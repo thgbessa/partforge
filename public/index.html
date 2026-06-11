@@ -1,0 +1,2252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PartForge — Gestão de Peças</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --surface3: #1e2330;
+    --border: #252c3a;
+    --border2: #2e3748;
+    --accent: #e88c2a;
+    --accent2: #f0a830;
+    --accent-dim: rgba(232,140,42,0.12);
+    --accent-glow: rgba(232,140,42,0.25);
+    --green: #2ecc71;
+    --green-dim: rgba(46,204,113,0.1);
+    --red: #e74c3c;
+    --red-dim: rgba(231,76,60,0.1);
+    --blue: #3a9ef5;
+    --blue-dim: rgba(58,158,245,0.1);
+    --purple: #9b59b6;
+    --purple-dim: rgba(155,89,182,0.1);
+    --text: #e8ecf2;
+    --text2: #8a95a8;
+    --text3: #4a5568;
+    --radius: 4px;
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Rajdhani', sans-serif;
+    --body: 'Barlow Condensed', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
+  /* GRID TEXTURE */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(232,140,42,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(232,140,42,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* LAYOUT */
+  .app { display:flex; height:100vh; position:relative; z-index:1; overflow:hidden; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-mark {
+    font-family: var(--display);
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--accent);
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .logo-sub {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .nav { flex:1; padding: 12px 0; overflow-y:auto; }
+
+  .nav-group { margin-bottom: 4px; }
+  .nav-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 20px 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    position: relative;
+    border-left: 2px solid transparent;
+    margin: 1px 0;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active {
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-left-color: var(--accent);
+  }
+  .nav-item .icon { font-size: 16px; width: 20px; text-align:center; }
+  .nav-badge {
+    margin-left: auto;
+    background: var(--accent);
+    color: var(--bg);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .system-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* MAIN */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    height: 56px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .page-title {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .page-path {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-left: 4px;
+  }
+
+  .topbar-actions { margin-left: auto; display:flex; gap:8px; align-items:center; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 16px;
+    border-radius: var(--radius);
+    font-family: var(--body);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: var(--accent2); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text2);
+    border-color: var(--border2);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border2); background: var(--surface2); }
+  .btn-danger {
+    background: var(--red-dim);
+    color: var(--red);
+    border-color: var(--red);
+  }
+  .btn-danger:hover { background: var(--red); color: white; }
+  .btn-success {
+    background: var(--green-dim);
+    color: var(--green);
+    border-color: var(--green);
+  }
+  .btn-success:hover { background: var(--green); color: var(--bg); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  /* CONTENT */
+  .content {
+    flex: 1;
+    overflow: auto;
+    padding: 24px 28px;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  /* PAGES */
+  .page { display: none; animation: fadeIn 0.2s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
+
+  /* KPI CARDS */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card:hover { border-color: var(--border2); }
+  .kpi-card::after {
+    content:'';
+    position:absolute;
+    bottom:0; left:0; right:0;
+    height:2px;
+    background: var(--accent);
+    opacity: 0.5;
+  }
+  .kpi-card.green::after { background: var(--green); }
+  .kpi-card.red::after { background: var(--red); }
+  .kpi-card.blue::after { background: var(--blue); }
+  .kpi-card.purple::after { background: var(--purple); }
+
+  .kpi-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: var(--display);
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--text);
+  }
+  .kpi-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+
+  /* SECTION HEADER */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::before {
+    content:'';
+    width: 3px;
+    height: 16px;
+    background: var(--accent);
+    border-radius: 2px;
+  }
+
+  /* TABLE */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    max-height: calc(100vh - 160px);
+  }
+
+  .data-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  .data-table th {
+    background: var(--surface2);
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .data-table td {
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  .data-table tbody tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover td { background: var(--surface2); }
+  .data-table .mono { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+
+  /* BADGES */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(46,204,113,0.2); }
+  .badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(231,76,60,0.2); }
+  .badge-orange { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,140,42,0.2); }
+  .badge-blue { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(58,158,245,0.2); }
+  .badge-purple { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(155,89,182,0.2); }
+  .badge-gray { background: rgba(138,149,168,0.1); color: var(--text3); border: 1px solid var(--border); }
+  .badge-teal { background: rgba(26,188,156,0.12); color: #1abc9c; border: 1px solid rgba(26,188,156,0.25); }
+  .badge-yellow { background: rgba(241,196,15,0.12); color: #f1c40f; border: 1px solid rgba(241,196,15,0.25); }
+
+  /* PIPELINE STEPS */
+  .pipeline {
+    display: flex; align-items: center; gap: 0; margin-bottom: 24px; overflow-x: auto; padding-bottom: 4px;
+  }
+  .pipeline-step {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 18px; border: 1px solid var(--border); background: var(--surface);
+    font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--text3); white-space: nowrap; position: relative; cursor: default;
+  }
+  .pipeline-step:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .pipeline-step:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+  .pipeline-step + .pipeline-step { border-left: none; }
+  .pipeline-step.active  { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .pipeline-step.done    { background: rgba(46,204,113,0.08); border-color: rgba(46,204,113,0.3); color: var(--green); }
+  .pipeline-step.pending { background: rgba(58,158,245,0.08); border-color: rgba(58,158,245,0.3); color: var(--blue); }
+  .pipeline-step .step-num { font-size: 16px; line-height: 1; }
+
+  /* SOLICITAÇÃO CARDS */
+  .sol-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 10px; transition: border-color 0.15s;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .sol-card:hover { border-color: var(--border2); }
+  .sol-card.finalizado { opacity: 0.55; }
+
+  /* ACTION MODAL */
+  .action-modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+    z-index: 200; display: none; align-items: center; justify-content: center;
+  }
+  .action-modal-overlay.open { display: flex; }
+  .action-modal {
+    background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius);
+    width: 90%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6); animation: slideUp 0.2s ease;
+  }
+
+  /* FORMS */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .form-input, .form-select, .form-textarea {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 14px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  .form-select option { background: var(--surface2); }
+  .form-textarea { resize: vertical; min-height: 72px; }
+
+  /* MODAL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    width: 90%;
+    max-width: 640px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    animation: slideUp 0.2s ease;
+  }
+  @keyframes slideUp { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-title {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .modal-close {
+    width: 28px; height: 28px;
+    display: flex; align-items:center; justify-content:center;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 18px;
+    background: transparent;
+    border: none;
+    transition: all 0.15s;
+  }
+  .modal-close:hover { background: var(--surface2); color: var(--text); }
+  .modal-body { padding: 24px; }
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* SEARCH BAR */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .search-input-wrap {
+    position: relative;
+    flex: 1;
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text3);
+    font-size: 13px;
+  }
+  .search-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 14px;
+    padding: 8px 12px 8px 34px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+
+  /* ESTOQUE VISUAL */
+  .stock-bar {
+    width: 80px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .stock-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  /* MOVIMENTAÇÃO CARDS */
+  .mov-type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .mov-type-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    background: var(--surface2);
+    transition: all 0.15s;
+    font-family: var(--body);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+  .mov-type-btn:hover { border-color: var(--border2); color: var(--text); }
+  .mov-type-btn.selected { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+  .mov-type-btn .mov-icon { font-size: 20px; }
+
+  /* TIMELINE */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content:'';
+    position:absolute;
+    left: 8px; top: 0; bottom: 0;
+    width: 1px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    padding: 0 0 20px;
+  }
+  .timeline-dot {
+    position: absolute;
+    left: -24px;
+    top: 4px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+  }
+  .timeline-date {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+  }
+  .timeline-text { font-size: 13px; color: var(--text2); }
+  .timeline-text strong { color: var(--text); }
+
+  /* TOAST */
+  .toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    min-width: 240px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastIn 0.25s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  @keyframes toastIn { from{transform:translateX(20px);opacity:0} to{transform:translateX(0);opacity:1} }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+  .toast.info { border-left: 3px solid var(--blue); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 48px;
+    color: var(--text3);
+  }
+  .empty-state .empty-icon { font-size: 36px; margin-bottom: 12px; }
+  .empty-state .empty-title {
+    font-family: var(--display);
+    font-size: 16px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .empty-state .empty-sub { font-size: 13px; }
+
+  .btn-excel {
+    background: rgba(33,115,70,0.15);
+    color: #4caf7d;
+    border-color: #2e7d4f;
+  }
+  .btn-excel:hover { background: #217346; color: white; border-color: #217346; }
+  .btn-import {
+    background: rgba(58,158,245,0.1);
+    color: var(--blue);
+    border-color: #2a6fb5;
+  }
+  .btn-import:hover { background: var(--blue); color: white; }
+  .import-info {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    line-height: 1.8;
+  }
+
+  /* SCROLLBARS — visíveis em todos os eixos */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--surface2); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb { background: #444c5e; border-radius: 4px; border: 2px solid var(--surface2); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+  ::-webkit-scrollbar-corner { background: var(--surface2); }
+  * { scrollbar-width: thin; scrollbar-color: #444c5e var(--surface2); }
+
+  /* RESPONSIVE HELPERS */
+  .flex { display:flex; }
+  .gap-2 { gap:8px; }
+  .mt-1 { margin-top:8px; }
+  .mb-3 { margin-bottom:20px; }
+  .text-mono { font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  .text-sm { font-size: 12px; color: var(--text2); }
+
+  /* ── LOGIN SCREEN ──────────────────────────────── */
+  #login-screen {
+    position: fixed; inset: 0; z-index: 9999;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #login-screen.hidden { display: none; }
+  .login-box {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 40px 44px;
+    width: 380px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+  }
+  .login-logo {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .login-sub {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 2px;
+    margin-bottom: 32px;
+  }
+  .login-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text3);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .login-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    padding: 11px 14px;
+    box-sizing: border-box;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .login-input:focus { border-color: var(--accent); }
+  .login-btn {
+    width: 100%;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: var(--radius);
+    font-family: var(--display);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    padding: 13px;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: opacity 0.15s;
+  }
+  .login-btn:hover { opacity: 0.88; }
+  .login-error {
+    font-size: 12px;
+    color: var(--red);
+    text-align: center;
+    margin-top: 10px;
+    min-height: 18px;
+    font-family: var(--mono);
+  }
+
+  /* ── USER PILL (sidebar footer) ────────────────── */
+  .user-pill {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    cursor: default;
+  }
+  .user-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--display); font-weight: 700;
+    font-size: 13px; color: var(--bg); flex-shrink: 0;
+  }
+  .user-info-name  { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.2; }
+  .user-info-cargo { font-family: var(--mono); font-size: 9px; color: var(--accent); letter-spacing: 1px; }
+  .logout-btn {
+    background: none; border: none; color: var(--text3);
+    cursor: pointer; font-size: 14px; padding: 2px 4px;
+    margin-left: auto; border-radius: 4px; transition: color 0.15s;
+  }
+  .logout-btn:hover { color: var(--red); }
+
+
+  /* ONLINE INDICATOR */
+  .sync-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text3);
+    letter-spacing: 1px;
+  }
+  .sync-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+  .sync-dot.syncing {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 0.8s infinite;
+  }
+  .sync-dot.error {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red);
+  }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">⚙ PARTFORGE</div>
+    <div class="login-sub">SISTEMA DE GESTÃO DE PEÇAS</div>
+    <div class="login-label">E-mail</div>
+    <input class="login-input" type="email" id="login-email" placeholder="seu@email.com"
+      onkeydown="if(event.key==='Enter')document.getElementById('login-senha').focus()">
+    <div class="login-label">Senha</div>
+    <input class="login-input" type="password" id="login-senha" placeholder="••••••••"
+      onkeydown="if(event.key==='Enter')fazerLogin()">
+    <button class="login-btn" onclick="fazerLogin()">ENTRAR</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">⚙ PartForge</div>
+      <div class="logo-sub">Sistema de Gestão de Peças</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">
+        <div class="nav-label">Painel</div>
+        <div class="nav-item active" onclick="navigate('dashboard', this)">
+          <span class="icon">▦</span> Dashboard
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Cadastros</div>
+        <div class="nav-item" onclick="navigate('pecas', this)">
+          <span class="icon">⬡</span> Peças
+          <span class="nav-badge" id="badge-pecas">0</span>
+        </div>
+        <div class="nav-item" onclick="navigate('equipamentos', this)">
+          <span class="icon">⚙</span> Equipamentos
+          <span class="nav-badge" id="badge-equip">0</span>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Estoque</div>
+        <div class="nav-item" onclick="navigate('estoque', this)">
+          <span class="icon">◫</span> Posição de Estoque
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Operações</div>
+        <div class="nav-item" onclick="navigate('movimentacao', this)">
+          <span class="icon">⇄</span> Nova Movimentação
+        </div>
+        <div class="nav-item" onclick="navigate('historico', this)">
+          <span class="icon">≡</span> Histórico
+        </div>
+        <div class="nav-item" onclick="navigate('logistica', this)">
+          <span class="icon">◈</span> Logística
+          <span class="nav-badge" id="badge-logistica">0</span>
+        </div>
+        <div class="nav-item" onclick="navigate('compras', this)">
+          <span class="icon">🛒</span> Compras
+          <span class="nav-badge" id="badge-compras">0</span>
+        </div>
+        <div class="nav-item" onclick="navigate('doadoras', this)">
+          <span class="icon">⊘</span> Máq. Doadoras
+          <span class="nav-badge" id="badge-doadoras">0</span>
+        </div>
+        <div class="nav-item" onclick="navigate('orcamento', this)">
+          <span class="icon">📋</span> Orçamentos
+          <span class="nav-badge" id="badge-orcamento">0</span>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Configurações</div>
+        <div class="nav-item" id="nav-usuarios" onclick="navigate('usuarios', this)">
+          <span class="icon">◉</span> Usuários
+          <span class="nav-badge" id="badge-usuarios">0</span>
+        </div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div style="display:flex;gap:6px;margin-bottom:10px;padding:0 4px">
+        <button onclick="exportarBancoDados()" title="Exportar backup dos dados"
+          style="flex:1;padding:5px 0;background:rgba(52,152,219,0.15);border:1px solid rgba(52,152,219,0.3);
+          border-radius:6px;color:#3498db;font-size:10px;cursor:pointer;font-family:var(--mono)">
+          ⬇ Backup
+        </button>
+        <label title="Importar backup" style="flex:1;padding:5px 0;background:rgba(46,204,113,0.15);
+          border:1px solid rgba(46,204,113,0.3);border-radius:6px;color:var(--green);font-size:10px;
+          cursor:pointer;font-family:var(--mono);text-align:center;display:block">
+          ⬆ Restaurar
+          <input type="file" accept=".json" style="display:none" onchange="importarBancoDados(this)">
+        </label>
+        <button onclick="limparBancoDados()" title="Resetar todos os dados"
+          style="padding:5px 8px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);
+          border-radius:6px;color:var(--red);font-size:12px;cursor:pointer">
+          ↺
+        </button>
+      </div>
+      <div class="user-pill" id="sidebar-user-pill">
+        <div class="user-avatar" id="sidebar-avatar">?</div>
+        <div>
+          <div class="user-info-name"  id="sidebar-user-name">—</div>
+          <div class="user-info-cargo" id="sidebar-user-cargo">—</div>
+        </div>
+        <button class="logout-btn" onclick="fazerLogout()" title="Sair">⏻</button>
+      </div>
+      <div class="system-status">
+        <div class="status-dot"></div>
+        SISTEMA ONLINE
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <span class="page-title" id="page-title">Dashboard</span>
+        <span class="page-path" id="page-path">/ visão geral</span>
+      </div>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </div>
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Total de Peças</div>
+            <div class="kpi-value" id="kpi-pecas">0</div>
+            <div class="kpi-sub">tipos cadastrados</div>
+          </div>
+          <div class="kpi-card green">
+            <div class="kpi-label">Equipamentos</div>
+            <div class="kpi-value" id="kpi-equip">0</div>
+            <div class="kpi-sub">cadastrados</div>
+          </div>
+          <div class="kpi-card blue">
+            <div class="kpi-label">Itens em Estoque</div>
+            <div class="kpi-value" id="kpi-estoque">0</div>
+            <div class="kpi-sub">unidades disponíveis</div>
+          </div>
+          <div class="kpi-card red">
+            <div class="kpi-label">Estoque Crítico</div>
+            <div class="kpi-value" id="kpi-critico">0</div>
+            <div class="kpi-sub">abaixo do mínimo</div>
+          </div>
+          <div class="kpi-card purple">
+            <div class="kpi-label">Solicitações Abertas</div>
+            <div class="kpi-value" id="kpi-movs">0</div>
+            <div class="kpi-sub">em andamento</div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Estoque Crítico / Alertas</div>
+        </div>
+        <div class="table-wrap mb-3" id="dash-critico">
+          <div class="empty-state">
+            <div class="empty-icon">✓</div>
+            <div class="empty-title">Sem Alertas</div>
+            <div class="empty-sub">Todos os itens com estoque adequado</div>
+          </div>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Últimas Movimentações</div>
+        </div>
+        <div class="table-wrap" id="dash-movs">
+          <div class="empty-state">
+            <div class="empty-icon">⇄</div>
+            <div class="empty-title">Nenhuma Movimentação</div>
+            <div class="empty-sub">Registre a primeira movimentação</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PECAS -->
+      <div class="page" id="page-pecas">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar peça por nome, código, fonte..." oninput="renderPecas(this.value)">
+          </div>
+          <select class="form-select" style="width:180px" id="pecas-filter-fonte" onchange="renderPecas(document.querySelector('#page-pecas .search-input').value)">
+            <option value="">Todas as fontes/linhas</option>
+            <optgroup label="DYMIND">
+              <option value="DYMIND">— Todas DYMIND —</option>
+              <option value="DYMIND:DP-C16">DYMIND · DP-C16</option>
+              <option value="DYMIND:DF55/DF56VET">DYMIND · DF55/DF56VET</option>
+              <option value="DYMIND:DH36">DYMIND · DH36</option>
+              <option value="DYMIND:DH36VET">DYMIND · DH36VET</option>
+              <option value="DYMIND:DH76">DYMIND · DH76</option>
+              <option value="DYMIND:DH615">DYMIND · DH615</option>
+            </optgroup>
+            <optgroup label="RAYTO">
+              <option value="RAYTO">— Todas RAYTO —</option>
+            </optgroup>
+            <optgroup label="Outros">
+              <option value="ORTHO">ORTHO</option>
+              <option value="SIEMENS">SIEMENS</option>
+              <option value="SNIBE">SNIBE</option>
+              <option value="FUJIFILM">FUJIFILM</option>
+              <option value="STAGO">STAGO</option>
+              <option value="VIDA BIOTECNOLOGIA">VIDA BIOTECNOLOGIA</option>
+              <option value="SENSACORE">SENSACORE</option>
+              <option value="BIOBASE">BIOBASE</option>
+              <option value="OUTRO">OUTRO</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="table-wrap" id="pecas-table">
+          <div class="empty-state">
+            <div class="empty-icon">⬡</div>
+            <div class="empty-title">Nenhuma Peça Cadastrada</div>
+            <div class="empty-sub">Clique em "Nova Peça" para começar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EQUIPAMENTOS -->
+      <div class="page" id="page-equipamentos">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar equipamento..." oninput="renderEquipamentos(this.value)">
+          </div>
+        </div>
+        <div class="table-wrap" id="equip-table">
+          <div class="empty-state">
+            <div class="empty-icon">⚙</div>
+            <div class="empty-title">Nenhum Equipamento Cadastrado</div>
+            <div class="empty-sub">Clique em "Novo Equipamento" para começar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ESTOQUE -->
+      <div class="page" id="page-estoque">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Filtrar estoque..." oninput="renderEstoque(this.value)">
+          </div>
+        </div>
+        <div class="table-wrap" id="estoque-table">
+          <div class="empty-state">
+            <div class="empty-icon">◫</div>
+            <div class="empty-title">Estoque Vazio</div>
+            <div class="empty-sub">Cadastre peças e realize movimentações de entrada</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOVIMENTAÇÃO -->
+      <div class="page" id="page-movimentacao">
+        <div class="section-title" style="margin-bottom:16px">Nova Solicitação de Peça</div>
+        <div id="mov-form">
+          <div class="form-grid">
+
+            <!-- PEÇA COM BUSCA -->
+            <div class="form-group" style="position:relative">
+              <label class="form-label">Peça *</label>
+              <input class="form-input" id="mov-peca-search" placeholder="Buscar por código ou nome..." autocomplete="off"
+                oninput="filtrarPecasMov(this.value)" onfocus="filtrarPecasMov(this.value)" onblur="setTimeout(()=>fecharDropdownPeca(),200)">
+              <input type="hidden" id="mov-peca">
+              <div id="mov-peca-dropdown" style="
+                display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+                background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius);
+                max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4); margin-top:2px;
+              "></div>
+              <div id="mov-peca-selected" style="display:none; margin-top:6px; padding:8px 10px;
+                background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius);
+                font-family:var(--mono); font-size:11px; color:var(--text2); line-height:1.6">
+              </div>
+            </div>
+
+            <!-- EQUIPAMENTO / SÉRIE -->
+            <div class="form-group" style="position:relative">
+              <label class="form-label">Nº de Série do Equipamento</label>
+              <input class="form-input" id="mov-serie-search" placeholder="Buscar por série, código ou nome..." autocomplete="off"
+                oninput="filtrarEquipMov(this.value)" onfocus="filtrarEquipMov(this.value)" onblur="setTimeout(()=>fecharDropdownEquip(),200)">
+              <input type="hidden" id="mov-equip">
+              <div id="mov-equip-dropdown" style="
+                display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+                background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius);
+                max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4); margin-top:2px;
+              "></div>
+              <div id="mov-equip-card" style="display:none; margin-top:6px; padding:8px 10px;
+                background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius);
+                font-size:11px; line-height:1.7">
+              </div>
+            </div>
+
+            <!-- MÁQUINA DOADORA -->
+            <div class="form-group" style="position:relative">
+              <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+                <span>Máquina Doadora <span style="color:var(--text3);font-size:9px">(opcional)</span></span>
+                <a onclick="navigate('doadoras',document.querySelector('[onclick*=doadoras]'))" style="cursor:pointer;color:var(--accent);font-size:9px;letter-spacing:1px;text-decoration:none;font-family:var(--mono)" title="Ir para cadastro de doadoras">⊕ GERENCIAR DOADORAS</a>
+              </label>
+              <input class="form-input" id="mov-doadora-search" placeholder="Buscar por modelo, série ou marca..." autocomplete="off"
+                oninput="filtrarDoadorasMov(this.value)" onfocus="filtrarDoadorasMov(this.value)" onblur="setTimeout(()=>fecharDropdownDoadora(),200)">
+              <input type="hidden" id="mov-doadora">
+              <div id="mov-doadora-dropdown" style="
+                display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+                background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius);
+                max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4); margin-top:2px;
+              "></div>
+              <div id="mov-doadora-card" style="display:none; margin-top:6px; padding:8px 10px;
+                background:rgba(52,152,219,0.08); border:1px solid rgba(52,152,219,0.25); border-radius:var(--radius);
+                font-family:var(--mono); font-size:11px; color:var(--text2); line-height:1.7">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Quantidade *</label>
+              <input class="form-input" type="number" min="1" id="mov-qtd" placeholder="0" oninput="atualizarResumoCustoMov()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Técnico Solicitante</label>
+              <div style="position:relative">
+                <input class="form-input" id="mov-tecnico" placeholder="Nome do técnico" autocomplete="off"
+                  oninput="filtrarTecnicosMov(this.value,'mov')" onfocus="filtrarTecnicosMov(this.value,'mov')"
+                  onblur="setTimeout(()=>fecharDropdownTecnico('mov'),200)">
+                <div id="mov-tecnico-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:160px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">E-mail do Técnico</label>
+              <input class="form-input" type="email" id="mov-tecnico-email" placeholder="email@empresa.com.br">
+            </div>
+            <div class="form-group full">
+              <label class="form-label">Observação / Motivo</label>
+              <textarea class="form-textarea" id="mov-obs" placeholder="Descreva o motivo da solicitação..." style="min-height:70px"></textarea>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" onclick="criarSolicitacao()">⊕ Criar Solicitação</button>
+            <button class="btn btn-ghost" onclick="populateMovSelects()">✕ Limpar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORICO / PIPELINE -->
+      <div class="page" id="page-historico">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Filtrar por peça, série, técnico..." oninput="renderHistorico(this.value)">
+          </div>
+          <select class="form-select" style="width:180px" onchange="renderHistorico('',this.value)" id="hist-filter-status">
+            <option value="">Todos os status</option>
+            <option value="SOLICITADA">Solicitada</option>
+            <option value="ENVIADA">Enviada</option>
+            <option value="DESPACHADA">Despachada</option>
+            <option value="COMPRA_PENDENTE">Compra Pendente</option>
+            <option value="RECEBIDA">Recebida</option>
+            <option value="ALOCADA">Alocada</option>
+            <option value="NF_EMITIDA">NF Emitida</option>
+            <option value="FINALIZADO">Finalizado</option>
+          </select>
+        </div>
+        <div id="hist-table">
+          <div class="empty-state">
+            <div class="empty-icon">≡</div>
+            <div class="empty-title">Sem Solicitações</div>
+            <div class="empty-sub">Crie a primeira solicitação na aba Movimentação</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGÍSTICA -->
+      <div class="page" id="page-logistica">
+        <div style="display:flex;gap:0;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;width:fit-content">
+          <button class="btn" id="log-tab-envios" onclick="switchLogTab('envios')"
+            style="border-radius:0;border:none;padding:10px 24px;font-family:var(--mono);font-size:11px;letter-spacing:1px;background:var(--accent);color:var(--bg)">
+            ⬆ ENVIOS PENDENTES
+          </button>
+          <button class="btn" id="log-tab-retornos" onclick="switchLogTab('retornos')"
+            style="border-radius:0;border:none;padding:10px 24px;font-family:var(--mono);font-size:11px;letter-spacing:1px;background:var(--surface2);color:var(--text2)">
+            ↩ RETORNOS
+          </button>
+        </div>
+        <div id="log-content">
+          <div class="empty-state"><div class="empty-icon">◈</div><div class="empty-title">Carregando...</div></div>
+        </div>
+      </div>
+
+      <!-- ORÇAMENTOS -->
+      <div class="page" id="page-orcamento">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por número, cliente, peça..." oninput="renderOrcamentos(this.value)">
+          </div>
+          <select class="form-select" style="width:160px" id="orc-filter-status" onchange="renderOrcamentos()">
+            <option value="">Todos os status</option>
+            <option value="RASCUNHO">Rascunho</option>
+            <option value="APROVADO">Aprovado</option>
+            <option value="FATURANDO">Faturando</option>
+            <option value="FATURADO">Faturado</option>
+            <option value="CANCELADO">Cancelado</option>
+          </select>
+        </div>
+        <div class="table-wrap" id="orcamento-table"></div>
+      </div>
+
+      <!-- MODAL: Config de Orçamento -->
+      <div class="modal-overlay" id="modal-config-orc">
+        <div class="modal" style="max-width:680px">
+          <div class="modal-header">
+            <span class="modal-title">⚙ Configurações de Orçamento</span>
+            <button class="modal-close" onclick="closeModal('modal-config-orc')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;margin-bottom:14px;font-weight:700">CÁLCULO PADRÃO DE PREÇOS</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Taxa de Importação/Frete</label>
+                  <input class="form-input" type="number" step="0.01" id="cfg-orc-taxa" placeholder="1.50" value="">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Cotação do Dólar (R$)</label>
+                  <input class="form-input" type="number" step="0.01" id="cfg-orc-dolar" placeholder="5.60" value="">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Mark-up Padrão</label>
+                  <input class="form-input" type="number" step="0.01" id="cfg-orc-markup" placeholder="2.00" value="">
+                </div>
+              </div>
+            </div>
+
+            <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px">
+              <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;margin-bottom:14px;font-weight:700">CONDIÇÕES COMERCIAIS PADRÃO</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Validade do Orçamento</label>
+                  <select class="form-select" id="cfg-orc-validade" onchange="gerarCondicoesAuto()">
+                    <option value="30 dias">30 dias</option>
+                    <option value="45 dias">45 dias</option>
+                    <option value="60 dias">60 dias</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Prazo de Pagamento</label>
+                  <select class="form-select" id="cfg-orc-pagamento" onchange="gerarCondicoesAuto()">
+                    <option value="30 dias">30 dias</option>
+                    <option value="45 dias">45 dias</option>
+                    <option value="60 dias">60 dias</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Prazo de Entrega</label>
+                  <select class="form-select" id="cfg-orc-prazo" onchange="gerarCondicoesAuto()">
+                    <option value="À combinar">À combinar</option>
+                    <option value="5 dias úteis">5 dias úteis</option>
+                    <option value="10 dias úteis">10 dias úteis</option>
+                    <option value="20 dias úteis">20 dias úteis</option>
+                    <option value="30 dias">30 dias</option>
+                    <option value="45 dias">45 dias</option>
+                    <option value="60 dias">60 dias</option>
+                    <option value="90 dias">90 dias</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:16px 20px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;font-weight:700">CONDIÇÕES GERAIS (aparece em todos os PDFs)</div>
+                <button class="btn btn-ghost btn-sm" onclick="gerarCondicoesAuto(true)" style="font-size:10px">↺ Regenerar texto</button>
+              </div>
+              <textarea class="form-input" id="cfg-orc-condicoes" rows="9"
+                style="resize:vertical;min-height:180px;font-size:12px;line-height:1.7"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modal-config-orc')">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvarConfigOrcamento()">✓ Salvar Configuração</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL ORÇAMENTO -->
+      <div class="modal-overlay" id="modal-orcamento">
+        <div class="modal" style="max-width:700px">
+          <div class="modal-header">
+            <span class="modal-title" id="modal-orcamento-title">Novo Orçamento</span>
+            <button class="modal-close" onclick="fecharModalOrcamento()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Número do Orçamento *</label>
+                <input class="form-input" id="orc-numero" placeholder="Ex: ORC-2026-001">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="orc-status">
+                  <option value="RASCUNHO">Rascunho</option>
+                  <option value="APROVADO">Aprovado</option>
+                  <option value="CANCELADO">Cancelado</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cliente / Nome Fantasia</label>
+                <input class="form-input" id="orc-cliente" placeholder="Nome do cliente">
+              </div>
+              <div class="form-group" style="grid-column:span 2">
+                <label class="form-label">Buscar Equipamento <span style="color:var(--text3);font-weight:400">(série, nome do equipamento ou cliente)</span></label>
+                <div style="position:relative">
+                  <input class="form-input" id="orc-serie" placeholder="Ex: 000083, SLIDEINK, LABORATORIO TAJARA..." autocomplete="off"
+                    oninput="filtrarEquipOrc(this.value)" onfocus="filtrarEquipOrc(this.value)"
+                    onblur="setTimeout(()=>fecharDropdownEquipOrc(),200)">
+                  <div id="orc-equip-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+                    background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                    max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Equipamento</label>
+                <input class="form-input" id="orc-equip-nome" placeholder="Preenchido automaticamente"
+                  style="color:var(--text2);background:var(--surface2)" readonly>
+              </div>
+              <div class="form-group">
+                <label class="form-label">OS Vinculada</label>
+                <input class="form-input" id="orc-os" placeholder="Número da OS">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Data do Orçamento</label>
+                <input class="form-input" type="date" id="orc-data" value="">
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Observação</label>
+                <textarea class="form-textarea" id="orc-obs" placeholder="Observações específicas deste orçamento..." style="min-height:60px"></textarea>
+              </div>
+              <div class="form-group full" id="orc-condicoes-bloco">
+                <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+                  Condições Comerciais
+                </label>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+                  <div>
+                    <label class="form-label" style="font-size:10px;margin-bottom:3px">VALIDADE</label>
+                    <select class="form-select" id="orc-validade" onchange="atualizarCondicoesOrc()">
+                      <option value="30 dias">30 dias</option>
+                      <option value="45 dias">45 dias</option>
+                      <option value="60 dias">60 dias</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size:10px;margin-bottom:3px">PAGAMENTO</label>
+                    <select class="form-select" id="orc-pagamento" onchange="atualizarCondicoesOrc()">
+                      <option value="30 dias">30 dias</option>
+                      <option value="45 dias">45 dias</option>
+                      <option value="60 dias">60 dias</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size:10px;margin-bottom:3px">ENTREGA</label>
+                    <select class="form-select" id="orc-entrega" onchange="atualizarCondicoesOrc()">
+                      <option value="À combinar">À combinar</option>
+                      <option value="5 dias úteis">5 dias úteis</option>
+                      <option value="10 dias úteis">10 dias úteis</option>
+                      <option value="20 dias úteis">20 dias úteis</option>
+                      <option value="30 dias">30 dias</option>
+                      <option value="45 dias">45 dias</option>
+                      <option value="60 dias">60 dias</option>
+                      <option value="90 dias">90 dias</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label" style="font-size:10px;margin-bottom:3px">FRETE</label>
+                    <select class="form-select" id="orc-frete" onchange="atualizarCondicoesOrc()">
+                      <option value="FOB">FOB — Cliente</option>
+                      <option value="CIF">CIF — Quallyx</option>
+                    </select>
+                  </div>
+                </div>
+                <label class="form-label" style="font-size:10px;margin-bottom:3px">OBSERVAÇÕES ADICIONAIS (opcional)</label>
+                <textarea class="form-textarea" id="orc-condicoes" rows="3"
+                  style="min-height:60px;font-size:11px;line-height:1.6"
+                  placeholder="Condições específicas deste orçamento, descontos, observações..."
+                  oninput="atualizarCondicoesOrc()"></textarea>
+                <input type="hidden" id="orc-condicoes-geradas">
+              </div>
+            </div>
+
+            <!-- Itens do orçamento -->
+            <div class="section-title" style="margin:18px 0 12px;font-size:12px">ITENS DO ORÇAMENTO</div>
+            <div id="orc-itens-lista" style="margin-bottom:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 2fr 80px 110px 80px;gap:8px;align-items:end;margin-bottom:8px">
+              <div style="position:relative">
+                <label class="form-label" style="font-size:9px">CÓDIGO / NOME</label>
+                <input class="form-input" id="orc-item-cod" placeholder="Cód. ou nome..." style="font-family:var(--mono);font-size:12px"
+                  autocomplete="off"
+                  oninput="sugerirPecaOrc(this.value)" onfocus="sugerirPecaOrc(this.value)"
+                  onblur="setTimeout(()=>fecharDropdownPecaOrc(),200)">
+                <div id="orc-peca-dropdown" style="display:none;position:absolute;top:100%;left:0;width:340px;z-index:9999;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
+              </div>
+              <div style="position:relative">
+                <label class="form-label" style="font-size:9px">DESCRIÇÃO</label>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <div id="orc-item-img" style="display:none;width:32px;height:32px;flex-shrink:0;border-radius:4px;
+                    overflow:hidden;border:1px solid var(--border2)"></div>
+                  <input class="form-input" id="orc-item-desc" placeholder="Descrição da peça" style="flex:1">
+                </div>
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">QTD</label>
+                <input class="form-input" type="number" min="1" id="orc-item-qtd" placeholder="1" value="1">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">VALOR UNIT (R$)</label>
+                <input class="form-input" type="number" step="0.01" id="orc-item-valor" placeholder="0,00">
+              </div>
+              <div>
+                <button class="btn btn-primary btn-sm" onclick="adicionarItemOrc()" style="width:100%">⊕ Add</button>
+              </div>
+            </div>
+            <div style="text-align:right;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">TOTAL: </span>
+              <span style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent)" id="orc-total-display">R$ 0,00</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="fecharModalOrcamento()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvarOrcamento()">✓ Salvar Orçamento</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MÁQUINAS DOADORAS -->
+      <div class="page" id="page-doadoras">
+
+        <!-- Tabs: Cadastro de Doadoras / Histórico de Retiradas -->
+        <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)">
+          <button id="tab-doadoras-cadastro" onclick="switchDoadTab('cadastro')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid var(--accent);
+            color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;font-weight:700">
+            DOADORAS
+          </button>
+          <button id="tab-doadoras-retiradas" onclick="switchDoadTab('retiradas')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid transparent;
+            color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer">
+            HISTÓRICO DE RETIRADAS
+          </button>
+        </div>
+
+        <!-- Panel: Doadoras -->
+        <div id="panel-doadoras-cadastro">
+          <div class="search-bar">
+            <div class="search-input-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" type="text" placeholder="Buscar doadora por modelo, série, marca..."
+                oninput="renderDoadoras(this.value)">
+            </div>
+            <select class="form-select" style="width:160px" id="filter-doadora-status"
+              onchange="renderDoadoras(document.querySelector('#panel-doadoras-cadastro .search-input').value)">
+              <option value="">Todas as classificações</option>
+              <option value="USO">Em Uso</option>
+              <option value="SUCATA">Sucata</option>
+            </select>
+          </div>
+          <div class="table-wrap" id="doadoras-table"></div>
+        </div>
+
+        <!-- Panel: Histórico Retiradas -->
+        <div id="panel-doadoras-retiradas" style="display:none">
+          <div class="search-bar">
+            <div class="search-input-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" type="text" placeholder="Buscar por peça, doadora, técnico..."
+                oninput="renderRetiradas(this.value)">
+            </div>
+            <button class="btn btn-excel" onclick="exportarRetiradasExcel()">⬇ Exportar Excel</button>
+          </div>
+          <div class="table-wrap" id="retiradas-table"></div>
+        </div>
+      </div>
+
+      <!-- MODAL: Nova Doadora -->
+      <div class="modal-overlay" id="modal-doadora">
+        <div class="modal" style="max-width:640px">
+          <div class="modal-header">
+            <span class="modal-title" id="modal-doadora-title">Nova Máquina Doadora</span>
+            <button class="modal-close" onclick="closeModal('modal-doadora')">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group full" style="position:relative">
+                <label class="form-label">Buscar Equipamento do Estoque <span style="color:var(--text3);font-weight:400">(série, nome ou cliente)</span></label>
+                <input class="form-input" id="doad-equip-search" placeholder="Buscar por série, modelo ou nome do cliente..."
+                  autocomplete="off" oninput="filtrarEquipDoadora(this.value)" onfocus="filtrarEquipDoadora(this.value)"
+                  onblur="setTimeout(()=>{const dd=document.getElementById('doad-equip-dd');if(dd)dd.style.display='none'},200)">
+                <input type="hidden" id="doad-equip-id">
+                <div id="doad-equip-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:240px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Modelo / Nome *</label>
+                <input class="form-input" id="doad-modelo" placeholder="Ex: ADVIA 2120">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Série / Patrimônio *</label>
+                <input class="form-input" id="doad-serie" placeholder="Nº de série ou patrimônio">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Marca / Fabricante</label>
+                <input class="form-input" id="doad-marca" placeholder="Ex: Siemens">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Linha / Família</label>
+                <input class="form-input" id="doad-linha" placeholder="Ex: Hematologia">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Classificação *</label>
+                <select class="form-select" id="doad-classificacao" onchange="onDoadClassifChange(this.value)">
+                  <option value="USO">🟢 Em Uso — custo cheio (100%)</option>
+                  <option value="SUCATA">🔴 Sucata — custo reduzido (50%)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fator de Custo</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input class="form-input" id="doad-fator" type="number" step="0.05" min="0.01" max="1"
+                    value="1.00" style="width:90px" oninput="onDoadFatorChange(this.value)">
+                  <span id="doad-fator-label" style="font-family:var(--mono);font-size:11px;color:var(--green);font-weight:700">= 100%</span>
+                </div>
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Observação / Motivo da Sucata</label>
+                <input class="form-input" id="doad-obs" placeholder="Ex: Motor queimado, chassis preservado">
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer" id="modal-doadora-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modal-doadora')">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvarDoadora()">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Retirar Peça da Doadora -->
+      <div class="modal-overlay" id="modal-retirada">
+        <div class="modal" style="max-width:600px">
+          <div class="modal-header">
+            <span class="modal-title">Registrar Retirada de Peça</span>
+            <button class="modal-close" onclick="closeModal('modal-retirada')">✕</button>
+          </div>
+          <div class="modal-body" id="modal-retirada-body">
+            <!-- filled dynamically -->
+          </div>
+          <div class="modal-footer" id="modal-retirada-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modal-retirada')">Cancelar</button>
+            <button class="btn btn-primary" onclick="confirmarRetirada()">✓ Confirmar Retirada</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- COMPRAS -->
+      <div class="page" id="page-compras">
+
+        <!-- Tabs -->
+        <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--border)">
+          <button id="tab-compras-sugestao"  onclick="switchComprasTab('sugestao')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid var(--accent);
+            color:var(--accent);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;font-weight:700">
+            SUGESTÃO DE COMPRA
+          </button>
+          <button id="tab-compras-pendentes" onclick="switchComprasTab('pendentes')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid transparent;
+            color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer">
+            PENDÊNCIAS <span id="badge-compras-pend" style="background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:4px">0</span>
+          </button>
+          <button id="tab-compras-pedidos"   onclick="switchComprasTab('pedidos')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid transparent;
+            color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer">
+            PEDIDOS
+          </button>
+          <button id="tab-compras-config"    onclick="switchComprasTab('config')"
+            style="padding:8px 22px;background:none;border:none;border-bottom:2px solid transparent;
+            color:var(--text3);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer">
+            CONFIGURAR
+          </button>
+        </div>
+
+        <!-- ── SUGESTÃO DE COMPRA ───────────────────────────────── -->
+        <div id="panel-compras-sugestao">
+          <div class="search-bar" style="margin-bottom:14px">
+            <div class="search-input-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" type="text" placeholder="Buscar peça, código, fonte..."
+                oninput="renderSugestao(this.value)">
+            </div>
+            <select class="form-select" style="width:170px" id="filter-sug-origem" onchange="renderSugestao()">
+              <option value="">Todas as origens</option>
+              <option value="doadora">Reposição Doadora (Em Uso)</option>
+              <option value="pendente">Solicitação sem Estoque</option>
+              <option value="minimo">Abaixo do Mínimo</option>
+            </select>
+            <select class="form-select" style="width:130px" id="filter-sug-fonte" onchange="renderSugestao()">
+              <option value="">Todos Fornecedores</option>
+            </select>
+            <button class="btn btn-primary" onclick="gerarPedidoCompra()">📋 Gerar Pedido</button>
+            <button class="btn btn-excel"   onclick="exportarSugestaoExcel()">⬇ Exportar Excel</button>
+          </div>
+
+          <!-- Resumo KPIs -->
+          <div id="compras-kpis" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px"></div>
+
+          <div class="table-wrap" id="sugestao-table"></div>
+        </div>
+
+        <!-- ── PENDÊNCIAS ───────────────────────────────────────── -->
+        <div id="panel-compras-pendentes" style="display:none">
+          <div class="search-bar" style="margin-bottom:14px">
+            <div class="search-input-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" type="text" placeholder="Buscar solicitação, peça, técnico..."
+                oninput="renderPendencias(this.value)">
+            </div>
+          </div>
+          <div class="table-wrap" id="pendencias-table"></div>
+        </div>
+
+        <!-- ── PEDIDOS DE COMPRA ─────────────────────────────────── -->
+        <div id="panel-compras-pedidos" style="display:none">
+          <div class="search-bar" style="margin-bottom:14px">
+            <div class="search-input-wrap">
+              <span class="search-icon">⌕</span>
+              <input class="search-input" type="text" placeholder="Buscar pedido..."
+                oninput="renderPedidos(this.value)">
+            </div>
+          </div>
+          <div class="table-wrap" id="pedidos-table"></div>
+        </div>
+
+        <!-- ── CONFIGURAR ─────────────────────────────────────────── -->
+        <div id="panel-compras-config" style="display:none">
+          <div style="max-width:640px">
+            <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:20px 24px;margin-bottom:18px">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:16px;font-weight:700">PARÂMETROS GLOBAIS DE COMPRA</div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Dias de Estoque (Cobertura)</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input class="form-input" type="number" min="1" id="cfg-dias-estoque" value="30" style="width:100px">
+                    <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">dias</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:4px">
+                    Meta de cobertura após reposição
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Período de Análise de Consumo</label>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input class="form-input" type="number" min="7" id="cfg-periodo-analise" value="90" style="width:100px">
+                    <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">dias</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text3);margin-top:4px">
+                    Histórico considerado para calcular consumo médio diário
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Incluir reposição de Doadoras Em Uso</label>
+                  <select class="form-select" id="cfg-inclui-doadora">
+                    <option value="sim" selected>Sim — repor peças retiradas de doadoras em uso</option>
+                    <option value="nao">Não</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Incluir Solicitações sem Estoque</label>
+                  <select class="form-select" id="cfg-inclui-pendente">
+                    <option value="sim" selected>Sim — comprar para atender solicitações pendentes</option>
+                    <option value="nao">Não</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" style="margin-top:8px" onclick="salvarConfigCompras()">Salvar Configuração</button>
+            </div>
+
+            <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:20px 24px">
+              <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:1px;margin-bottom:16px;font-weight:700">DIAS DE ESTOQUE POR PEÇA</div>
+              <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+                Defina coberturas específicas por peça para sobrescrever o valor global.
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:12px">
+                <input class="search-input" style="flex:1" id="cfg-peca-search" type="text"
+                  placeholder="Buscar peça para configurar dias específicos..."
+                  oninput="filtrarPecasCfg(this.value)">
+              </div>
+              <div id="cfg-pecas-lista" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: Pedido de Compra -->
+      <div class="modal-overlay" id="modal-pedido">
+        <div class="modal" style="max-width:780px">
+          <div class="modal-header">
+            <span class="modal-title" id="modal-pedido-title">Pedido de Compra</span>
+            <button class="modal-close" onclick="closeModal('modal-pedido')">✕</button>
+          </div>
+          <div class="modal-body" id="modal-pedido-body"></div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="closeModal('modal-pedido')">Cancelar</button>
+            <button class="btn btn-excel" onclick="exportarPedidoExcel()">⬇ Exportar Excel</button>
+            <button class="btn btn-primary" onclick="salvarPedido()">✓ Registrar Pedido</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- USUÁRIOS -->
+      <div class="page" id="page-usuarios">
+        <div class="table-wrap" id="usuarios-table"></div>
+      </div>
+
+      <!-- MODAL USUÁRIO -->
+      <div class="modal-overlay" id="modal-usuario">
+        <div class="modal" style="max-width:460px">
+          <div class="modal-header">
+            <span class="modal-title" id="modal-usuario-title">Novo Usuário</span>
+            <button class="modal-close" onclick="fecharModalUsuario()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group full">
+                <label class="form-label">Nome Completo *</label>
+                <input class="form-input" id="usr-nome" placeholder="Nome completo">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Cargo *</label>
+                <select class="form-select" id="usr-cargo">
+                  <option value="Gerente">Gerente</option>
+                  <option value="Back Office">Back Office</option>
+                  <option value="Tecnico">Técnico</option>
+                  <option value="Assessor">Assessor</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Telefone</label>
+                <input class="form-input" id="usr-tel" placeholder="(11) 99999-9999">
+              </div>
+              <div class="form-group full">
+                <label class="form-label">E-mail *</label>
+                <input class="form-input" type="email" id="usr-email" placeholder="nome@empresa.com.br">
+              </div>
+              <div class="form-group" id="usr-senha-group">
+                <label class="form-label">Senha *</label>
+                <input class="form-input" type="password" id="usr-senha" placeholder="Mínimo 6 caracteres">
+              </div>
+              <div class="form-group" id="usr-senha-confirm-group">
+                <label class="form-label">Confirmar Senha *</label>
+                <input class="form-input" type="password" id="usr-senha-confirm" placeholder="Repita a senha">
+              </div>
+            </div>
+            <div style="margin-top:14px;padding:10px 14px;background:rgba(212,140,50,0.08);border:1px solid rgba(212,140,50,0.2);
+              border-radius:var(--radius);font-size:11px;color:var(--text2);line-height:1.6" id="usr-cargo-info">
+              <strong style="color:var(--accent)">Permissões por cargo:</strong><br>
+              <span style="color:var(--green)">Gerente / Back Office / Assessor</span> — acesso total a todas as solicitações<br>
+              <span style="color:var(--accent)">Técnico</span> — visualiza apenas suas próprias solicitações
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="fecharModalUsuario()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvarUsuario()">✓ Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION MODAL (pipeline actions) -->
+      <div class="action-modal-overlay" id="action-modal">
+        <div class="action-modal">
+          <div class="modal-header">
+            <span class="modal-title" id="action-modal-title">Ação</span>
+            <button class="modal-close" onclick="fecharActionModal()">✕</button>
+          </div>
+          <div class="modal-body" id="action-modal-body"></div>
+          <div class="modal-footer" id="action-modal-footer"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PEÇA -->
+<div class="modal-overlay" id="modal-peca">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-peca-title">Nova Peça</span>
+      <button class="modal-close" onclick="closeModal('modal-peca')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:20px;align-items:flex-start">
+        <!-- Imagem -->
+        <div style="flex-shrink:0">
+          <div id="peca-img-preview" style="
+            width:110px;height:110px;border:2px dashed var(--border2);border-radius:var(--radius);
+            display:flex;align-items:center;justify-content:center;overflow:hidden;
+            background:var(--surface2);cursor:pointer;transition:border-color 0.2s;background-size:cover;background-position:center"
+            onclick="document.getElementById('peca-img-input').click()"
+            onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+            <span style="font-size:32px;color:var(--border2)" id="peca-img-icon">⊞</span>
+          </div>
+          <input type="file" id="peca-img-input" accept="image/*" style="display:none" onchange="onPecaImgChange(this)">
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="document.getElementById('peca-img-input').click()">⊕ Foto</button>
+            <button class="btn btn-ghost btn-sm" id="peca-img-remove" style="display:none;color:var(--red);font-size:10px;padding:3px 8px" onclick="removerImgPeca()">✕</button>
+          </div>
+        </div>
+        <!-- Campos -->
+        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group full" style="grid-column:span 2">
+            <label class="form-label">P/N (Código) *</label>
+            <input class="form-input" id="peca-codigo" placeholder="Ex: 50.15.0016A">
+          </div>
+          <div class="form-group full" style="grid-column:span 2">
+            <label class="form-label">Nome (Part Name) *</label>
+            <input class="form-input" id="peca-nome" placeholder="Nome da peça em inglês/português">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fonte / Fabricante</label>
+            <select class="form-select" id="peca-fonte" onchange="atualizarLinhasModal(this.value)">
+              <option value="">— Selecionar —</option>
+              <optgroup label="DYMIND">
+                <option value="DYMIND">DYMIND</option>
+              </optgroup>
+              <optgroup label="RAYTO">
+                <option value="RAYTO">RAYTO</option>
+              </optgroup>
+              <optgroup label="Outros Fabricantes">
+                <option value="ORTHO">ORTHO</option>
+                <option value="SIEMENS">SIEMENS</option>
+                <option value="SNIBE">SNIBE</option>
+                <option value="FUJIFILM">FUJIFILM</option>
+                <option value="STAGO">STAGO</option>
+                <option value="VIDA BIOTECNOLOGIA">VIDA BIOTECNOLOGIA</option>
+                <option value="SENSACORE">SENSACORE</option>
+                <option value="BIOBASE">BIOBASE</option>
+                <option value="OUTRO">OUTRO</option>
+              </optgroup>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Linha / Modelo</label>
+            <select class="form-select" id="peca-linha">
+              <option value="">— Selecionar —</option>
+              <option value="DP-C16">DP-C16</option>
+              <option value="DF55/DF56VET">DF55/DF56VET</option>
+              <option value="DH36">DH36</option>
+              <option value="DH36VET">DH36VET</option>
+              <option value="DH76">DH76</option>
+              <option value="DH615">DH615</option>
+            </select>
+          </div>
+          </div>
+          <div class="form-group full" style="grid-column:span 2">
+            <label class="form-label">Especificações / Descrição Detalhada</label>
+            <textarea class="form-input" id="peca-especificacoes" rows="2"
+              placeholder="Detalhes técnicos, dimensões, compatibilidade, referência do fabricante..."
+              style="resize:vertical;min-height:60px"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unidade</label>
+            <select class="form-select" id="peca-unidade">
+              <option>pcs</option><option>FT</option><option>UN</option>
+              <option>KG</option><option>M</option><option>CX</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Peso (g)</label>
+            <input class="form-input" type="number" step="0.1" id="peca-peso-g" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estoque Mínimo</label>
+            <input class="form-input" type="number" id="peca-minimo" placeholder="0" value="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Seção de precificação -->
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;margin-bottom:12px">▸ PRECIFICAÇÃO — Custo USD × Taxa × Dólar × Mark-up</div>
+
+        <!-- Fórmula visual -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:14px;
+          background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px">
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:2px">PREÇO USD</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)" id="calc-usd-display">$ 0,00</div>
+          </div>
+          <span style="color:var(--text3);font-size:16px">×</span>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:2px">TAXA</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)" id="calc-taxa-display">1,00</div>
+          </div>
+          <span style="color:var(--text3);font-size:16px">×</span>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:2px">DÓLAR</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)" id="calc-dolar-display">R$ 0,00</div>
+          </div>
+          <span style="color:var(--text3);font-size:16px">=</span>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--accent);margin-bottom:2px">CUSTO R$</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)" id="calc-custo-display">R$ 0,00</div>
+          </div>
+          <span style="color:var(--text3);font-size:16px">×</span>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:2px">MARK-UP</div>
+            <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text)" id="calc-markup-display">1,00</div>
+          </div>
+          <span style="color:var(--text3);font-size:16px">=</span>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--green);margin-bottom:2px">VENDA R$</div>
+            <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green)" id="calc-venda-display">R$ 0,00</div>
+          </div>
+        </div>
+
+        <!-- Campos de entrada -->
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end">
+          <div class="form-group">
+            <label class="form-label">Preço (USD) *</label>
+            <input class="form-input" type="number" step="0.01" id="peca-preco-usd" placeholder="0.00"
+              oninput="recalcPricing()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px">
+              Taxa
+              <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">(imp/frete)</span>
+            </label>
+            <input class="form-input" type="number" step="0.01" id="peca-taxa" placeholder="1.50"
+              oninput="recalcPricing()">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="display:flex;align-items:center;gap:4px">
+              Dólar
+              <span style="font-family:var(--mono);font-size:9px;color:var(--text3)">(R$)</span>
+            </label>
+            <input class="form-input" type="number" step="0.01" id="peca-dolar" placeholder="5.60"
+              oninput="recalcPricing()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Custo R$</label>
+            <input class="form-input" type="number" step="0.01" id="peca-custo" placeholder="auto"
+              style="background:rgba(212,140,50,0.06);border-color:rgba(212,140,50,0.3)"
+              oninput="recalcPricingFromCusto()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mark-up</label>
+            <input class="form-input" type="number" step="0.01" id="peca-markup" placeholder="2.00"
+              oninput="recalcPricing()">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          <div class="form-group">
+            <label class="form-label">Valor Venda (R$)</label>
+            <input class="form-input" type="number" step="0.01" id="peca-valor-venda" placeholder="auto"
+              style="background:rgba(80,200,120,0.06);border-color:rgba(80,200,120,0.3)"
+              oninput="recalcMarkupFromVenda()">
+          </div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:1px">
+            <div style="font-size:11px;color:var(--text3);line-height:1.5;font-family:var(--mono)">
+              Edite <span style="color:var(--accent)">Custo R$</span> ou <span style="color:var(--green)">Valor Venda</span> manualmente<br>para sobrescrever o cálculo automático.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-peca')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPeca()">✓ Salvar Peça</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EQUIPAMENTO -->
+<div class="modal-overlay" id="modal-equip">
+  <div class="modal" style="max-width:820px">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-equip-title">Novo Equipamento</span>
+      <button class="modal-close" onclick="closeModal('modal-equip')">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Identificação -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">▸ Identificação</div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Equipamento (Código) *</label>
+          <input class="form-input" id="equip-codigo" placeholder="Ex: 000083">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Produto (Nome) *</label>
+          <input class="form-input" id="equip-nome" placeholder="Nome do equipamento">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cód. Produto</label>
+          <input class="form-input" id="equip-cod-produto" placeholder="Ex: HMG020606894EN">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Série Fabricante</label>
+          <input class="form-input" id="equip-serie" placeholder="Número de série">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Marca</label>
+          <input class="form-input" id="equip-marca" placeholder="Ex: Sysmex, Roche">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Modelo</label>
+          <input class="form-input" id="equip-modelo" placeholder="Modelo do equipamento">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grupo</label>
+          <input class="form-input" id="equip-grupo" placeholder="Ex: HEMATOLOGIA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Grupo 2</label>
+          <input class="form-input" id="equip-grupo2" placeholder="Ex: EQUIPAMENTOS">
+        </div>
+      </div>
+
+      <!-- Status / Propriedade -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">▸ Status / Propriedade / Localização</div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="equip-status">
+            <option>Em Contrato</option>
+            <option>Disponivel</option>
+            <option>Em OS - Com Contrato</option>
+            <option>Em OS - Sem Contrato</option>
+            <option>Inativo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Proprietário</label>
+          <select class="form-select" id="equip-proprietario">
+            <option>Empresa</option>
+            <option>Cliente</option>
+            <option>Terceiros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Usado</label>
+          <select class="form-select" id="equip-usado">
+            <option value="">—</option>
+            <option>Bom Estado</option>
+            <option>Usado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Local</label>
+          <input class="form-input" id="equip-local" placeholder="Ex: QUALLYX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Setor</label>
+          <input class="form-input" id="equip-setor" placeholder="Setor interno">
+        </div>
+        <div class="form-group">
+          <label class="form-label">IP</label>
+          <input class="form-input" id="equip-ip" placeholder="Endereço IP">
+        </div>
+      </div>
+
+      <!-- Cliente / Contrato -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">▸ Cliente / Contrato / OS</div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Nome Fantasia (Cliente)</label>
+          <input class="form-input" id="equip-nome-fantasia" placeholder="Nome do cliente">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contrato</label>
+          <input class="form-input" id="equip-contrato" placeholder="Ex: 2025-000246">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Local Contrato</label>
+          <input class="form-input" id="equip-local-contrato" placeholder="Local do contrato">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Última OS</label>
+          <input class="form-input" id="equip-ult-os" placeholder="Número da OS">
+        </div>
+        <div class="form-group">
+          <label class="form-label">OS Aberta</label>
+          <input class="form-input" id="equip-os-aberta" placeholder="OS em aberto">
+        </div>
+        <div class="form-group">
+          <label class="form-label">OS Instalação</label>
+          <input class="form-input" id="equip-os-instalacao" placeholder="OS de instalação">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fornecedor</label>
+          <input class="form-input" id="equip-fornecedor" placeholder="Nome do fornecedor">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nota Fiscal de Compra</label>
+          <input class="form-input" id="equip-nf-compra" placeholder="NF de compra">
+        </div>
+      </div>
+
+      <!-- Datas / Valores -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">▸ Datas / Valores</div>
+      <div class="form-grid" style="margin-bottom:16px">
+        <div class="form-group">
+          <label class="form-label">Data de Compra</label>
+          <input class="form-input" id="equip-data-compra" placeholder="AAAA-MM-DD">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ano de Fabricação</label>
+          <input class="form-input" type="number" id="equip-ano-fab" placeholder="Ex: 2021">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Término Garantia</label>
+          <input class="form-input" id="equip-termino-garantia" placeholder="AAAA-MM-DD">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Envio</label>
+          <input class="form-input" id="equip-envio" placeholder="Data envio">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Último Retorno</label>
+          <input class="form-input" id="equip-ult-retorno" placeholder="Data último retorno">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor de Compra (R$)</label>
+          <input class="form-input" type="number" step="0.01" id="equip-valor-compra" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor de Mercado (R$)</label>
+          <input class="form-input" type="number" step="0.01" id="equip-valor-mercado" placeholder="0,00">
+        </div>
+      </div>
+
+      <!-- Endereço -->
+      <div style="font-family:var(--mono);font-size:9px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">▸ Endereço de Instalação</div>
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">Endereço</label>
+          <input class="form-input" id="equip-endereco" placeholder="Logradouro">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Número</label>
+          <input class="form-input" id="equip-numero" placeholder="Nº">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Complemento</label>
+          <input class="form-input" id="equip-complemento" placeholder="Apto, sala...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bairro</label>
+          <input class="form-input" id="equip-bairro" placeholder="Bairro">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Município</label>
+          <input class="form-input" id="equip-municipio" placeholder="Cidade">
+        </div>
+        <div class="form-group">
+          <label class="form-label">UF</label>
+          <input class="form-input" id="equip-uf" placeholder="SP" maxlength="2" style="width:80px">
+        </div>
+        <div class="form-group">
+          <label class="form-label">CEP</label>
+          <input class="form-input" id="equip-cep" placeholder="00000-000">
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-equip')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEquipamento()">✓ Salvar Equipamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+
+  <!-- Scripts -->
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
