@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const db = require('./database');
+const { getDb } = require('./database');
+const db = { prepare: (...a) => getDb().prepare(...a), exec: (...a) => getDb().exec(...a), run: (...a) => getDb().run(...a), transaction: (...a) => getDb().transaction(...a) };
 const bcrypt = require('bcryptjs');
 const { gerarToken, autenticar, isAdmin } = require('./auth');
 

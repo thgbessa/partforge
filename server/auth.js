@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const db = require('./database');
+const { getDb } = require('./database');
+const db = { prepare: (...a) => getDb().prepare(...a) };
 
 const JWT_SECRET = process.env.JWT_SECRET || 'partforge-secret-change-in-production';
 
