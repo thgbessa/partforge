@@ -20,35 +20,38 @@ app.use(express.static(path.join(__dirname, '../public'), { maxAge: '1d' }));
 
 init().then(async () => {
   const db = require('./database');
-  const countPecas = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
-  const htmlPath = path.join(__dirname, '../gestao-pecas.html');
 
-  if (countPecas < 500 && fs.existsSync(htmlPath)) {
-    console.log(`Importando catalogos (${countPecas} pecas no banco)...`);
+  const countP = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
+  if (countP < 500) {
+    console.log('Auto-import iniciando, pecas no banco: ' + countP);
     try {
-      const html   = fs.readFileSync(htmlPath, 'utf-8');
-      const nodeVm = require('vm');
-      const catMatch = html.match(/const PARTS_CATALOG\s*=[\s\S]*?(?=\/\/ ={10})/);
-      if (catMatch) {
-        const sandbox = { module: { exports: {} } };
-        nodeVm.runInNewContext(catMatch[0] + `
-          module.exports = {
-            PARTS_CATALOG:      typeof PARTS_CATALOG      !== 'undefined' ? PARTS_CATALOG      : [],
-            DYMIND_NEW_CATALOG: typeof DYMIND_NEW_CATALOG !== 'undefined' ? DYMIND_NEW_CATALOG : [],
-            RAYTO_CATALOG:      typeof RAYTO_CATALOG      !== 'undefined' ? RAYTO_CATALOG      : [],
-            IMPORTAR1_CATALOG:  typeof IMPORTAR1_CATALOG  !== 'undefined' ? IMPORTAR1_CATALOG  : [],
-            SENSACORE_CATALOG:  typeof SENSACORE_CATALOG  !== 'undefined' ? SENSACORE_CATALOG  : [],
-            BIOBASE_CATALOG:    typeof BIOBASE_CATALOG    !== 'undefined' ? BIOBASE_CATALOG    : [],
-          };
-        `, sandbox);
-        const cats = sandbox.module.exports;
-        const allPecas = [
-          ...(cats.PARTS_CATALOG      || []).map(p => ({ ...p, fonte: p.fonte || 'DYMIND', linha: p.linha || 'DP-C16' })),
-          ...(cats.DYMIND_NEW_CATALOG || []),
-          ...(cats.RAYTO_CATALOG      || []),
-          ...(cats.IMPORTAR1_CATALOG  || []),
-          ...(cats.SENSACORE_CATALOG  || []),
-          ...(cats.BIOBASE_CATALOG    || []),
-        ];
-        let inserted = 0;
-        for (const p of allPecas)
+      const https   = require('https');
+      const tmpFile = '/tmp/auto-imp.js';
+      const catUrl  = 'https://raw.githubusercontent.com/thgbessa/partforge/main/import-pecas.js';
+      await new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(tmpFile);
+        https.get(catUrl, res => {
+          res.pipe(file);
+          file.on('finish', resolve);
+        }).on('error', reject);
+      });
+      delete require.cache[require.resolve(tmpFile)];
+      require(tmpFile);
+      console.log('Auto-import concluido!');
+    } catch(e) {
+      console.log('Auto-import erro: ' + e.message);
+    }
+  }
+
+  const routes = require('./routes');
+  app.use('/api', routes);
+  app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+  app.use((err, req, res, next) => { console.error(err); res.status(500).json({ erro: 'Erro interno' }); });
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('PartForge v2.0 rodando na porta ' + PORT);
+  });
+}).catch(err => {
+  console.error('Erro ao iniciar banco:', err);
+  process.exit(1);
+});
