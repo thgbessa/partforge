@@ -2135,7 +2135,7 @@ function abrirModalOrcamento(id) {
   orcItens  = o ? JSON.parse(JSON.stringify(o.itens||[])) : [];
 
   document.getElementById('modal-orcamento-title').textContent = o ? 'Editar Orçamento' : 'Novo Orçamento';
-  document.getElementById('orc-numero').value      = o?.numero     || `ORC-${new Date().getFullYear()}-${String(db.orcamentos.length+1).padStart(3,'0')}`;
+  if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
   document.getElementById('orc-status').value      = o?.status     || 'RASCUNHO';
   document.getElementById('orc-cliente').value     = o?.cliente    || '';
   document.getElementById('orc-serie').value       = o?.equipSerie || '';
