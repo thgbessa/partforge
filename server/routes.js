@@ -110,12 +110,13 @@ router.get('/equipamentos', autenticar, (req, res) => {
     const campos = P(e.campos)||{};
     return {
       ...e, campos,
-      // Expõe campos extras do backup antigo diretamente no objeto
       nome: e.modelo, nome_fantasia: e.cliente,
       cod_produto: campos.cod_produto||'', grupo: campos.grupo||e.linha||'',
       grupo2: campos.grupo2||'', status: campos.status||'',
       proprietario: campos.proprietario||'', municipio: campos.municipio||'',
       uf: campos.uf||'', os_aberta: campos.os_aberta||'',
+      // Expõe codigo do campos diretamente
+      codigo: campos.codigo || e.serie || e.id || '',
     };
   }));
 });
@@ -162,6 +163,19 @@ router.put('/estoque/:pecaId', autenticar, isAdmin, (req, res) => {
 });
 
 // ── MOVIMENTAÇÕES ─────────────────────────────────────────────
+const toMov=m=>({
+  ...m,
+  pecaId:      m.peca_id,
+  pecaCodigo:  m.peca_codigo,
+  pecaNome:    m.peca_nome,
+  pecaUnidade: m.peca_unidade,
+  equipSerie:  m.equip_serie,
+  equipCliente:m.equip_cliente,
+  equipModelo: m.equip_modelo,
+  temEstoque:  m.tem_estoque,
+  eventos:     typeof m.eventos==='string' ? JSON.parse(m.eventos||'[]') : m.eventos||[]
+});
+
 router.get('/movimentacoes', autenticar, (req, res) => {
   const {status,q}=req.query;
   const admin=['Gerente','Back Office','Assessor'].includes(req.user.cargo);
@@ -169,7 +183,7 @@ router.get('/movimentacoes', autenticar, (req, res) => {
   if (!admin) { sql+=' AND tecnico=?'; p.push(req.user.nome); }
   if (status) { sql+=' AND status=?'; p.push(status); }
   if (q) { sql+=' AND (peca_nome LIKE ? OR peca_codigo LIKE ? OR equip_serie LIKE ? OR tecnico LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`,`%${q}%`); }
-  const lista = db.query(sql+' ORDER BY created_at DESC',p).map(m=>({...m,eventos:P(m.eventos)}));
+  const lista = db.query(sql+' ORDER BY created_at DESC',p).map(toMov);
   res.json(lista);
 });
 
@@ -350,7 +364,7 @@ router.get('/dashboard', autenticar, (req, res) => {
   const orcAbertos   = db.get("SELECT COUNT(*) as n FROM orcamentos WHERE status='ABERTO'")?.n || 0;
   const pedAbertos   = db.get("SELECT COUNT(*) as n FROM pedidos WHERE status='ABERTO'")?.n || 0;
   const estoqueMin   = db.get(`SELECT COUNT(*) as n FROM estoque e JOIN pecas p ON p.id=e.peca_id WHERE p.minimo>0 AND e.quantidade<p.minimo`)?.n || 0;
-  const ultMovs      = db.query("SELECT * FROM movimentacoes ORDER BY created_at DESC LIMIT 10").map(m=>({...m,eventos:P(m.eventos)}));
+  const ultMovs      = db.query("SELECT * FROM movimentacoes ORDER BY created_at DESC LIMIT 10").map(toMov);
   res.json({totalPecas,totalEquip,movAbertos,compPendente,orcAbertos,pedAbertos,estoqueMin,ultMovs});
 });
 
@@ -377,15 +391,12 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
 router.post('/restore', autenticar, isAdmin, (req, res) => {
   const s=req.body;
   try {
-    // Suporte ao backup novo (array pecas) e antigo (pecasPrecos + movimentacoes + depositos)
     if (s.pecas?.length) {
       for (const p of s.pecas)
         db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [p.id||uid(),p.codigo||'',p.nome||'',p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,p.imagem||'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.created_at||now()]);
     } else if (s.pecasPrecos || s.depositos || s.movimentacoes) {
-      // Backup antigo: reconstrói peças a partir de movimentacoes + depositos + pecasPrecos
       const pecasMap = {};
-      // 1. Peças de movimentações
       if (s.movimentacoes?.length) {
         for (const m of s.movimentacoes) {
           const pid = m.peca_id||m.pecaId||'';
@@ -399,7 +410,6 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
           }
         }
       }
-      // 2. Peças de depositos (backup antigo)
       if (s.depositos) {
         for (const [pid, dep] of Object.entries(s.depositos)) {
           if (!pecasMap[pid] && dep._nome) {
@@ -411,20 +421,17 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
           }
         }
       }
-      // 3. Aplica preços de pecasPrecos
       if (s.pecasPrecos) {
         for (const p of Object.values(pecasMap)) {
           const preco = s.pecasPrecos[p.codigo] || s.pecasPrecos[p.id];
           if (preco) Object.assign(p, preco);
         }
       }
-      // 4. Insere no banco
       for (const p of Object.values(pecasMap)) {
         if (!p.nome) continue;
         db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [p.id,p.codigo||'',p.nome,p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,now()]);
       }
-      // 5. Estoque de depositos antigo
       if (s.depositos) {
         for (const [pid, dep] of Object.entries(s.depositos)) {
           const total = typeof dep.Total === 'number' ? dep.Total : 0;
@@ -434,7 +441,6 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
           }
         }
       }
-      // 6. Estoque de estoque antigo (chaves random IDs)
       if (s.estoque && !Array.isArray(s.estoque)) {
         for (const [pid, qtd] of Object.entries(s.estoque)) {
           if (pecasMap[pid] && qtd > 0) {
@@ -445,12 +451,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     }
 
     if (s.equipamentos?.length) for (const e of s.equipamentos) {
-      // Compatível com backup antigo (campos: nome, nome_fantasia, municipio, uf) e novo (modelo, cliente)
       const modelo  = e.modelo || e.nome || '';
       const cliente = e.cliente || e.nome_fantasia || '';
       const local   = e.local || e.endereco || '';
       const linha   = e.linha || e.grupo || '';
-      // Salva campos extras no JSON campos
       const campos  = e.campos || {
         codigo: e.codigo||'', cod_produto: e.cod_produto||'', grupo: e.grupo||'',
         grupo2: e.grupo2||'', status: e.status||'', proprietario: e.proprietario||'',
