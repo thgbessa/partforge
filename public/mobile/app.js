@@ -2,7 +2,6 @@ const API_BASE='/api';
 let currentUser=null;
 let navHistory=[];
 let token=localStorage.getItem('pf_mobile_token');
-// FLAG: impede autoLogin após logout
 let didLogout=false;
 
 async function api(method,path,body){
@@ -52,6 +51,7 @@ function goBack(){
 }
 
 function mostrarLogin(){
+  document.getElementById('screen-home').style.transform='translateX(100%)';
   navHistory.length=0;
   document.querySelectorAll('.screen').forEach(s=>{
     s.classList.remove('active','slide-left');
@@ -82,7 +82,10 @@ async function doLogin(){
     localStorage.setItem('pf_mobile_token',token);
     didLogout=false;
     initHome();
-    showScreen('screen-home',false);
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active','slide-left'));
+    const home=document.getElementById('screen-home');
+    home.style.transform='translateX(0)';
+    home.classList.add('active');
   }catch(e){
     errEl.textContent=e.message;
   }finally{
@@ -92,7 +95,6 @@ async function doLogin(){
 }
 
 function doLogout(){
-  // Remove token PRIMEIRO antes de qualquer outra coisa
   localStorage.removeItem('pf_mobile_token');
   token=null;
   currentUser=null;
@@ -372,7 +374,6 @@ async function enviarOrcamento(){
 }
 
 async function autoLogin(){
-  // Não faz autoLogin se acabou de fazer logout
   if(didLogout)return;
   const t=localStorage.getItem('pf_mobile_token');
   if(!t)return;
@@ -380,13 +381,15 @@ async function autoLogin(){
     const r=await fetch(API_BASE+'/auth/me',{headers:{Authorization:`Bearer ${t}`}});
     if(!r.ok)throw new Error('token inválido');
     const d=await r.json();
-    // Se fez logout durante a requisição, ignora
     if(didLogout)return;
     currentUser=d.usuario||d.user||(d.id?d:null);
     if(currentUser){
       token=t;
       initHome();
-      showScreen('screen-home',false);
+      document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active','slide-left'));
+      const home=document.getElementById('screen-home');
+      home.style.transform='translateX(0)';
+      home.classList.add('active');
       return;
     }
   }catch(e){}
