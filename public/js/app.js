@@ -38,7 +38,7 @@ let editId = null;
 //  NAVIGATION
 // ============================================================
 function navigate(page, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); var _pMob=document.getElementById('page-mobile-requests'); if(_pMob) _pMob.style.display='none';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   el.classList.add('active');
@@ -60,6 +60,12 @@ function navigate(page, el) {
   const actionsEl = document.getElementById('topbar-actions');
   actionsEl.innerHTML = '';
 
+  if (page === 'mobile-requests') { const pMob=document.getElementById('page-mobile-requests'); if(pMob){pMob.style.display='block';} setTimeout(()=>{renderMobOrc();renderMobPed();marcarTodasLidas();},200); }
+  if (page === 'mobile-requests') {
+    const pMob=document.getElementById('page-mobile-requests');
+    if(pMob) pMob.style.display='block';
+    setTimeout(()=>{if(typeof renderMobOrc==='function'){renderMobOrc();renderMobPed();marcarTodasLidas();}},300);
+  }
   if (page === 'pecas') {
     const isAdmin = podeAcessar('admin');
     actionsEl.innerHTML = `
@@ -4848,6 +4854,7 @@ function navigate(page, el) {
     usuarios:     ['Usuários',     '/ cadastro e permissões'],
     compras:      ['Compras',      '/ pedidos e sugestões'],
     doadoras:     ['Máq. Doadoras','/ retirada de peças'],
+    'mobile-requests': ['Solicitações Mobile','/ orçamentos e pedidos do app'],
   };
   const t = titles[page] || [page, ''];
   const titleEl = document.getElementById('page-title');
@@ -4857,6 +4864,7 @@ function navigate(page, el) {
 
   const actionsEl = document.getElementById('topbar-actions');
   if (actionsEl) actionsEl.innerHTML = '';
+  if (page === 'mobile-requests') { var pMob=document.getElementById('page-mobile-requests'); if(pMob){pMob.style.display='block';} setTimeout(function(){if(typeof renderMobOrc==='function'){renderMobOrc();renderMobPed();marcarTodasLidas();}},200); }
 
   if (page === 'pecas') {
     const isAdmin = podeAcessar('admin');
@@ -4956,3 +4964,105 @@ function importarBancoDados(input) {
     API.clearToken();
   });
 })();
+
+// ============================================================
+// SOLICITAÇÕES MOBILE
+// ============================================================
+let mobSeenIds = [];
+
+function getMobOrcamentos() {
+  return (db.orcamentos||[]).filter(o=>o.numero&&String(o.numero).startsWith('M-'));
+}
+
+function getMobPedidos() {
+  return (db.movimentacoes||[]).filter(m=>m.tecnico&&m.tecnico.trim()!=='');
+}
+
+function tocarSomAlerta() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [523,659,784].forEach((freq,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0.3,ctx.currentTime+i*0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+i*0.15+0.3);
+      osc.start(ctx.currentTime+i*0.15);
+      osc.stop(ctx.currentTime+i*0.15+0.3);
+    });
+  } catch(e){}
+}
+
+function atualizarBadgeMobile() {
+  const orcs = getMobOrcamentos();
+  const peds = getMobPedidos();
+  const novosOrcs = orcs.filter(o=>!mobSeenIds.includes('orc-'+o.id));
+  const novosPeds = peds.filter(m=>!mobSeenIds.includes('ped-'+m.id));
+  const total = novosOrcs.length + novosPeds.length;
+  const badge = document.getElementById('badge-mobile');
+  const badgeOrc = document.getElementById('badge-mob-orc');
+  const badgePed = document.getElementById('badge-mob-ped');
+  if(badge){if(total>0){badge.textContent=total;badge.style.display='';}else{badge.style.display='none';}}
+  if(badgeOrc){if(novosOrcs.length>0){badgeOrc.textContent=novosOrcs.length;badgeOrc.style.display='';}else{badgeOrc.style.display='none';}}
+  if(badgePed){if(novosPeds.length>0){badgePed.textContent=novosPeds.length;badgePed.style.display='';}else{badgePed.style.display='none';}}
+}
+
+function marcarTodasLidas() {
+  const orcs = getMobOrcamentos();
+  const peds = getMobPedidos();
+  mobSeenIds = [...orcs.map(o=>'orc-'+o.id), ...peds.map(m=>'ped-'+m.id)];
+  atualizarBadgeMobile();
+  renderMobOrc(); renderMobPed();
+}
+
+function switchMobTab(tab) {
+  document.getElementById('panel-mob-orc').style.display = tab==='orc'?'':'none';
+  document.getElementById('panel-mob-ped').style.display = tab==='ped'?'':'none';
+  const tOrc = document.getElementById('tab-mob-orc');
+  const tPed = document.getElementById('tab-mob-ped');
+  if(tOrc){tOrc.style.borderBottomColor=tab==='orc'?'var(--accent)':'transparent';tOrc.style.color=tab==='orc'?'var(--accent)':'var(--text3)';}
+  if(tPed){tPed.style.borderBottomColor=tab==='ped'?'var(--accent)':'transparent';tPed.style.color=tab==='ped'?'var(--accent)':'var(--text3)';}
+}
+
+function renderMobOrc() {
+  const el = document.getElementById('mob-orc-table');
+  if(!el) return;
+  const orcs = getMobOrcamentos();
+  if(!orcs.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-title">Nenhum orçamento mobile</div></div>';return;}
+  el.innerHTML='<table class="data-table"><thead><tr><th>Número</th><th>Cliente</th><th>Equipamento</th><th>Total</th><th>Data</th><th>Status</th><th>Ações</th></tr></thead><tbody>'+
+    orcs.map(o=>{
+      const isNovo = !mobSeenIds.includes('orc-'+o.id);
+      return '<tr style="'+(isNovo?'background:rgba(249,115,22,0.05);':'')+'">' +
+        '<td><span style="font-family:var(--mono);color:var(--accent)">'+o.numero+'</span>'+(isNovo?'<span style="background:var(--accent);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-left:6px">NOVO</span>':'')+'</td>'+
+        '<td>'+(o.cliente||'—')+'</td>'+
+        '<td>'+(o.equipNome||o.equipSerie||'—')+'</td>'+
+        '<td style="font-family:var(--mono);color:var(--green)">R$ '+parseFloat(o.total||0).toFixed(2)+'</td>'+
+        '<td>'+(o.data||'—')+'</td>'+
+        '<td><span class="status-badge status-'+(o.status||'').toLowerCase()+'">'+(o.status||'—')+'</span></td>'+
+        '<td><button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento(\''+o.id+'\')">Ver</button> <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento(\''+o.id+'\')">⬇ PDF</button></td>'+
+      '</tr>';
+    }).join('')+
+  '</tbody></table>';
+}
+
+function renderMobPed() {
+  const el = document.getElementById('mob-ped-table');
+  if(!el) return;
+  const peds = getMobPedidos();
+  if(!peds.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-title">Nenhuma solicitação mobile</div></div>';return;}
+  el.innerHTML='<table class="data-table"><thead><tr><th>Seq</th><th>Peça</th><th>Qtd</th><th>Técnico</th><th>Série</th><th>Status</th><th>Data</th></tr></thead><tbody>'+
+    peds.map(m=>{
+      const isNovo = !mobSeenIds.includes('ped-'+m.id);
+      return '<tr style="'+(isNovo?'background:rgba(249,115,22,0.05);':'')+'">' +
+        '<td><span style="font-family:var(--mono)">#'+(m.seqNum||m.seq_num||'—')+'</span>'+(isNovo?'<span style="background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-left:6px">NOVO</span>':'')+'</td>'+
+        '<td>'+(m.pecaNome||m.peca_nome||'—')+'<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">'+(m.pecaCodigo||m.peca_codigo||'')+'</span></td>'+
+        '<td style="font-family:var(--mono)">'+(m.qtd||1)+'</td>'+
+        '<td>'+(m.tecnico||'—')+'</td>'+
+        '<td>'+(m.equipSerie||m.equip_serie||'—')+'</td>'+
+        '<td><span class="status-badge">'+(m.status||'—')+'</span></td>'+
+        '<td>'+((m.createdAt||m.created_at||'').slice(0,10)||'—')+'</td>'+
+      '</tr>';
+    }).join('')+
+  '</tbody></table>';
+}
