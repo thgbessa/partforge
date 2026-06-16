@@ -79,9 +79,12 @@
   <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Novo Orçamento</div><div class="topbar-sub">PROPOSTA COMERCIAL</div></div></div>
   <div class="scroll-body">
     <div class="form-section">
-      <div class="form-section-title">Cliente</div>
-      <div class="form-row"><label class="form-label">Nome do cliente</label><input type="text" id="orc-cliente" class="form-input" placeholder="Ex: Laboratório ABC"></div>
-      <div class="form-row"><label class="form-label">Equipamento / Série</label><input type="text" id="orc-equip" class="form-input" placeholder="Modelo ou nº de série"></div>
+      <div class="form-section-title">Dados do Cliente</div>
+      <div class="form-row"><label class="form-label">Nome do Cliente *</label><input type="text" id="orc-cliente" class="form-input" placeholder="Nome do cliente (obrigatório)"></div>
+      <div class="form-row"><label class="form-label">Nº do Chamado *</label><input type="text" id="orc-chamado" class="form-input" placeholder="Número do chamado (obrigatório)"></div>
+      <div class="form-row"><label class="form-label">Nº de Série do Equipamento *</label><input type="text" id="orc-equip" class="form-input" placeholder="Nº de série (obrigatório)"></div>
+      <div class="form-row"><label class="form-label">E-mail do Cliente *</label><input type="email" id="orc-email" class="form-input" placeholder="email@cliente.com (obrigatório)"></div>
+      <div class="form-row"><label class="form-label">WhatsApp do Cliente</label><input type="tel" id="orc-whatsapp" class="form-input" placeholder="(11) 99999-9999"></div>
     </div>
     <div class="form-section">
       <div class="form-section-title">Itens</div>
