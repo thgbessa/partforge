@@ -157,7 +157,7 @@ async function loadRecentes(){
 }
 
 let pedidoPeca=null;
-function abrirPedido(){
+function abrirSolicitacao(){
   pedidoPeca=null;
   document.getElementById('pedido-peca-sel').style.display='none';
   document.getElementById('pedido-busca-wrap').style.display='block';
@@ -166,11 +166,11 @@ function abrirPedido(){
   document.getElementById('pedido-obs').value='';
   document.getElementById('pedido-busca').value='';
   document.getElementById('pedido-resultados').innerHTML='';
-  showScreen('screen-pedido');
+  showScreen('screen-solicitacao');
 }
 
 let buscaTimer=null;
-async function buscarPecasPedido(q){
+async function buscarPecasSolicitacao(q){
   clearTimeout(buscaTimer);
   if(!q||q.length<2){document.getElementById('pedido-resultados').innerHTML='';return;}
   buscaTimer=setTimeout(async()=>{
@@ -203,7 +203,7 @@ function selecionarPecaPedido(id,codigo,nome,unidade,custo){
   sel.querySelector('.selected-peca-nome').textContent=nome;
 }
 
-function alterarPecaPedido(){
+function alterarPecaSolicitacao(){
   pedidoPeca=null;
   document.getElementById('pedido-peca-sel').style.display='none';
   document.getElementById('pedido-busca-wrap').style.display='block';
@@ -211,12 +211,12 @@ function alterarPecaPedido(){
   document.getElementById('pedido-resultados').innerHTML='';
 }
 
-function pedidoQty(delta){
+function solicitacaoQty(delta){
   const inp=document.getElementById('pedido-qtd');
   inp.value=Math.max(1,parseInt(inp.value||'1')+delta);
 }
 
-async function enviarPedido(){
+async function enviarSolicitacao(){
   if(!pedidoPeca){toast('Selecione uma peça','error');return;}
   const qtd=parseInt(document.getElementById('pedido-qtd').value)||1;
   const equip=document.getElementById('pedido-equip').value.trim();
@@ -239,7 +239,7 @@ async function enviarPedido(){
   }catch(e){
     toast(e.message,'error');
   }finally{
-    btn.disabled=false;btn.textContent='🛒 Enviar Pedido';
+    btn.disabled=false;btn.textContent='🛒 Enviar Solicitação';
   }
 }
 
@@ -408,3 +408,80 @@ document.addEventListener('DOMContentLoaded',()=>{
     autoLogin();
   }
 });
+
+let movPecaSel = null;
+function abrirMovimentacao() {
+  movPecaSel = null;
+  document.getElementById('mov-busca').value = '';
+  document.getElementById('mov-resultados').innerHTML = '';
+  document.getElementById('mov-busca-wrap').style.display = '';
+  document.getElementById('mov-peca-sel').style.display = 'none';
+  document.getElementById('mov-qtd').value = '1';
+  document.getElementById('mov-equip').value = '';
+  document.getElementById('mov-tecnico').value = currentUser ? currentUser.nome : '';
+  document.getElementById('mov-obs').value = '';
+  showScreen('screen-mov');
+}
+function buscarPecasMov(q) {
+  const el = document.getElementById('mov-resultados');
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  const r = (db.pecas || []).filter(p =>
+    (p.codigo||'').toLowerCase().includes(q.toLowerCase()) ||
+    (p.nome||'').toLowerCase().includes(q.toLowerCase())
+  ).slice(0,8);
+  if (!r.length) { el.innerHTML = '<div style="padding:12px;color:var(--text2);font-size:13px">Nenhuma peca encontrada</div>'; return; }
+  el.innerHTML = r.map(p => '<div class="peca-card" onclick="selecionarPecaMov(\''+p.id+'\')"><div class="peca-codigo">'+p.codigo+'</div><div class="peca-nome">'+p.nome+'</div></div>').join('');
+}
+function selecionarPecaMov(id) {
+  movPecaSel = (db.pecas || []).find(p => p.id === id);
+  if (!movPecaSel) return;
+  document.getElementById('mov-busca-wrap').style.display = 'none';
+  const sel = document.getElementById('mov-peca-sel');
+  sel.style.display = '';
+  sel.querySelector('.selected-peca-codigo').textContent = movPecaSel.codigo || '';
+  sel.querySelector('.selected-peca-nome').textContent = movPecaSel.nome || '';
+}
+function alterarPecaMov() {
+  movPecaSel = null;
+  document.getElementById('mov-busca-wrap').style.display = '';
+  document.getElementById('mov-peca-sel').style.display = 'none';
+  document.getElementById('mov-busca').value = '';
+  document.getElementById('mov-resultados').innerHTML = '';
+}
+function movQty(d) {
+  const el = document.getElementById('mov-qtd');
+  el.value = Math.max(1, (parseInt(el.value)||1) + d);
+}
+async function enviarMovimentacao() {
+  if (!movPecaSel) { showToast('Selecione uma peca', 'error'); return; }
+  const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
+  const tecnico = document.getElementById('mov-tecnico').value.trim();
+  if (!tecnico) { showToast('Informe o tecnico solicitante', 'error'); return; }
+  const btn = document.getElementById('btn-enviar-mov');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    const body = {
+      peca_id: movPecaSel.id,
+      peca_codigo: movPecaSel.codigo,
+      peca_nome: movPecaSel.nome,
+      peca_unidade: movPecaSel.unidade || 'UN',
+      qtd,
+      equip_serie: document.getElementById('mov-equip').value.trim(),
+      tecnico,
+      obs: document.getElementById('mov-obs').value.trim(),
+      origem: 'mobile'
+    };
+    const r = await fetch('/api/movimentacoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error('Erro ao enviar');
+    showToast('Movimentacao enviada!', 'success');
+    btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
+    goBack();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
+  }
+}
