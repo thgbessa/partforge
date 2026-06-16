@@ -37,8 +37,7 @@
   <div class="home-body">
     <div class="home-section-title">Ações rápidas</div>
     <div class="action-grid">
-      <div class="action-card highlight" onclick="abrirSolicitacao()"><span class="action-icon">🛒</span><span class="action-label">Solicitação de Peças</span><span class="action-desc">Solicitar peças ao estoque</span></div>
-      <div class="action-card" onclick="abrirMovimentacao()"><span class="action-icon">⇄</span><span class="action-label">Movimentação</span><span class="action-desc">Solicitar peça ao almoxarifado</span></div>
+      <div class="action-card highlight" onclick="abrirMovimentacao()"><span class="action-icon">⇄</span><span class="action-label">Solicitação de Peças</span><span class="action-desc">Solicitar peça ao almoxarifado</span></div>
       <div class="action-card" onclick="abrirOrcamento()"><span class="action-icon">📄</span><span class="action-label">Orçamento</span><span class="action-desc">Criar proposta para cliente</span></div>
     </div>
     <div class="home-section-title">Atividade recente</div>
@@ -46,32 +45,34 @@
   </div>
   <div class="nav-tabs">
     <div class="nav-tab active"><span class="nav-tab-icon">🏠</span><span class="nav-tab-label">Início</span></div>
-    <div class="nav-tab" onclick="abrirSolicitacao()"><span class="nav-tab-icon">🛒</span><span class="nav-tab-label">Solicitação</span></div>
+    <div class="nav-tab" onclick="abrirMovimentacao()"><span class="nav-tab-icon">⇄</span><span class="nav-tab-label">Solicitação</span></div>
     <div class="nav-tab" onclick="abrirOrcamento()"><span class="nav-tab-icon">📄</span><span class="nav-tab-label">Orçamento</span></div>
-    <div class="nav-tab" onclick="abrirMovimentacao()"><span class="nav-tab-icon">⇄</span><span class="nav-tab-label">Movimentação</span></div>
     <div class="nav-tab" onclick="doLogout()"><span class="nav-tab-icon">👤</span><span class="nav-tab-label">Sair</span></div>
   </div>
 </div>
 
-<div id="screen-solicitacao" class="screen">
+<div id="screen-mov" class="screen">
   <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Solicitação de Peças</div><div class="topbar-sub">NOVA SOLICITAÇÃO</div></div></div>
   <div class="scroll-body">
     <div class="form-section">
-      <div class="form-section-title">Peça</div>
-      <div id="solicitacao-busca-wrap"><div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="solicitacao-busca" placeholder="Buscar por código ou descrição..." oninput="buscarPecasSolicitacao(this.value)" autocomplete="off"></div><div class="peca-list" id="solicitacao-resultados"></div></div>
-      <div id="solicitacao-peca-sel" class="selected-peca" style="display:none"><div class="selected-peca-codigo"></div><div class="selected-peca-nome"></div><button class="btn-change" onclick="alterarPecaSolicitacao()">Alterar peça</button></div>
+      <div class="form-section-title">Peça *</div>
+      <div id="mov-busca-wrap"><div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="mov-busca" placeholder="Buscar por código ou descrição..." oninput="buscarPecasMov(this.value)" autocomplete="off"></div><div class="peca-list" id="mov-resultados"></div></div>
+      <div id="mov-peca-sel" class="selected-peca" style="display:none"><div class="selected-peca-codigo"></div><div class="selected-peca-nome"></div><button class="btn-change" onclick="alterarPecaMov()">Alterar peça</button></div>
     </div>
     <div class="form-section">
       <div class="form-section-title">Quantidade</div>
-      <div class="qty-row"><button class="qty-btn" onclick="solicitacaoQty(-1)">−</button><input type="number" id="solicitacao-qtd" value="1" min="1" class="form-input qty-input"><button class="qty-btn" onclick="solicitacaoQty(1)">+</button></div>
+      <div class="qty-row"><button class="qty-btn" onclick="movQty(-1)">−</button><input type="number" id="mov-qtd" value="1" min="1" class="form-input qty-input"><button class="qty-btn" onclick="movQty(1)">+</button></div>
     </div>
     <div class="form-section">
       <div class="form-section-title">Detalhes</div>
-      <div class="form-row"><label class="form-label">Série / Equipamento</label><input type="text" id="solicitacao-equip" class="form-input" placeholder="Nº de série (opcional)"></div>
-      <div class="form-row"><label class="form-label">Observação</label><textarea id="solicitacao-obs" class="form-input" placeholder="Motivo, urgência, etc..." rows="3"></textarea></div>
+      <div class="form-row"><label class="form-label">Nº de Série do Equipamento *</label><input type="text" id="mov-equip" class="form-input" placeholder="Nº de série (obrigatório)"></div>
+      <div class="form-row"><label class="form-label">Nº do Chamado *</label><input type="text" id="mov-chamado" class="form-input" placeholder="Número do chamado"></div>
+      <div class="form-row"><label class="form-label">Técnico Solicitante *</label><input type="text" id="mov-tecnico" class="form-input" placeholder="Seu nome"></div>
+      <div class="form-row"><label class="form-label">E-mail do Técnico *</label><input type="email" id="mov-email" class="form-input" placeholder="seu@email.com"></div>
+      <div class="form-row"><label class="form-label">Observação</label><textarea id="mov-obs" class="form-input" placeholder="Motivo, urgência, etc..." rows="3"></textarea></div>
     </div>
   </div>
-  <div class="bottom-bar"><button class="btn-primary" id="btn-enviar-solicitacao" onclick="enviarSolicitacao()">🛒 Enviar Solicitação</button></div>
+  <div class="bottom-bar"><button class="btn-primary" id="btn-enviar-mov" onclick="enviarMovimentacao()">⇄ Enviar Solicitação</button></div>
 </div>
 
 <div id="screen-orc" class="screen">
@@ -108,28 +109,6 @@
     </div>
   </div>
   <div class="bottom-bar"><button class="btn-primary" onclick="adicionarItemOrc()">✓ Adicionar ao Orçamento</button></div>
-</div>
-
-<div id="screen-mov" class="screen">
-  <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Nova Movimentação</div><div class="topbar-sub">SOLICITAÇÃO DE PEÇA</div></div></div>
-  <div class="scroll-body">
-    <div class="form-section">
-      <div class="form-section-title">Peça</div>
-      <div id="mov-busca-wrap"><div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="mov-busca" placeholder="Buscar por código ou descrição..." oninput="buscarPecasMov(this.value)" autocomplete="off"></div><div class="peca-list" id="mov-resultados"></div></div>
-      <div id="mov-peca-sel" class="selected-peca" style="display:none"><div class="selected-peca-codigo"></div><div class="selected-peca-nome"></div><button class="btn-change" onclick="alterarPecaMov()">Alterar peça</button></div>
-    </div>
-    <div class="form-section">
-      <div class="form-section-title">Quantidade</div>
-      <div class="qty-row"><button class="qty-btn" onclick="movQty(-1)">−</button><input type="number" id="mov-qtd" value="1" min="1" class="form-input qty-input"><button class="qty-btn" onclick="movQty(1)">+</button></div>
-    </div>
-    <div class="form-section">
-      <div class="form-section-title">Detalhes</div>
-      <div class="form-row"><label class="form-label">Série / Equipamento</label><input type="text" id="mov-equip" class="form-input" placeholder="Nº de série (opcional)"></div>
-      <div class="form-row"><label class="form-label">Técnico Solicitante</label><input type="text" id="mov-tecnico" class="form-input" placeholder="Seu nome"></div>
-      <div class="form-row"><label class="form-label">Observação</label><textarea id="mov-obs" class="form-input" placeholder="Motivo, urgência, etc..." rows="3"></textarea></div>
-    </div>
-  </div>
-  <div class="bottom-bar"><button class="btn-primary" id="btn-enviar-mov" onclick="enviarMovimentacao()">⇄ Enviar Movimentação</button></div>
 </div>
 
 <div class="toast" id="toast"></div>
