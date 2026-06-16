@@ -455,8 +455,14 @@ function movQty(d) {
 async function enviarMovimentacao() {
   if (!movPecaSel) { showToast('Selecione uma peca', 'error'); return; }
   const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
+  const serie = document.getElementById('mov-equip').value.trim();
+  const chamado = document.getElementById('mov-chamado') ? document.getElementById('mov-chamado').value.trim() : '';
   const tecnico = document.getElementById('mov-tecnico').value.trim();
+  const email = document.getElementById('mov-email') ? document.getElementById('mov-email').value.trim() : '';
+  if (!serie) { showToast('Informe o numero de serie', 'error'); return; }
+  if (!chamado) { showToast('Informe o numero do chamado', 'error'); return; }
   if (!tecnico) { showToast('Informe o tecnico solicitante', 'error'); return; }
+  if (!email) { showToast('Informe o e-mail do tecnico', 'error'); return; }
   const btn = document.getElementById('btn-enviar-mov');
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
@@ -466,8 +472,10 @@ async function enviarMovimentacao() {
       peca_nome: movPecaSel.nome,
       peca_unidade: movPecaSel.unidade || 'UN',
       qtd,
-      equip_serie: document.getElementById('mov-equip').value.trim(),
+      equip_serie: serie,
       tecnico,
+      tecnico_email: email,
+      chamado,
       obs: document.getElementById('mov-obs').value.trim(),
       origem: 'mobile'
     };
