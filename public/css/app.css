@@ -817,3 +817,4 @@
     margin-left: auto; border-radius: 4px; transition: color 0.15s;
   }
   .logout-btn:hover { color: var(--red); }
+#page-mobile-requests.active{display:block;padding:24px;overflow-y:auto;height:calc(100vh - 60px);}
