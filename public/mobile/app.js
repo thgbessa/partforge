@@ -578,8 +578,13 @@ async function confirmarRecebimento() {
   if (defeituosa && !motivo) { toast('Informe o motivo da devolução', 'error'); return; }
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
-    await api('POST', '/movimentacoes/' + minhasSolAtual + '/eventos', {
+    const _now=new Date();
+    const _data=_now.toLocaleDateString('pt-BR');
+    const _hora=_now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    await api('PUT', '/movimentacoes/' + minhasSolAtual + '/acao', {
       acao: 'RECEBER',
+      data_recebimento: _data,
+      hora_recebimento: _hora,
       obs: obs || (defeituosa ? 'Peça recebida com defeito: ' + motivo : 'Peça recebida pelo técnico via mobile'),
       tecnico_confirmou: true,
       devolucao: defeituosa,
