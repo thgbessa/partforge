@@ -529,7 +529,7 @@ async function abrirMinhasSolicitacoes() {
     };
     el.innerHTML = minhas.map(m => {
       const cor = statusColor[m.status] || '#888';
-      const podeConfirmar = m.status === 'DESPACHADA';
+      const podeConfirmar = m.status === 'DESPACHADA' && m.tipo_alocacao !== 'RETORNO';
       return '<div class="sol-card" style="margin-bottom:12px">' +
         '<div style="flex-shrink:0;text-align:center;min-width:80px">' +
           '<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)">#' + (m.numSeq || m.seqNum || '—') + '</div>' +
