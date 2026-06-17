@@ -422,24 +422,33 @@ function abrirMovimentacao() {
   document.getElementById('mov-obs').value = '';
   showScreen('screen-mov');
 }
-function buscarPecasMov(q) {
+let buscaMovTimer;
+async function buscarPecasMov(q) {
+  clearTimeout(buscaMovTimer);
   const el = document.getElementById('mov-resultados');
   if (!q || q.length < 2) { el.innerHTML = ''; return; }
-  const r = (db.pecas || []).filter(p =>
-    (p.codigo||'').toLowerCase().includes(q.toLowerCase()) ||
-    (p.nome||'').toLowerCase().includes(q.toLowerCase())
-  ).slice(0,8);
-  if (!r.length) { el.innerHTML = '<div style="padding:12px;color:var(--text2);font-size:13px">Nenhuma peca encontrada</div>'; return; }
-  el.innerHTML = r.map(p => '<div class="peca-card" onclick="selecionarPecaMov(\''+p.id+'\')"><div class="peca-codigo">'+p.codigo+'</div><div class="peca-nome">'+p.nome+'</div></div>').join('');
+  buscaMovTimer = setTimeout(async()=>{
+    el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
+    try {
+      const pecas = await api('GET', '/pecas?q='+encodeURIComponent(q));
+      if (!pecas||!pecas.length) { el.innerHTML='<div class="empty">Nenhuma peca encontrada</div>'; return; }
+      el.innerHTML = pecas.slice(0,20).map(p=>
+        '<div class="peca-card" onclick="selecionarPecaMov(\''+p.id+'\',\''+((p.codigo||'').replace(/'/g,"\\'"))+'\',\''+((p.nome||'').replace(/'/g,"\\'"))+'\',\''+( p.unidade||'UN')+'\','+( p.custo||0)+')">'+
+        '<div class="peca-codigo">'+(p.codigo||p.id)+'</div>'+
+        '<div class="peca-nome">'+(p.nome||'')+'</div>'+
+        '<div class="peca-tags">'+(p.fonte?'<span class="tag fonte">'+p.fonte+'</span>':'')+'<span class="tag">'+(p.unidade||'UN')+'</span></div>'+
+        '</div>'
+      ).join('');
+    } catch(e) { el.innerHTML='<div class="empty">Erro na busca</div>'; }
+  }, 400);
 }
-function selecionarPecaMov(id) {
-  movPecaSel = (db.pecas || []).find(p => p.id === id);
-  if (!movPecaSel) return;
+function selecionarPecaMov(id,codigo,nome,unidade,custo) {
+  movPecaSel = {id,codigo,nome,unidade:unidade||'UN',custo:custo||0};
   document.getElementById('mov-busca-wrap').style.display = 'none';
   const sel = document.getElementById('mov-peca-sel');
   sel.style.display = '';
-  sel.querySelector('.selected-peca-codigo').textContent = movPecaSel.codigo || '';
-  sel.querySelector('.selected-peca-nome').textContent = movPecaSel.nome || '';
+  sel.querySelector('.selected-peca-codigo').textContent = codigo || '';
+  sel.querySelector('.selected-peca-nome').textContent = nome || '';
 }
 function alterarPecaMov() {
   movPecaSel = null;
@@ -453,16 +462,16 @@ function movQty(d) {
   el.value = Math.max(1, (parseInt(el.value)||1) + d);
 }
 async function enviarMovimentacao() {
-  if (!movPecaSel) { showToast('Selecione uma peca', 'error'); return; }
+  if (!movPecaSel) { toast('Selecione uma peca', 'error'); return; }
   const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
   const serie = document.getElementById('mov-equip').value.trim();
   const chamado = document.getElementById('mov-chamado') ? document.getElementById('mov-chamado').value.trim() : '';
   const tecnico = document.getElementById('mov-tecnico').value.trim();
   const email = document.getElementById('mov-email') ? document.getElementById('mov-email').value.trim() : '';
-  if (!serie) { showToast('Informe o numero de serie', 'error'); return; }
-  if (!chamado) { showToast('Informe o numero do chamado', 'error'); return; }
-  if (!tecnico) { showToast('Informe o tecnico solicitante', 'error'); return; }
-  if (!email) { showToast('Informe o e-mail do tecnico', 'error'); return; }
+  if (!serie) { toast('Informe o numero de serie', 'error'); return; }
+  if (!chamado) { toast('Informe o numero do chamado', 'error'); return; }
+  if (!tecnico) { toast('Informe o tecnico solicitante', 'error'); return; }
+  if (!email) { toast('Informe o e-mail do tecnico', 'error'); return; }
   const btn = document.getElementById('btn-enviar-mov');
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
@@ -485,11 +494,11 @@ async function enviarMovimentacao() {
       body: JSON.stringify(body)
     });
     if (!r.ok) throw new Error('Erro ao enviar');
-    showToast('Movimentacao enviada!', 'success');
+    toast('Movimentacao enviada!', 'success');
     btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
     goBack();
   } catch(e) {
-    showToast('Erro: ' + e.message, 'error');
+    toast('Erro: ' + e.message, 'error');
     btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
   }
 }
