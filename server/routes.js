@@ -235,7 +235,17 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     const {nf_numero,nf_data}=req.body;
     upd.status='NF_EMITIDA';
     addEv('NF_EMITIDA','NF: '+(nf_numero||'')+(nf_data?' · '+nf_data:''));
-  } else if (acao==='FINALIZAR') { upd.status='FINALIZADO'; addEv('FINALIZADO');
+  } else if (acao==='FINALIZAR') {
+    const {devolucao,motivo_devolucao}=req.body;
+    upd.status='FINALIZADO'; addEv('FINALIZADO');
+    if(devolucao){
+      const uid2=()=>Math.random().toString(36).slice(2,14);
+      const retId=uid2();
+      const retSeq=(db.get('SELECT MAX(seq_num) as m FROM movimentacoes')?.m||0)+1;
+      const retEvt=JSON.stringify([{status:'SOLICITADA',data:Date.now(),obs:'Devolucao solicitada pelo desktop. Motivo: '+(motivo_devolucao||'Peca defeituosa'),user:req.user.nome}]);
+      db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO',motivo_devolucao||'Devolucao de peca defeituosa',retEvt,Date.now(),req.user.id]);
+    }
   } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
 
