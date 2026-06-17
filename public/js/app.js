@@ -1415,6 +1415,10 @@ function executarAcao(acao) {
     body.nf_numero = document.getElementById('am-nf-num')?.value || '';
     body.nf_data = document.getElementById('am-nf-data')?.value || '';
   }
+  if (acao === 'FINALIZAR') {
+    body.devolucao = document.getElementById('am-devolucao')?.checked || false;
+    body.motivo_devolucao = document.getElementById('am-motivo-dev')?.value || '';
+  }
 
   API.put('/movimentacoes/' + solId + '/acao', body)
     .then(() => {
