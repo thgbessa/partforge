@@ -233,8 +233,8 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     addEv('ALOCADA','Tipo: '+(tipo_alocacao||'INSTALACAO')+(os_num?' | OS: '+os_num:''));
   } else if (acao==='EMITIR_NF') {
     const {nf_numero,nf_data}=req.body;
-    upd.status='NF_EMITIDA'; upd.nf_numero=nf_numero||''; upd.nf_data=nf_data||'';
-    addEv('NF_EMITIDA','NF: '+(nf_numero||''));
+    upd.status='NF_EMITIDA';
+    addEv('NF_EMITIDA','NF: '+(nf_numero||'')+(nf_data?' · '+nf_data:''));
   } else if (acao==='FINALIZAR') { upd.status='FINALIZADO'; addEv('FINALIZADO');
   } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
