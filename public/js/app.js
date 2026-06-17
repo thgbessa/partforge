@@ -1990,7 +1990,11 @@ function renderHistorico(q='', statusFilter='') {
     } else if (m.status === 'DESPACHADA') {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','RECEBER')">✓ Receber</button>`;
     } else if (m.status === 'RECEBIDA') {
-      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ALOCAR')">⇢ Alocar</button>`;
+      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+        acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar Devolução</button>`;
+      } else {
+        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ALOCAR')">⇢ Alocar</button>`;
+      }
     } else if (m.status === 'ALOCADA') {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','EMITIR_NF')">📄 Emitir NF</button>`;
     } else if (m.status === 'NF_EMITIDA') {
