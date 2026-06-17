@@ -1983,8 +1983,12 @@ function renderHistorico(q='', statusFilter='') {
     // Botões de ação conforme status atual
     let acoes = '';
     if (m.status === 'SOLICITADA') {
-      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
-      if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
+      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Aguardando Devolução</button>`;
+      } else {
+        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
+        if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
+      }
     } else if (m.status === 'ENVIADA' || m.status === 'COMPRA_PENDENTE') {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Despachar</button>`;
     } else if (m.status === 'DESPACHADA') {
