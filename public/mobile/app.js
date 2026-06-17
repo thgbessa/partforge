@@ -539,10 +539,10 @@ async function abrirMinhasSolicitacoes() {
           '<div style="font-family:var(--mono);font-size:11px;color:var(--accent)">' + (m.pecaCodigo || '—') + '</div>' +
           '<div style="font-size:13px;font-weight:600;color:var(--text)">' + (m.pecaNome || '—') + '</div>' +
           '<div style="font-size:11px;color:var(--text3)">Qtd: ' + (m.qtd || 1) + ' · S/N: ' + (m.equipSerie || '—') + '</div>' +
-          (m.transportadora ? '<div style="font-size:11px;color:var(--text3)">📦 ' + m.transportadora + (m.rastreio ? ' · ' + m.rastreio : '') + '</div>' : '') +
+          (m.tipo_alocacao==='RETORNO'?'<div style="font-size:11px;color:var(--red);font-weight:600">↩ DEVOLUÇÃO SOLICITADA</div>':'') +(m.transportadora ? '<div style="font-size:11px;color:var(--text3)">📦 ' + m.transportadora + (m.rastreio ? ' · ' + m.rastreio : '') + '</div>' : '') +
           (m.dataRecebimento ? '<div style="font-size:11px;color:#1abc9c">✓ Recebido: ' + m.dataRecebimento + '</div>' : '') +
         '</div>' +
-        (podeConfirmar ? '<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px" onclick="abrirConfirmarRecebimento(\'' + m.id + '\')">✓ Recebi</button></div>' : '') +
+        (podeConfirmar ? '<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px" onclick="abrirConfirmarRecebimento(\'' + m.id + '\')">✓ Recebi</button></div>' : '') +(m.tipo_alocacao==='RETORNO'&&m.status==='SOLICITADA'?'<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px;background:var(--red)" onclick="despacharRetorno(\'' + m.id + '\')" >↩ Despachar Devolução</button></div>':'')+
       '</div>';
     }).join('');
   } catch(e) {
@@ -598,5 +598,23 @@ async function confirmarRecebimento() {
     toast('Erro: ' + e.message, 'error');
     btn.disabled = false;
     btn.textContent = '✓ Confirmar Recebimento';
+  }
+}
+
+async function despacharRetorno(id) {
+  if (!confirm('Confirmar despacho da peça defeituosa de volta ao almoxarifado?')) return;
+  try {
+    const now = new Date();
+    const data = now.toLocaleDateString('pt-BR');
+    const hora = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    await api('PUT', '/movimentacoes/' + id + '/acao', {
+      acao: 'DESPACHAR',
+      transporte: 'Motoboy',
+      obs: 'Peça devolvida pelo técnico via mobile em ' + data + ' às ' + hora
+    });
+    toast('Devolução despachada com sucesso!', 'success');
+    setTimeout(()=>abrirMinhasSolicitacoes(), 1500);
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
   }
 }
