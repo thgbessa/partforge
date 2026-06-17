@@ -502,3 +502,96 @@ async function enviarMovimentacao() {
     btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
   }
 }
+
+// ============================================================
+// MINHAS SOLICITAÇÕES
+// ============================================================
+let minhasSolAtual = null;
+
+async function abrirMinhasSolicitacoes() {
+  showScreen('screen-minhas');
+  const el = document.getElementById('minhas-list');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Carregando...</div>';
+  try {
+    const movs = await api('GET', '/movimentacoes');
+    const minhas = (movs || []).filter(m =>
+      m.tecnico && currentUser &&
+      m.tecnico.toLowerCase() === (currentUser.nome || '').toLowerCase()
+    );
+    if (!minhas.length) {
+      el.innerHTML = '<div class="empty"><span class="empty-icon">📋</span>Nenhuma solicitação encontrada</div>';
+      return;
+    }
+    const statusColor = {
+      'SOLICITADA': '#f39c12', 'ENVIADA': '#3498db', 'COMPRA_PENDENTE': '#e67e22',
+      'DESPACHADA': '#9b59b6', 'RECEBIDA': '#1abc9c', 'ALOCADA': '#27ae60',
+      'FINALIZADO': '#95a5a6', 'CANCELADA': '#e74c3c'
+    };
+    el.innerHTML = minhas.map(m => {
+      const cor = statusColor[m.status] || '#888';
+      const podeConfirmar = m.status === 'DESPACHADA';
+      return '<div class="sol-card" style="margin-bottom:12px">' +
+        '<div style="flex-shrink:0;text-align:center;min-width:80px">' +
+          '<div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)">#' + (m.numSeq || m.seqNum || '—') + '</div>' +
+          '<span style="background:' + cor + ';color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;display:inline-block;margin-top:4px">' + (m.status || '—') + '</span>' +
+        '</div>' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-family:var(--mono);font-size:11px;color:var(--accent)">' + (m.pecaCodigo || '—') + '</div>' +
+          '<div style="font-size:13px;font-weight:600;color:var(--text)">' + (m.pecaNome || '—') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3)">Qtd: ' + (m.qtd || 1) + ' · S/N: ' + (m.equipSerie || '—') + '</div>' +
+          (m.transportadora ? '<div style="font-size:11px;color:var(--text3)">📦 ' + m.transportadora + (m.rastreio ? ' · ' + m.rastreio : '') + '</div>' : '') +
+          (m.dataRecebimento ? '<div style="font-size:11px;color:#1abc9c">✓ Recebido: ' + m.dataRecebimento + '</div>' : '') +
+        '</div>' +
+        (podeConfirmar ? '<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px" onclick="abrirConfirmarRecebimento(\'' + m.id + '\')">✓ Recebi</button></div>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty"><span class="empty-icon">⚠</span>Erro ao carregar</div>';
+  }
+}
+
+function abrirConfirmarRecebimento(id) {
+  minhasSolAtual = id;
+  document.getElementById('conf-obs').value = '';
+  document.getElementById('conf-defeituosa').checked = false;
+  document.getElementById('conf-devolucao-section').style.display = 'none';
+  document.getElementById('conf-motivo') && (document.getElementById('conf-motivo').value = '');
+  // Busca dados da solicitacao
+  api('GET', '/movimentacoes').then(movs => {
+    const m = (movs || []).find(x => x.id === id);
+    if (m) {
+      document.getElementById('conf-peca-codigo').textContent = m.pecaCodigo || '';
+      document.getElementById('conf-peca-nome').textContent = m.pecaNome || '';
+    }
+  });
+  document.getElementById('conf-defeituosa').onchange = function() {
+    document.getElementById('conf-devolucao-section').style.display = this.checked ? 'block' : 'none';
+  };
+  showScreen('screen-confirmar-recebimento');
+}
+
+async function confirmarRecebimento() {
+  const btn = document.getElementById('btn-confirmar-receb');
+  const obs = document.getElementById('conf-obs').value.trim();
+  const defeituosa = document.getElementById('conf-defeituosa').checked;
+  const motivo = defeituosa ? (document.getElementById('conf-motivo') ? document.getElementById('conf-motivo').value.trim() : '') : '';
+  if (defeituosa && !motivo) { toast('Informe o motivo da devolução', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try {
+    await api('POST', '/movimentacoes/' + minhasSolAtual + '/eventos', {
+      acao: 'RECEBER',
+      obs: obs || (defeituosa ? 'Peça recebida com defeito: ' + motivo : 'Peça recebida pelo técnico via mobile'),
+      tecnico_confirmou: true,
+      devolucao: defeituosa,
+      motivo_devolucao: motivo
+    });
+    toast(defeituosa ? 'Recebimento confirmado. Devolução registrada!' : 'Recebimento confirmado!', 'success');
+    btn.disabled = false;
+    btn.textContent = '✓ Confirmar Recebimento';
+    setTimeout(() => { goBack(); abrirMinhasSolicitacoes(); }, 1500);
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '✓ Confirmar Recebimento';
+  }
+}
