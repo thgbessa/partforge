@@ -5046,23 +5046,20 @@ function renderMobOrc() {
   '</tbody></table>';
 }
 
-function renderMobPed() {
+async function renderMobPed() {
   const el = document.getElementById('mob-ped-table');
   if(!el) return;
+  el.innerHTML='<div class="loading"><div class="spinner"></div> Carregando...</div>';
+  try{ const data=await API.get('/movimentacoes'); db.movimentacoes=Array.isArray(data)?data:(data.movimentacoes||[]); }catch(e){}
   const peds = getMobPedidos();
-  if(!peds.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-title">Nenhuma solicitação mobile</div></div>';return;}
-  el.innerHTML='<table class="data-table"><thead><tr><th>Seq</th><th>Peça</th><th>Qtd</th><th>Técnico</th><th>Série</th><th>Status</th><th>Data</th></tr></thead><tbody>'+
-    peds.map(m=>{
-      const isNovo = !mobSeenIds.includes('ped-'+m.id);
-      return '<tr style="'+(isNovo?'background:rgba(249,115,22,0.05);':'')+'">' +
-        '<td><span style="font-family:var(--mono)">#'+(m.seqNum||m.seq_num||'—')+'</span>'+(isNovo?'<span style="background:var(--red);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-left:6px">NOVO</span>':'')+'</td>'+
-        '<td>'+(m.pecaNome||m.peca_nome||'—')+'<br><span style="font-family:var(--mono);font-size:11px;color:var(--text3)">'+(m.pecaCodigo||m.peca_codigo||'')+'</span></td>'+
-        '<td style="font-family:var(--mono)">'+(m.qtd||1)+'</td>'+
-        '<td>'+(m.tecnico||'—')+'</td>'+
-        '<td>'+(m.equipSerie||m.equip_serie||'—')+'</td>'+
-        '<td><span class="status-badge">'+(m.status||'—')+'</span></td>'+
-        '<td>'+((m.createdAt||m.created_at||'').slice(0,10)||'—')+'</td>'+
-      '</tr>';
-    }).join('')+
-  '</tbody></table>';
+  if(!peds.length){ el.innerHTML='<div class="empty-state"><div class="empty-icon">📱</div><div class="empty-title">Nenhuma solicitacao mobile</div></div>'; return; }
+  const origEl = document.getElementById('hist-table');
+  const origMov = db.movimentacoes;
+  if(origEl) origEl.id='hist-table-backup';
+  el.id='hist-table';
+  db.movimentacoes = peds;
+  renderHistorico();
+  el.id='mob-ped-table';
+  if(origEl) origEl.id='hist-table';
+  db.movimentacoes = origMov;
 }
