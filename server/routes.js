@@ -205,6 +205,7 @@ router.post('/movimentacoes', autenticar, (req, res) => {
 });
 
 router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
+  try {
   const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento}=req.body;
   const sol=db.get('SELECT * FROM movimentacoes WHERE id=?',[req.params.id]);
   if (!sol) return res.status(404).json({erro:'Não encontrada'});
@@ -228,7 +229,7 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     addEv('RECEBIDA',`Recebido em ${data_recebimento} às ${hora_recebimento}`);
   } else if (acao==='ALOCAR') {
     const {tipo_alocacao,os_num}=req.body;
-    upd.status='ALOCADA'; upd.tipo_alocacao=tipo_alocacao||'INSTALACAO'; upd.os_num=os_num||'';
+    upd.status='ALOCADA'; upd.tipo_alocacao=tipo_alocacao||'INSTALACAO';
     addEv('ALOCADA','Tipo: '+(tipo_alocacao||'INSTALACAO')+(os_num?' | OS: '+os_num:''));
   } else if (acao==='EMITIR_NF') {
     const {nf_numero,nf_data}=req.body;
@@ -238,9 +239,15 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
 
-  const sets=Object.keys(upd).map(k=>`${k}=?`).join(',');
-  db.run(`UPDATE movimentacoes SET ${sets} WHERE id=?`,[...Object.values(upd),req.params.id]);
-  res.json({ok:true,status:upd.status});
+  try{
+    const sets=Object.keys(upd).map(k=>`${k}=?`).join(',');
+    db.run(`UPDATE movimentacoes SET ${sets} WHERE id=?`,[...Object.values(upd),req.params.id]);
+    res.json({ok:true,status:upd.status});
+  }catch(e2){
+    console.error('ACAO ERROR:',e2.message,'UPD:',JSON.stringify(upd));
+    res.status(500).json({erro:e2.message});
+  }
+  }catch(e1){ console.error('OUTER ERROR:',e1.message); res.status(500).json({erro:e1.message}); }
 });
 
 router.delete('/movimentacoes/:id', autenticar, isAdmin, (req, res) => {
