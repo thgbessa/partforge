@@ -226,6 +226,14 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     if (!data_recebimento||!hora_recebimento) return res.status(400).json({erro:'Data e hora obrigatórios'});
     upd.status='RECEBIDA'; upd.data_recebimento=data_recebimento; upd.hora_recebimento=hora_recebimento;
     addEv('RECEBIDA',`Recebido em ${data_recebimento} às ${hora_recebimento}`);
+  } else if (acao==='ALOCAR') {
+    const {tipo_alocacao,os_num}=req.body;
+    upd.status='ALOCADA'; upd.tipo_alocacao=tipo_alocacao||'INSTALACAO'; upd.os_num=os_num||'';
+    addEv('ALOCADA','Tipo: '+(tipo_alocacao||'INSTALACAO')+(os_num?' | OS: '+os_num:''));
+  } else if (acao==='EMITIR_NF') {
+    const {nf_numero,nf_data}=req.body;
+    upd.status='NF_EMITIDA'; upd.nf_numero=nf_numero||''; upd.nf_data=nf_data||'';
+    addEv('NF_EMITIDA','NF: '+(nf_numero||''));
   } else if (acao==='FINALIZAR') { upd.status='FINALIZADO'; addEv('FINALIZADO');
   } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
