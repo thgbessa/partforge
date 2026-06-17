@@ -818,3 +818,5 @@
   }
   .logout-btn:hover { color: var(--red); }
 #page-mobile-requests.active{display:block;padding:24px;overflow-y:auto;height:calc(100vh - 60px);}
+
+.action-modal-overlay{z-index:9999!important;}
