@@ -38,6 +38,7 @@
     <div class="home-section-title">Ações rápidas</div>
     <div class="action-grid">
       <div class="action-card highlight" onclick="abrirMovimentacao()"><span class="action-icon">⇄</span><span class="action-label">Solicitação de Peças</span><span class="action-desc">Solicitar peça ao almoxarifado</span></div>
+      <div class="action-card" onclick="abrirMinhasSolicitacoes()"><span class="action-icon">📋</span><span class="action-label">Minhas Solicitações</span><span class="action-desc">Ver status e confirmar recebimento</span></div>
       <div class="action-card" onclick="abrirOrcamento()"><span class="action-icon">📄</span><span class="action-label">Orçamento</span><span class="action-desc">Criar proposta para cliente</span></div>
     </div>
     <div class="home-section-title">Atividade recente</div>
@@ -46,8 +47,46 @@
   <div class="nav-tabs">
     <div class="nav-tab active"><span class="nav-tab-icon">🏠</span><span class="nav-tab-label">Início</span></div>
     <div class="nav-tab" onclick="abrirMovimentacao()"><span class="nav-tab-icon">⇄</span><span class="nav-tab-label">Solicitação</span></div>
+    <div class="nav-tab" onclick="abrirMinhasSolicitacoes()"><span class="nav-tab-icon">📋</span><span class="nav-tab-label">Minhas</span></div>
     <div class="nav-tab" onclick="abrirOrcamento()"><span class="nav-tab-icon">📄</span><span class="nav-tab-label">Orçamento</span></div>
     <div class="nav-tab" onclick="doLogout()"><span class="nav-tab-icon">👤</span><span class="nav-tab-label">Sair</span></div>
+  </div>
+</div>
+
+<div id="screen-minhas" class="screen">
+  <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Minhas Solicitações</div><div class="topbar-sub">ACOMPANHE O STATUS</div></div></div>
+  <div class="scroll-body" id="minhas-list">
+    <div class="loading"><div class="spinner"></div> Carregando...</div>
+  </div>
+</div>
+
+<div id="screen-confirmar-recebimento" class="screen">
+  <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Confirmar Recebimento</div><div class="topbar-sub">PEÇA RECEBIDA</div></div></div>
+  <div class="scroll-body">
+    <div class="form-section">
+      <div class="form-section-title">Peça Recebida</div>
+      <div id="conf-peca-info" class="selected-peca" style="display:block">
+        <div class="selected-peca-codigo" id="conf-peca-codigo"></div>
+        <div class="selected-peca-nome" id="conf-peca-nome"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">Confirmação</div>
+      <div class="form-row"><label class="form-label">Observação (opcional)</label><textarea id="conf-obs" class="form-input" placeholder="Tudo certo com a peça? Alguma observação..." rows="3"></textarea></div>
+      <div class="form-row" style="margin-top:12px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input type="checkbox" id="conf-defeituosa" style="width:18px;height:18px;accent-color:var(--red)">
+          <span style="font-size:13px;color:var(--text2)">Peça veio com defeito / precisa devolver</span>
+        </label>
+      </div>
+    </div>
+    <div id="conf-devolucao-section" class="form-section" style="display:none">
+      <div class="form-section-title" style="color:var(--red)">⚠ Devolução de Peça</div>
+      <div class="form-row"><label class="form-label">Motivo da devolução *</label><textarea id="conf-motivo" class="form-input" placeholder="Descreva o defeito ou motivo da devolução..." rows="3"></textarea></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn-primary" id="btn-confirmar-receb" onclick="confirmarRecebimento()" style="background:var(--green)">✓ Confirmar Recebimento</button>
   </div>
 </div>
 
@@ -115,6 +154,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="/mobile/app.js?v=1781645708"></script>
+<script src="/mobile/app.js?v=1781610534"></script>
 </body>
 </html>
