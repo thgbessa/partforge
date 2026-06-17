@@ -1407,6 +1407,14 @@ function executarAcao(acao) {
     body.hora_recebimento = document.getElementById('am-hora-rec')?.value || '';
     if (!body.data_recebimento || !body.hora_recebimento) { toast('Informe data e hora', 'error'); return; }
   }
+  if (acao === 'ALOCAR') {
+    body.tipo_alocacao = document.getElementById('am-tipo-aloc')?.value || 'INSTALACAO';
+    body.os_num = document.getElementById('am-os-num')?.value || '';
+  }
+  if (acao === 'EMITIR_NF') {
+    body.nf_numero = document.getElementById('am-nf-num')?.value || '';
+    body.nf_data = document.getElementById('am-nf-data')?.value || '';
+  }
 
   API.put('/movimentacoes/' + solId + '/acao', body)
     .then(() => {
@@ -1415,6 +1423,8 @@ function executarAcao(acao) {
       loadAndRenderHistorico();
       loadAndRenderLogistica();
       loadAndRenderDashboard();
+      if(typeof renderMobPed==='function') renderMobPed();
+      if(typeof renderMobOrc==='function') renderMobOrc();
     })
     .catch(err => toast(err.message, 'error'));
 }
