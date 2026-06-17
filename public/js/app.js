@@ -1052,6 +1052,9 @@ function fecharDropdownDoadora() {
 // ACTION MODAL — abre para cada ação do pipeline
 // -----------------------------------------------
 function abrirActionModal(id, acao) {
+  var _modal=document.getElementById('action-modal');
+  if(_modal&&_modal.parentNode!==document.body) document.body.appendChild(_modal);
+
   const sol = db.movimentacoes.find(x => x.id === id);
   if (!sol) return;
   actionModalTarget = id;
