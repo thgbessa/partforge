@@ -1416,7 +1416,9 @@ function executarAcao(acao) {
     body.nf_data = document.getElementById('am-nf-data')?.value || '';
   }
   if (acao === 'FINALIZAR') {
-    body.devolucao = document.getElementById('am-devolucao')?.checked || false;
+    const solAtual=db.movimentacoes.find(x=>x.id===solId);
+    const isRetorno=solAtual&&(solAtual.tipoAlocacao==='RETORNO'||solAtual.tipo_alocacao==='RETORNO');
+    body.devolucao = !isRetorno && (document.getElementById('am-devolucao')?.checked || false);
     body.motivo_devolucao = document.getElementById('am-motivo-dev')?.value || '';
   }
 
