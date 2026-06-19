@@ -5095,3 +5095,76 @@ async function renderMobPed() {
   if(origEl) origEl.id='hist-table';
   db.movimentacoes = origMov;
 }
+
+// ============================================================
+// NOTIFICAÇÕES - POLLING DESKTOP
+// ============================================================
+let notifUltimoTs = Date.now();
+let notifTimer = null;
+let notifStatusMap = {};
+
+function iniciarPollingNotificacoes() {
+  if(notifTimer) clearInterval(notifTimer);
+  notifTimer = setInterval(verificarNotificacoes, 30000);
+}
+
+async function verificarNotificacoes() {
+  try {
+    const data = await API.get('/notificacoes?desde=' + (notifUltimoTs - 5000));
+    notifUltimoTs = data.timestamp || Date.now();
+
+    // Novas solicitacoes mobile
+    const novasMov = (data.movimentacoes||[]).filter(m =>
+      m.origem === 'mobile' || m.tecnico
+    );
+    const novosOrcs = (data.orcamentos||[]);
+
+    novasMov.forEach(m => {
+      const key = 'mov-' + m.id + '-' + m.status;
+      if(!notifStatusMap[key]) {
+        notifStatusMap[key] = true;
+        const msgs = {
+          'SOLICITADA': '📱 Nova solicitação de ' + (m.tecnico||'técnico') + ': ' + (m.pecaNome||''),
+          'DESPACHADA': '📦 Peça despachada confirmada: ' + (m.pecaNome||''),
+          'RECEBIDA': '✓ Peça recebida pelo técnico: ' + (m.pecaNome||''),
+        };
+        const msg = msgs[m.status];
+        if(msg) {
+          toast(msg, 'success');
+          tocarSomNotificacao();
+          atualizarBadgeMobile();
+        }
+      }
+    });
+
+    novosOrcs.forEach(o => {
+      const key = 'orc-' + o.id;
+      if(!notifStatusMap[key]) {
+        notifStatusMap[key] = true;
+        toast('📱 Novo orçamento mobile: ' + (o.cliente||o.numero||''), 'success');
+        tocarSomNotificacao();
+        atualizarBadgeMobile();
+      }
+    });
+  } catch(e) {}
+}
+
+function tocarSomNotificacao() {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [880, 1100].forEach((freq,i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.2, ctx.currentTime + i*0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i*0.15 + 0.2);
+      osc.start(ctx.currentTime + i*0.15);
+      osc.stop(ctx.currentTime + i*0.15 + 0.3);
+    });
+  } catch(e) {}
+}
+
+// Inicia polling quando carregar
+setTimeout(iniciarPollingNotificacoes, 5000);
