@@ -1306,6 +1306,7 @@ function abrirActionModal(id, acao) {
 
   } else if (acao === 'FINALIZAR') {
     const numRetorno = (sol.numSeq||'????') + 'R';
+    const isRetornoFin = sol.tipoAlocacao==='RETORNO'||sol.tipo_alocacao==='RETORNO';
     body.innerHTML = pInfoBox + `
       <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.25);border-radius:var(--radius);
         padding:14px;margin-bottom:16px;font-size:13px;color:var(--text2)">
@@ -1315,7 +1316,7 @@ function abrirActionModal(id, acao) {
       </div>
 
       <div style="background:rgba(231,76,60,0.06);border:1px solid rgba(231,76,60,0.2);border-radius:var(--radius);
-        padding:12px 14px;margin-bottom:16px">
+        padding:12px 14px;margin-bottom:16px;display:${isRetornoFin?'none':'block'}">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
           <input type="checkbox" id="am-devolucao" onchange="toggleDevolucaoInfo(this.checked)"
             style="width:16px;height:16px;accent-color:var(--red);cursor:pointer">
