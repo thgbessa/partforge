@@ -329,7 +329,7 @@ router.get('/notificacoes', autenticar, (req, res) => {
   const desde=parseInt(req.query.desde)||0;
   const userId=req.user.id;
   const userNome=req.user.nome;
-  const movs=db.query('SELECT * FROM movimentacoes WHERE created_at > ? OR updated_at > ?',[desde,desde])
+  const movs=db.query('SELECT * FROM movimentacoes WHERE created_at > ?',[desde])
     .map(m=>({...m,eventos:typeof m.eventos==='string'?JSON.parse(m.eventos||'[]'):m.eventos||[]}))
     .filter(m=>{
       // Desktop ve novas solicitacoes mobile
