@@ -618,3 +618,53 @@ async function despacharRetorno(id) {
     toast('Erro: ' + e.message, 'error');
   }
 }
+
+// ============================================================
+// NOTIFICACOES - POLLING MOBILE
+// ============================================================
+let mobileNotifTs = Date.now();
+let mobileNotifTimer = null;
+let mobileNotifMap = {};
+
+function iniciarPollingMobile() {
+  if(mobileNotifTimer) clearInterval(mobileNotifTimer);
+  mobileNotifTimer = setInterval(verificarNotificacoesMobile, 30000);
+}
+
+async function verificarNotificacoesMobile() {
+  try {
+    const r = await fetch('/api/notificacoes?desde=' + (mobileNotifTs - 5000), {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const data = await r.json();
+    mobileNotifTs = data.timestamp || Date.now();
+
+    const movs = (data.movimentacoes||[]).filter(m =>
+      m.tecnico && currentUser && m.tecnico.toLowerCase() === (currentUser.nome||'').toLowerCase()
+    );
+
+    movs.forEach(m => {
+      const key = 'mob-' + m.id + '-' + m.status;
+      if(!mobileNotifMap[key]) {
+        mobileNotifMap[key] = true;
+        const msgs = {
+          'ENVIADA': 'Sua solicitacao foi enviada para despacho!',
+          'DESPACHADA': 'Sua peca foi despachada! Aguarde a entrega.',
+          'RECEBIDA': 'Recebimento confirmado.',
+          'ALOCADA': 'Peca alocada com sucesso!',
+          'FINALIZADO': 'Processo finalizado!',
+          'CANCELADA': 'Solicitacao cancelada.',
+        };
+        const msg = msgs[m.status];
+        if(msg) toast(msg, m.status==='CANCELADA'?'error':'success');
+      }
+    });
+  } catch(e) {}
+}
+
+// Inicia apos login
+function iniciarNotificacoesMobile() {
+  mobileNotifTs = Date.now();
+  mobileNotifMap = {};
+  iniciarPollingMobile();
+}
