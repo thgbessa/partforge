@@ -1995,7 +1995,11 @@ function renderHistorico(q='', statusFilter='') {
     } else if (m.status === 'ENVIADA' || m.status === 'COMPRA_PENDENTE') {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Despachar</button>`;
     } else if (m.status === 'DESPACHADA') {
-      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','RECEBER')">✓ Receber</button>`;
+      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','RECEBER')">✓ Receber Devolução</button>`;
+      } else {
+        acoes = `<span style="font-size:11px;color:var(--text3);font-style:italic">⏳ Aguardando confirmação do técnico</span>`;
+      }
     } else if (m.status === 'RECEBIDA') {
       if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
         acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar Devolução</button>`;
