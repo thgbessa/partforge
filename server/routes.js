@@ -324,6 +324,23 @@ router.put('/pedidos/:id/status', autenticar, isAdmin, (req, res) => {
 });
 
 // ── DOADORAS ──────────────────────────────────────────────────
+
+router.get('/notificacoes', autenticar, (req, res) => {
+  const desde=parseInt(req.query.desde)||0;
+  const userId=req.user.id;
+  const userNome=req.user.nome;
+  const movs=db.query('SELECT * FROM movimentacoes WHERE created_at > ? OR updated_at > ?',[desde,desde])
+    .map(m=>({...m,eventos:typeof m.eventos==='string'?JSON.parse(m.eventos||'[]'):m.eventos||[]}))
+    .filter(m=>{
+      // Desktop ve novas solicitacoes mobile
+      // Mobile ve mudancas de status nas suas solicitacoes
+      return m.tecnico===userNome || true;
+    });
+  const orcs=db.query('SELECT * FROM orcamentos WHERE created_at > ?',[desde])
+    .filter(o=>String(o.numero||'').startsWith('M-'));
+  res.json({movimentacoes:movs,orcamentos:orcs,timestamp:Date.now()});
+});
+
 router.get('/doadoras', autenticar, (req, res) => {
   res.json(db.query('SELECT * FROM doadoras ORDER BY modelo'));
 });
