@@ -326,7 +326,8 @@ router.put('/pedidos/:id/status', autenticar, isAdmin, (req, res) => {
 // ── DOADORAS ──────────────────────────────────────────────────
 
 router.get('/notificacoes', autenticar, (req, res) => {
-  const desde=parseInt(req.query.desde)||0;
+  const desdeMs=parseInt(req.query.desde)||0;
+  const desde=desdeMs>9999999999?Math.floor(desdeMs/1000):desdeMs;
   const userId=req.user.id;
   const userNome=req.user.nome;
   const movs=db.query('SELECT * FROM movimentacoes WHERE created_at > ?',[desde])
