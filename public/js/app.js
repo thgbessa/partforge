@@ -1987,7 +1987,7 @@ function renderHistorico(q='', statusFilter='') {
     let acoes = '';
     if (m.status === 'SOLICITADA') {
       if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
-        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Aguardando Devolução</button>`;
+        acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
       } else {
         acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
         if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
