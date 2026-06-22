@@ -1305,7 +1305,7 @@ function abrirActionModal(id, acao) {
       <button class="btn btn-primary" onclick="executarAcao('EMITIR_NF')">✓ Registrar NF</button>`;
 
   } else if (acao === 'FINALIZAR') {
-    const numRetorno = (sol.numSeq||'????') + 'R';
+    const numRetorno = (sol.numSeq||sol.num_seq||sol.seqNum||sol.seq_num||'???') + 'R';
     const isRetornoFin = sol.tipoAlocacao==='RETORNO'||sol.tipo_alocacao==='RETORNO';
     body.innerHTML = pInfoBox + `
       <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.25);border-radius:var(--radius);
