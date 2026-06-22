@@ -173,6 +173,9 @@ const toMov=m=>({
   equipCliente:m.equip_cliente,
   equipModelo: m.equip_modelo,
   temEstoque:  m.tem_estoque,
+  numSeq:      m.seq_num,
+  tipoAlocacao:m.tipo_alocacao,
+  osNum:       m.os_num,
   eventos:     typeof m.eventos==='string' ? JSON.parse(m.eventos||'[]') : m.eventos||[]
 });
 
