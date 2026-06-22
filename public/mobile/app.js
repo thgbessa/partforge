@@ -357,7 +357,14 @@ async function enviarOrcamento(){
   const btn=document.getElementById('btn-enviar-orc');
   btn.disabled=true;btn.textContent='Salvando...';
   try{
-    const numero='M-'+Date.now().toString(36).toUpperCase();
+    // Busca proximo numero O-XXX
+    const orcsExist = await api('GET','/orcamentos');
+    const nums = (orcsExist||[])
+      .map(o=>o.numero||'')
+      .filter(n=>n.startsWith('O-'))
+      .map(n=>parseInt(n.replace('O-',''))||0);
+    const proxOrc = nums.length ? Math.max(...nums)+1 : 1;
+    const numero = 'O-' + String(proxOrc).padStart(3,'0');
     const total=orcItens.reduce((s,i)=>s+i.qtd*i.valor,0);
     await api('POST','/orcamentos',{
       numero,total,status:'ABERTO',cliente,equip_serie:equip,obs,
@@ -472,6 +479,19 @@ async function enviarMovimentacao() {
   if (!chamado) { toast('Informe o numero do chamado', 'error'); return; }
   if (!tecnico) { toast('Informe o tecnico solicitante', 'error'); return; }
   if (!email) { toast('Informe o e-mail do tecnico', 'error'); return; }
+  // Busca proximo numero P-XXX
+  let proxNum = 'P-001';
+  try {
+    const movsExist = await api('GET','/movimentacoes');
+    const pNums = (movsExist||[])
+      .map(m=>m.obs_num||m.peca_num||'')
+      .filter(n=>n.startsWith('P-'))
+      .map(n=>parseInt(n.replace('P-',''))||0);
+    const seqNums = (movsExist||[])
+      .map(m=>m.seq_num||m.seqNum||0);
+    const proxSeq = seqNums.length ? Math.max(...seqNums)+1 : 1;
+    proxNum = 'P-' + String(proxSeq).padStart(3,'0');
+  } catch(e){}
   const btn = document.getElementById('btn-enviar-mov');
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
