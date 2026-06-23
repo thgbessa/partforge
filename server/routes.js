@@ -248,7 +248,7 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
       const retSeq=(db.get('SELECT MAX(seq_num) as m FROM movimentacoes')?.m||0)+1;
       const retEvt=JSON.stringify([{status:'SOLICITADA',data:Date.now(),obs:'Devolucao solicitada pelo desktop. Motivo: '+(motivo_devolucao||'Peca defeituosa'),user:req.user.nome}]);
       db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO',motivo_devolucao||'Devolucao de peca defeituosa',retEvt,Date.now(),'REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
+        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
     }
   } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
