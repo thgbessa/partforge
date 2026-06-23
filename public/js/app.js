@@ -2035,8 +2035,7 @@ function renderHistorico(q='', statusFilter='') {
       <!-- Status badge + pipeline mini -->
       <div style="flex-shrink:0;text-align:center;min-width:100px">
         <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px">
-          #${m.numSeq||'—'}
-          ${m.devolucao ? `<span style="color:var(--red);font-size:10px"> ↩R</span>` : ''}
+          ${m.tipoAlocacao==='RETORNO'&&m.numSeqOrigem ? '#'+m.numSeqOrigem+'R' : '#'+(m.numSeq||'—')}
           ${m.tipoAlocacao==='RETORNO' ? `<span class="badge badge-red" style="font-size:9px;margin-left:4px">RETORNO</span>` : ''}
         </div>
         <span class="badge ${ps.badge}" style="margin-bottom:6px;display:inline-block">${ps.label}</span>
