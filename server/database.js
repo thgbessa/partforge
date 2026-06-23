@@ -62,7 +62,7 @@ async function init() {
       peca_id TEXT, peca_codigo TEXT, peca_nome TEXT, peca_unidade TEXT,
       peca_fonte TEXT, peca_custo REAL DEFAULT 0, qtd REAL DEFAULT 1,
       equip_id TEXT, equip_serie TEXT, equip_cliente TEXT, equip_modelo TEXT,
-      tecnico TEXT, tem_estoque INTEGER DEFAULT 0, tipo_alocacao TEXT,
+      tecnico TEXT, tem_estoque INTEGER DEFAULT 0, tipo_alocacao TEXT, num_seq_origem INTEGER,
       valor_por_orc INTEGER DEFAULT 0, obs TEXT, transportadora TEXT,
       rastreio TEXT, previsao_entrega TEXT, data_recebimento TEXT,
       hora_recebimento TEXT, eventos TEXT DEFAULT '[]',
