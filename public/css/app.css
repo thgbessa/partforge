@@ -819,4 +819,4 @@
   .logout-btn:hover { color: var(--red); }
 #page-mobile-requests.active{display:block;padding:24px;overflow-y:auto;height:calc(100vh - 60px);}
 
-.action-modal-overlay{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:99999!important;}
+.action-modal-overlay{position:fixed!important;top:0!important;left:0!important;width:100vw!important;height:100vh!important;z-index:99999!important;}#page-mobile-requests{display:none;}body.mob-active #page-mobile-requests{display:block;}
