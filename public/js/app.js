@@ -38,7 +38,7 @@ let editId = null;
 //  NAVIGATION
 // ============================================================
 function navigate(page, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.body.classList.remove('mob-active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active')); document.body.classList.remove('mob-active'); var _pM=document.getElementById('page-mobile-requests'); if(_pM) _pM.style.display='none';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   el.classList.add('active');
@@ -60,7 +60,7 @@ function navigate(page, el) {
   const actionsEl = document.getElementById('topbar-actions');
   actionsEl.innerHTML = '';
 
-  if (page === 'mobile-requests') { document.body.classList.add('mob-active'); setTimeout(()=>{renderMobOrc();renderMobPed();marcarTodasLidas();},200); }
+  if (page === 'mobile-requests') { var _pM2=document.getElementById('page-mobile-requests'); if(_pM2) _pM2.style.display='block'; document.body.classList.add('mob-active'); setTimeout(()=>{renderMobOrc();renderMobPed();marcarTodasLidas();},200); }
   if (page === 'mobile-requests') {
     const pMob=document.getElementById('page-mobile-requests');
     document.body.classList.add('mob-active');
