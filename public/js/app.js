@@ -4895,7 +4895,7 @@ function navigate(page, el) {
 
   const actionsEl = document.getElementById('topbar-actions');
   if (actionsEl) actionsEl.innerHTML = '';
-  if (page === 'mobile-requests') { var pMob=document.getElementById('page-mobile-requests'); document.body.classList.add('mob-active'); setTimeout(function(){if(typeof renderMobOrc==='function'){renderMobOrc();renderMobPed();marcarTodasLidas();}},200); }
+  if (page === 'mobile-requests') { var pMob=document.getElementById('page-mobile-requests'); if(pMob) pMob.style.display='block'; document.body.classList.add('mob-active'); setTimeout(function(){if(typeof renderMobOrc==='function'){renderMobOrc();renderMobPed();marcarTodasLidas();}},200); }
 
   if (page === 'pecas') {
     const isAdmin = podeAcessar('admin');
