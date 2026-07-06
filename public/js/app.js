@@ -4866,7 +4866,7 @@ function initApp() {
 // Override navigate to use loadAndRender functions
 const _originalNavigate = navigate;
 function navigate(page, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active")); document.body.classList.remove("mob-active"); var _pM=document.getElementById("page-mobile-requests"); if(_pM) _pM.style.display="none";
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const pageEl = document.getElementById('page-' + page);
   if (!pageEl) return;
