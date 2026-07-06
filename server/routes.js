@@ -346,6 +346,13 @@ router.get('/notificacoes', autenticar, (req, res) => {
   res.json({movimentacoes:movs,orcamentos:orcs,timestamp:Date.now()});
 });
 
+router.post('/admin/reset', autenticar, (req, res) => {
+  if(req.user.cargo !== 'Gerente') return res.status(403).json({erro:'Sem permissao'});
+  ['movimentacoes','orcamentos','estoque','pecas','equipamentos','pedidos','retiradas','doadoras'].forEach(t=>db.run('DELETE FROM '+t));
+  db.run("DELETE FROM usuarios WHERE cargo != 'Gerente'");
+  db.run("UPDATE configuracoes SET valor='1' WHERE chave='seq_counter'");
+  res.json({ok:true,msg:'Reset concluido'});
+});
 router.get('/doadoras', autenticar, (req, res) => {
   res.json(db.query('SELECT * FROM doadoras ORDER BY modelo'));
 });
