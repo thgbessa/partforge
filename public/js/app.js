@@ -4475,7 +4475,7 @@ function importarExcel(aba) {
           ws = wb.Sheets[sheetName];
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
-          importarPecas(rows, sheetName);
+          importarPecas(rows, sheetName); persistPecas();
 
         } else if (aba === 'equipamentos') {
           // Aba 'OG' é o padrão do eLoca; senão pega a primeira
@@ -4484,7 +4484,7 @@ function importarExcel(aba) {
           ws = wb.Sheets[sheetName];
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
-          importarEquipamentos(rows, sheetName);
+          importarEquipamentos(rows, sheetName); persistEquipamentos();
 
         } else if (aba === 'estoque') {
           // Sheet1 é o padrão do eLoca; senão pega a primeira
@@ -4688,6 +4688,38 @@ function importarEquipamentos(rows, sheetName) {
   renderDashboard();
   const skipMsg = skipped > 0 ? `, ${skipped} ignorados` : '';
   toast(`eLoca [${sheetName||'OG'}] — ${added} adicionados, ${updated} atualizados${skipMsg}`);
+}
+
+
+function persistPecas() {
+  const payload = db.pecas.map(function(p) {
+    return {
+      id: p.id, codigo: p.codigo || '', nome: p.nome || '', unidade: p.unidade || 'UN',
+      grupo: p.grupo || '', fonte: p.fonte || '', linha: p.linha || '', minimo: p.minimo || 0,
+      taxa: p.taxa || 0, dolar: p.dolar || 0, markup: p.markup || 0, custo: p.custo || 0,
+      valor_venda: p.valor_venda || 0
+    };
+  });
+  if (!payload.length) return;
+  API.post('/pecas/importar', { pecas: payload })
+    .then(function() { toast('OK: ' + payload.length + ' pecas salvas no servidor'); })
+    .catch(function(err) { toast('ERRO ao salvar pecas no servidor: ' + err.message); });
+}
+
+function persistEquipamentos() {
+  const payload = db.equipamentos.map(function(d) {
+    return {
+      id: d.id, modelo: d.nome || d.modelo || '', marca: d.marca || '',
+      serie: d.serie || '', linha: d.grupo || '',
+      cliente: d.nome_fantasia || d.proprietario || '',
+      local: d.local || '', contrato: d.contrato || '', obs: '',
+      campos: d
+    };
+  });
+  if (!payload.length) return;
+  API.post('/equipamentos/importar', { equipamentos: payload })
+    .then(function() { toast('OK: ' + payload.length + ' equipamentos salvos no servidor'); })
+    .catch(function(err) { toast('ERRO ao salvar equipamentos no servidor: ' + err.message); });
 }
 
 function openImportHelp(aba) {
