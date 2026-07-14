@@ -90,6 +90,13 @@ router.delete('/pecas/:id', autenticar, isAdmin, (req, res) => {
   res.json({ok:true});
 });
 
+router.post('/pecas/zerar', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM depositos');
+  db.run('DELETE FROM estoque');
+  db.run('DELETE FROM pecas');
+  res.json({ok:true, msg:'Pecas e estoque zerados'});
+});
+
 router.post('/pecas/importar', autenticar, isAdmin, (req, res) => {
   const { pecas } = req.body;
   if (!Array.isArray(pecas)) return res.status(400).json({erro:'Array obrigatório'});
