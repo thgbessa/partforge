@@ -74,9 +74,20 @@ app.listen(PORT, '0.0.0.0', () => {
 
         html += '<h3>Orcamentos Criados (' + orcamentos.length + ')</h3>';
         if (orcamentos.length) {
-          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Cliente</th><th>Total</th><th>Status</th></tr>';
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Cliente</th><th>Descricao Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr>';
           orcamentos.forEach(function(o) {
-            html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td>R$ ' + (parseFloat(o.total || 0).toFixed(2)) + '</td><td>' + (o.status || '') + '</td></tr>';
+            const itens = (function() {
+              try { return JSON.parse(o.itens || '[]'); } catch (e) { return Array.isArray(o.itens) ? o.itens : []; }
+            })();
+            if (itens.length) {
+              itens.forEach(function(it) {
+                const qtd = parseFloat(it.qtd || 0);
+                const valor = parseFloat(it.valor || 0);
+                html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
+              });
+            } else {
+              html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td colspan="2">(sem itens)</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
+            }
           });
           html += '</table>';
         } else {
