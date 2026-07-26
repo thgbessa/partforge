@@ -1128,6 +1128,10 @@ function abrirActionModal(id, acao) {
           <input class="form-input" type="date" id="am-previsao">
         </div>
         <div class="form-group">
+          <label class="form-label">Valor do Frete (R$)</label>
+          <input class="form-input" type="number" step="0.01" id="am-frete" placeholder="0.00">
+        </div>
+        <div class="form-group">
           <label class="form-label">Observação</label>
           <input class="form-input" id="am-obs" placeholder="Informações adicionais">
         </div>
@@ -1402,6 +1406,7 @@ function executarAcao(acao) {
     body.transporte        = document.getElementById('am-transporte')?.value || '';
     body.rastreio          = document.getElementById('am-rastreio')?.value.trim() || '';
     body.previsao_entrega  = document.getElementById('am-previsao')?.value || '';
+    body.valor_frete       = parseFloat(document.getElementById('am-frete')?.value) || 0;
     if (!body.transporte) { toast('Informe o meio de transporte', 'error'); return; }
   }
   if (acao === 'RECEBER') {
