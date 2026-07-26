@@ -232,7 +232,8 @@ async function enviarSolicitacao(){
       peca_custo:pedidoPeca.custo,
       qtd,equip_serie:equip,
       tecnico:currentUser?.nome||currentUser?.name||'',
-      obs
+      obs,
+      origem:'mobile'
     });
     toast('Pedido enviado!','success');
     setTimeout(()=>{goBack();loadRecentes();},1000);
