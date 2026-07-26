@@ -122,7 +122,7 @@ function navigate(page, el) {
   } else if (page === 'orcamento') {
     actionsEl.innerHTML = `
       <button class="btn btn-ghost" onclick="abrirConfigOrcamento()" title="Configurar condições gerais e taxa/markup">⚙ Configurar</button>
-      <button class="btn btn-excel" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
+      <button class="btn btn-import" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('orcamentos')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     renderOrcamentos();
@@ -5149,7 +5149,7 @@ function navigate(page, el) {
   } else if (page === 'orcamento') {
     if (actionsEl) actionsEl.innerHTML = `
       <button class="btn btn-ghost" onclick="abrirConfigOrcamento()" title="Configurar condições gerais">⚙ Configurar</button>
-      <button class="btn btn-excel" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
+      <button class="btn btn-import" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('orcamentos')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     loadAndRenderOrcamentos();
