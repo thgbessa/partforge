@@ -376,6 +376,7 @@ function salvarPeca() {
     taxa, dolar, markup,
     custo:       parseFloat(document.getElementById('peca-custo').value)       || 0,
     valor_venda: parseFloat(document.getElementById('peca-valor-venda').value) || 0,
+    preco_usd:   parseFloat(document.getElementById('peca-preco-usd').value)   || 0,
     minimo:      parseFloat(document.getElementById('peca-minimo').value)      || 0,
     imagem:      window._pecaImgData || (editId ? (db.pecas.find(x=>x.id===editId)?.imagem||'') : ''),
   };
@@ -4753,7 +4754,7 @@ function persistPecas() {
       id: p.id, codigo: p.codigo || '', nome: p.nome || '', unidade: p.unidade || 'UN',
       grupo: p.grupo || '', fonte: p.fonte || '', linha: p.linha || '', minimo: p.minimo || 0,
       taxa: p.taxa || 0, dolar: p.dolar || 0, markup: p.markup || 0, custo: p.custo || 0,
-      valor_venda: p.valor_venda || 0
+      valor_venda: p.valor_venda || 0, preco_usd: p.preco_usd || p.custo_usd || 0
     };
   });
   if (!payload.length) return;
