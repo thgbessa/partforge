@@ -31,6 +31,93 @@ app.listen(PORT, '0.0.0.0', () => {
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
     console.log('Banco iniciado, rotas ativas');
 
+    // ── Relatorio diario automatico (pecas enviadas + orcamentos) ──
+    const nodemailer = require('nodemailer');
+
+    function getYesterdayRangeBRT() {
+      const now = new Date();
+      const brtOffsetMs = 3 * 60 * 60 * 1000;
+      const brtNow = new Date(now.getTime() - brtOffsetMs);
+      const y = new Date(Date.UTC(brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate() - 1));
+      const startBRT = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), y.getUTCDate(), 0, 0, 0));
+      const endBRT = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), y.getUTCDate(), 23, 59, 59, 999));
+      return {
+        startMs: startBRT.getTime() + brtOffsetMs,
+        endMs: endBRT.getTime() + brtOffsetMs,
+        label: y.toISOString().slice(0, 10).split('-').reverse().join('/')
+      };
+    }
+
+    async function gerarEEnviarRelatorioDiario() {
+      try {
+        const range = getYesterdayRangeBRT();
+        const pecasEnviadas = db.query(
+          "SELECT * FROM movimentacoes WHERE status='ENVIADA' AND created_at BETWEEN ? AND ?",
+          [range.startMs, range.endMs]
+        );
+        const orcamentos = db.query(
+          "SELECT * FROM orcamentos WHERE created_at BETWEEN ? AND ?",
+          [range.startMs, range.endMs]
+        );
+
+        let html = '<h2>Relatorio Diario PartForge - ' + range.label + '</h2>';
+        html += '<h3>Pecas Enviadas (' + pecasEnviadas.length + ')</h3>';
+        if (pecasEnviadas.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Peca</th><th>Qtd</th><th>Tecnico</th><th>Equipamento</th></tr>';
+          pecasEnviadas.forEach(function(m) {
+            html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_modelo || '') + '</td></tr>';
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhuma peca enviada no dia.</p>';
+        }
+
+        html += '<h3>Orcamentos Criados (' + orcamentos.length + ')</h3>';
+        if (orcamentos.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Cliente</th><th>Total</th><th>Status</th></tr>';
+          orcamentos.forEach(function(o) {
+            html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td>R$ ' + (parseFloat(o.total || 0).toFixed(2)) + '</td><td>' + (o.status || '') + '</td></tr>';
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhum orcamento criado no dia.</p>';
+        }
+
+        const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        if (!destinatarios.length || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+          console.log('Relatorio diario: configuracao incompleta (GMAIL_USER, GMAIL_APP_PASSWORD ou RELATORIO_DESTINATARIOS ausente)');
+          return;
+        }
+
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+        });
+
+        await transporter.sendMail({
+          from: process.env.GMAIL_USER,
+          to: destinatarios.join(','),
+          subject: 'PartForge - Relatorio Diario ' + range.label,
+          html: html
+        });
+        console.log('Relatorio diario enviado com sucesso para', destinatarios.join(', '));
+      } catch (err) {
+        console.error('Erro ao gerar/enviar relatorio diario:', err.message);
+      }
+    }
+
+    let ultimoDiaEnviado = null;
+    setInterval(function() {
+      const now = new Date();
+      const hojeStr = now.toISOString().slice(0, 10);
+      if (now.getUTCHours() === 12 && now.getUTCMinutes() === 0 && ultimoDiaEnviado !== hojeStr) {
+        ultimoDiaEnviado = hojeStr;
+        gerarEEnviarRelatorioDiario();
+      }
+    }, 60 * 1000);
+    // ── fim relatorio diario ──
+
+
     // Auto-import após tudo pronto
     const countP = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
     if (countP < 500) {
