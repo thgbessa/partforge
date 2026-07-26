@@ -4611,7 +4611,8 @@ function importarPecas(rows, sheetName) {
       }
     })();
 
-    const existing = db.pecas.find(p => String(p.codigo) === codigo);
+    const codigoNorm = codigo.trim().toUpperCase();
+    const existing = db.pecas.find(p => String(p.codigo||'').trim().toUpperCase() === codigoNorm);
     if (existing) {
       Object.assign(existing, data);
       updated++;
