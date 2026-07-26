@@ -2174,7 +2174,7 @@ function renderOrcamentos(q='') {
         <td class="mono">${o.data||'—'}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')">Editar</button>
-          <button class="btn btn-ghost btn-sm" onclick="alterarStatusOrc('${o.id}')">${o.status==='RASCUNHO'?'✓ Aprovar':o.status==='APROVADO'?'✕ Cancelar':'—'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')">Status ▾</button>
           <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento('${o.id}')">⬇ PDF</button>
           <button class="btn btn-danger btn-sm" onclick="deleteOrcamento('${o.id}')">✕</button>
         </td>
@@ -2413,12 +2413,36 @@ function salvarOrcamento() {
     loadAndRenderOrcamentos();
   }).catch(err => toast(err.message, 'error'));
 }
-function alterarStatusOrc(id) {
-  const o = db.orcamentos.find(x=>x.id===id);
-  if (!o) return;
-  if (o.status==='RASCUNHO')  { o.status='APROVADO';  toast('Orçamento aprovado ✓','success'); }
-  else if (o.status==='APROVADO') { o.status='CANCELADO'; toast('Orçamento cancelado'); }
-  salvarDB(); renderOrcamentos();
+const STATUS_ORC_OPCOES = ['ENVIADO','APROVADO_TECNICO','APROVADO_PECA','APROVADO_PAGAMENTO','A_FATURAR','FATURADO'];
+function abrirMenuStatusOrc(ev, id) {
+  ev.stopPropagation();
+  fecharMenuStatusOrc();
+  const btn = ev.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.id = 'status-orc-menu';
+  menu.style.cssText = 'position:fixed;top:' + (rect.bottom+4) + 'px;left:' + rect.left + 'px;background:var(--surface);border:1px solid var(--border2);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:500;min-width:220px';
+  menu.innerHTML = STATUS_ORC_OPCOES.map(function(st) {
+    var info = ORC_STATUS[st];
+    return '<div style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text)" onmouseover="this.style.background=\'var(--border2)\'" onmouseout="this.style.background=\'transparent\'" onclick="definirStatusOrc(\'' + id + '\',\'' + st + '\')">' + info.label + '</div>';
+  }).join('');
+  document.body.appendChild(menu);
+  setTimeout(function() { document.addEventListener('click', fecharMenuStatusOrc, { once: true }); }, 0);
+}
+function fecharMenuStatusOrc() {
+  const m = document.getElementById('status-orc-menu');
+  if (m) m.remove();
+}
+function definirStatusOrc(id, status) {
+  fecharMenuStatusOrc();
+  API.put('/orcamentos/' + id + '/status', { status: status })
+    .then(function() {
+      const o = db.orcamentos.find(function(x) { return x.id === id; });
+      if (o) o.status = status;
+      toast('Status atualizado', 'success');
+      renderOrcamentos();
+    })
+    .catch(function(err) { toast(err.message, 'error'); });
 }
 
 function deleteOrcamento(id) {
