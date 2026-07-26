@@ -415,8 +415,11 @@
           <select class="form-select" style="width:160px" id="orc-filter-status" onchange="renderOrcamentos()">
             <option value="">Todos os status</option>
             <option value="RASCUNHO">Rascunho</option>
-            <option value="APROVADO">Aprovado</option>
-            <option value="FATURANDO">Faturando</option>
+            <option value="ENVIADO">Aguard. Aprov. Cliente</option>
+            <option value="APROVADO_TECNICO">Aprovado - Aguard. Tecnico</option>
+            <option value="APROVADO_PECA">Aprovado - Aguard. Peca</option>
+            <option value="APROVADO_PAGAMENTO">Aprovado - Aguard. Pagamento</option>
+            <option value="A_FATURAR">A Faturar</option>
             <option value="FATURADO">Faturado</option>
             <option value="CANCELADO">Cancelado</option>
           </select>
@@ -518,7 +521,12 @@
                 <label class="form-label">Status</label>
                 <select class="form-select" id="orc-status">
                   <option value="RASCUNHO">Rascunho</option>
-                  <option value="APROVADO">Aprovado</option>
+                  <option value="ENVIADO">Aguard. Aprov. Cliente</option>
+                  <option value="APROVADO_TECNICO">Aprovado - Aguard. Tecnico</option>
+                  <option value="APROVADO_PECA">Aprovado - Aguard. Peca</option>
+                  <option value="APROVADO_PAGAMENTO">Aprovado - Aguard. Pagamento</option>
+                  <option value="A_FATURAR">A Faturar</option>
+                  <option value="FATURADO">Faturado</option>
                   <option value="CANCELADO">Cancelado</option>
                 </select>
               </div>
@@ -1423,4 +1431,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000007"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000008"></script></html>
