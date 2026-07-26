@@ -4433,8 +4433,13 @@ function exportarExcel(aba) {
     XLSX.writeFile(wb, 'partforge_historico.xlsx');
     toast(`Histórico exportado: ${rows.length - 1} solicitações`);
   } else if (aba === 'orcamentos') {
-    const heads = ['Número','Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Observações'];
+    const heads = ['Número','Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
     const rows = [heads, ...db.orcamentos.map(function(o) {
+      const itensTexto = (o.itens || []).map(function(it) {
+        const qtd = parseFloat(it.qtd || 0);
+        const valor = parseFloat(it.valor || 0);
+        return (it.cod || '') + ' - ' + (it.desc || '') + ' (Qtd: ' + qtd + ', Unit: R$ ' + valor.toFixed(2) + ', Total: R$ ' + (qtd * valor).toFixed(2) + ')';
+      }).join(' | ');
       return [
         o.numero || '',
         o.status || '',
@@ -4449,23 +4454,13 @@ function exportarExcel(aba) {
         o.frete || '',
         parseFloat(o.total || 0),
         (o.itens || []).length,
+        itensTexto,
         o.obs || ''
       ];
     })];
     const ws = buildSheet(rows, heads);
+    ws['!cols'] = heads.map(function(h, i) { return i === 13 ? { wch: 80 } : { wch: 16 }; });
     XLSX.utils.book_append_sheet(wb, ws, 'Orçamentos');
-
-    const itHeads = ['Número Orçamento','Cliente','Código Peça','Descrição','Qtd','Valor Unit.','Total Item'];
-    const itRows = [itHeads];
-    db.orcamentos.forEach(function(o) {
-      (o.itens || []).forEach(function(it) {
-        const qtd = parseFloat(it.qtd || 0);
-        const valor = parseFloat(it.valor || 0);
-        itRows.push([o.numero || '', o.cliente || '', it.cod || '', it.desc || '', qtd, valor, qtd * valor]);
-      });
-    });
-    const wsIt = buildSheet(itRows, itHeads);
-    XLSX.utils.book_append_sheet(wb, wsIt, 'Itens');
 
     XLSX.writeFile(wb, 'partforge_orcamentos.xlsx');
     toast('Orçamentos exportados: ' + db.orcamentos.length);
