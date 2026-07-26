@@ -287,28 +287,31 @@ router.post('/orcamentos', autenticar, (req, res) => {
   const o=req.body; if (!o.numero) return res.status(400).json({erro:'Número obrigatório'});
   const id=uid();
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
-  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by,status_changed_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',
      o.data||'',o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',
      o.frete||'FOB',o.obs_condicoes||'',o.condicoes||'',o.assinatura||req.user.nome,
-     total,J(o.itens||[]),o.solicitacao_id||'',now(),req.user.id]);
+     total,J(o.itens||[]),o.solicitacao_id||'',now(),req.user.id,now()]);
   res.status(201).json({id});
 });
 
 router.put('/orcamentos/:id', autenticar, (req, res) => {
   const o=req.body;
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
+  const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
+  const statusMudou = existente && existente.status !== (o.status||'ABERTO');
   db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
     validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=? WHERE id=?`,
     [o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',o.data||'',
      o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',o.frete||'FOB',
      o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),req.params.id]);
+  if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   res.json({ok:true});
 });
 
 router.put('/orcamentos/:id/status', autenticar, isAdmin, (req, res) => {
-  db.run('UPDATE orcamentos SET status=? WHERE id=?',[req.body.status,req.params.id]); res.json({ok:true});
+  db.run('UPDATE orcamentos SET status=?,status_changed_at=? WHERE id=?',[req.body.status,now(),req.params.id]); res.json({ok:true});
 });
 
 router.delete('/orcamentos/:id', autenticar, isAdmin, (req, res) => {
