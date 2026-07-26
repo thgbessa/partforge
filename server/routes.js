@@ -90,6 +90,13 @@ router.delete('/pecas/:id', autenticar, isAdmin, (req, res) => {
   res.json({ok:true});
 });
 
+router.post('/pecas/definir-minimo-padrao', autenticar, isAdmin, (req, res) => {
+  const minimo = parseFloat(req.body.minimo) || 5;
+  db.run('UPDATE pecas SET minimo=? WHERE minimo=0 OR minimo IS NULL', [minimo]);
+  const total = db.get('SELECT COUNT(*) as n FROM pecas WHERE minimo=?', [minimo]);
+  res.json({ok:true, msg:'Minimo padrao definido', total: total?.n||0});
+});
+
 router.post('/pecas/zerar', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM depositos');
   db.run('DELETE FROM estoque');
