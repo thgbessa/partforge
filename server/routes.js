@@ -69,18 +69,18 @@ router.get('/pecas', autenticar, (req, res) => {
 router.post('/pecas', autenticar, isAdmin, (req, res) => {
   const p=req.body; if (!p.nome) return res.status(400).json({erro:'Nome obrigatório'});
   const id=p.id||uid();
-  db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,preco_usd,created_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,p.codigo||'',p.nome,p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,
-     p.imagem||'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,now()]);
+     p.imagem||'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.preco_usd||0,now()]);
   res.status(201).json({id});
 });
 
 router.put('/pecas/:id', autenticar, isAdmin, (req, res) => {
   const p=req.body;
-  db.run(`UPDATE pecas SET codigo=?,nome=?,unidade=?,grupo=?,fonte=?,linha=?,minimo=?,taxa=?,dolar=?,markup=?,custo=?,valor_venda=? WHERE id=?`,
+  db.run(`UPDATE pecas SET codigo=?,nome=?,unidade=?,grupo=?,fonte=?,linha=?,minimo=?,taxa=?,dolar=?,markup=?,custo=?,valor_venda=?,preco_usd=? WHERE id=?`,
     [p.codigo||'',p.nome,p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,
-     p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,req.params.id]);
+     p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.preco_usd||0,req.params.id]);
   res.json({ok:true});
 });
 
@@ -101,10 +101,10 @@ router.post('/pecas/importar', autenticar, isAdmin, (req, res) => {
   const { pecas } = req.body;
   if (!Array.isArray(pecas)) return res.status(400).json({erro:'Array obrigatório'});
   for (const p of pecas) {
-    db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,taxa,dolar,markup,custo,valor_venda,created_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,taxa,dolar,markup,custo,valor_venda,preco_usd,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [p.id||uid(),p.codigo||'',p.nome||'',p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',
-       p.minimo||0,p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,now()]);
+       p.minimo||0,p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.preco_usd||0,now()]);
   }
   res.json({importadas:pecas.length});
 });
