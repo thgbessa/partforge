@@ -2157,7 +2157,7 @@ function renderOrcamentos(q='') {
   }
   el.innerHTML = `<table class="data-table">
     <thead><tr>
-      <th>Nº de Orçamento</th><th>Status</th><th>Cliente</th><th>S/N Equip.</th>
+      <th>Nº de Orçamento</th><th>Status</th><th>Dias no Status</th><th>Cliente</th><th>S/N Equip.</th>
       <th>OS</th><th>Itens</th><th>Total</th><th>Data</th><th></th>
     </tr></thead>
     <tbody>
@@ -2166,6 +2166,7 @@ function renderOrcamentos(q='') {
       return `<tr>
         <td><strong style="font-family:var(--mono)">${o.numero}</strong></td>
         <td><span class="badge ${st.badge}">${st.label}</span></td>
+        <td class="mono" style="font-size:12px">${(function(){ var base = o.status_changed_at || o.created_at || Date.now(); var dias = Math.floor((Date.now() - base) / 86400000); return dias + (dias===1?' dia':' dias'); })()}</td>
         <td style="font-size:12px">${o.cliente||'—'}</td>
         <td class="mono">${o.equipSerie||'—'}</td>
         <td class="mono">${o.os||'—'}</td>
