@@ -52,7 +52,7 @@ app.listen(PORT, '0.0.0.0', () => {
       try {
         const range = getYesterdayRangeBRT();
         const pecasEnviadas = db.query(
-          "SELECT * FROM movimentacoes WHERE status='ENVIADA' AND created_at BETWEEN ? AND ?",
+          "SELECT * FROM movimentacoes WHERE status='DESPACHADA' AND created_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
         );
         const orcamentos = db.query(
