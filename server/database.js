@@ -118,6 +118,9 @@ async function init() {
     console.log('✅ Admin criado: admin@partforge.com / admin123');
   }
 
+  // Migracao: adiciona coluna preco_usd se ainda nao existir
+  try { _db.run("ALTER TABLE pecas ADD COLUMN preco_usd REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;
