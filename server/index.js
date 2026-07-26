@@ -52,7 +52,7 @@ app.listen(PORT, '0.0.0.0', () => {
       try {
         const range = getYesterdayRangeBRT();
         const pecasEnviadas = db.query(
-          "SELECT * FROM movimentacoes WHERE status='DESPACHADA' AND created_at BETWEEN ? AND ?",
+          "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status='DESPACHADA' AND m.created_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
         );
         const orcamentos = db.query(
@@ -63,9 +63,9 @@ app.listen(PORT, '0.0.0.0', () => {
         let html = '<h2>Relatorio Diario PartForge - ' + range.label + '</h2>';
         html += '<h3>Pecas Enviadas (' + pecasEnviadas.length + ')</h3>';
         if (pecasEnviadas.length) {
-          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Peca</th><th>Qtd</th><th>Tecnico</th><th>Equipamento</th></tr>';
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Peca</th><th>Qtd</th><th>Custo USD</th><th>Valor Frete</th><th>Tecnico</th><th>Equipamento</th></tr>';
           pecasEnviadas.forEach(function(m) {
-            html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_modelo || '') + '</td></tr>';
+            html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>' + CIFRAO + parseFloat(m.peca_preco_usd || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_modelo || '') + '</td></tr>';
           });
           html += '</table>';
         } else {
