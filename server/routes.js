@@ -217,7 +217,7 @@ router.post('/movimentacoes', autenticar, (req, res) => {
 
 router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   try {
-  const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento}=req.body;
+  const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento,valor_frete}=req.body;
   const sol=db.get('SELECT * FROM movimentacoes WHERE id=?',[req.params.id]);
   if (!sol) return res.status(404).json({erro:'Não encontrada'});
   const eventos=P(sol.eventos);
@@ -232,7 +232,7 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     }
   } else if (acao==='DESPACHAR') {
     if (!transporte) return res.status(400).json({erro:'Transporte obrigatório'});
-    upd.status='DESPACHADA'; upd.transportadora=transporte; upd.rastreio=rastreio||''; upd.previsao_entrega=previsao_entrega||'';
+    upd.status='DESPACHADA'; upd.transportadora=transporte; upd.rastreio=rastreio||''; upd.previsao_entrega=previsao_entrega||''; upd.valor_frete=parseFloat(valor_frete)||0;
     addEv('DESPACHADA',`Transporte: ${transporte}${rastreio?' · '+rastreio:''}`);
   } else if (acao==='RECEBER') {
     if (!data_recebimento||!hora_recebimento) return res.status(400).json({erro:'Data e hora obrigatórios'});
