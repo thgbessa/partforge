@@ -2117,11 +2117,14 @@ let editOrcId = null;
 let orcItens  = [];
 
 const ORC_STATUS = {
-  RASCUNHO:  { label:'Rascunho',  badge:'badge-gray'   },
-  APROVADO:  { label:'Aprovado',  badge:'badge-green'  },
-  FATURANDO: { label:'Faturando', badge:'badge-orange' },
-  FATURADO:  { label:'Faturado',  badge:'badge-blue'   },
-  CANCELADO: { label:'Cancelado', badge:'badge-red'    },
+  RASCUNHO:            { label:'Rascunho',                       badge:'badge-gray'   },
+  ENVIADO:              { label:'Aguard. Aprov. Cliente',          badge:'badge-orange' },
+  APROVADO_TECNICO:     { label:'Aprovado - Aguard. Tecnico',      badge:'badge-green'  },
+  APROVADO_PECA:        { label:'Aprovado - Aguard. Peca',         badge:'badge-green'  },
+  APROVADO_PAGAMENTO:   { label:'Aprovado - Aguard. Pagamento',    badge:'badge-green'  },
+  A_FATURAR:            { label:'A Faturar',                       badge:'badge-orange' },
+  FATURADO:             { label:'Faturado',                        badge:'badge-blue'   },
+  CANCELADO:            { label:'Cancelado',                       badge:'badge-red'    },
 };
 
 function renderOrcamentos(q='') {
@@ -2145,7 +2148,7 @@ function renderOrcamentos(q='') {
   }
   el.innerHTML = `<table class="data-table">
     <thead><tr>
-      <th>Número</th><th>Status</th><th>Cliente</th><th>S/N Equip.</th>
+      <th>Nº de Orçamento</th><th>Status</th><th>Cliente</th><th>S/N Equip.</th>
       <th>OS</th><th>Itens</th><th>Total</th><th>Data</th><th></th>
     </tr></thead>
     <tbody>
@@ -4438,7 +4441,7 @@ function exportarExcel(aba) {
     XLSX.writeFile(wb, 'partforge_historico.xlsx');
     toast(`Histórico exportado: ${rows.length - 1} solicitações`);
   } else if (aba === 'orcamentos') {
-    const heads = ['Número','Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
+    const heads = ['Nº de Orçamento','Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
     const rows = [heads, ...db.orcamentos.map(function(o) {
       const itensTexto = (o.itens || []).map(function(it) {
         const qtd = parseFloat(it.qtd || 0);
