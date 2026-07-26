@@ -123,6 +123,7 @@ async function init() {
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN valor_frete REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("UPDATE orcamentos SET status='APROVADO_TECNICO' WHERE status='APROVADO'"); } catch(e) {}
   try { _db.run("UPDATE orcamentos SET status='A_FATURAR' WHERE status='FATURANDO'"); } catch(e) {}
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN origem TEXT DEFAULT 'desktop'"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');
