@@ -124,6 +124,8 @@ async function init() {
   try { _db.run("UPDATE orcamentos SET status='APROVADO_TECNICO' WHERE status='APROVADO'"); } catch(e) {}
   try { _db.run("UPDATE orcamentos SET status='A_FATURAR' WHERE status='FATURANDO'"); } catch(e) {}
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN origem TEXT DEFAULT 'desktop'"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN status_changed_at INTEGER DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("UPDATE orcamentos SET status_changed_at = created_at WHERE status_changed_at IS NULL OR status_changed_at = 0"); } catch(e) {}
 
   persist();
   console.log('✅ Banco de dados iniciado');
