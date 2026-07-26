@@ -4934,6 +4934,11 @@ async function loadAndRenderPecas(q='') {
   setSyncing(true);
   try {
     db.pecas = await API.pecas(q);
+    try {
+      const { estoque } = await API.estoque();
+      db.estoque = {};
+      estoque.forEach(function(e) { db.estoque[e.peca_id] = e.quantidade; });
+    } catch (e2) { /* estoque opcional, nao bloqueia render */ }
     renderPecas(q);
     updateBadges();
   } catch(e) { toast(e.message, 'error'); }
