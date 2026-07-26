@@ -2081,6 +2081,7 @@ function renderHistorico(q='', statusFilter='') {
       <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${acoes}
         <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
       </div>
 
     </div>`;
