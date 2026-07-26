@@ -189,9 +189,9 @@ function movBadge(tipo) {
 const PECA_FIELDS_NUM = ['preco-usd','custo','valor-venda','peso-g','minimo'];
 
 // Globais de taxa/dólar/markup (lembrados entre cadastros)
-window._globalTaxa   = '';
-window._globalDolar  = '';
-window._globalMarkup = '';
+window._globalTaxa   = 2.00;
+window._globalDolar  = 5.27;
+window._globalMarkup = 2.00;
 
 function recalcPricing() {
   const usd    = parseFloat(document.getElementById('peca-preco-usd')?.value) || 0;
