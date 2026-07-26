@@ -4475,16 +4475,19 @@ function exportarExcel(aba) {
     XLSX.writeFile(wb, 'partforge_historico.xlsx');
     toast(`Histórico exportado: ${rows.length - 1} solicitações`);
   } else if (aba === 'orcamentos') {
-    const heads = ['Nº de Orçamento','Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
+    const heads = ['Nº de Orçamento','Status','Dias no Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
     const rows = [heads, ...db.orcamentos.map(function(o) {
       const itensTexto = (o.itens || []).map(function(it) {
         const qtd = parseFloat(it.qtd || 0);
         const valor = parseFloat(it.valor || 0);
         return (it.cod || '') + ' - ' + (it.desc || '') + ' (Qtd: ' + qtd + ', Unit: R$ ' + valor.toFixed(2) + ', Total: R$ ' + (qtd * valor).toFixed(2) + ')';
       }).join(' | ');
+      const baseData = o.status_changed_at || o.created_at || Date.now();
+      const diasStatus = Math.floor((Date.now() - baseData) / 86400000);
       return [
         o.numero || '',
         o.status || '',
+        diasStatus,
         o.cliente || '',
         o.equip_serie || '',
         o.equip_nome || '',
@@ -4501,7 +4504,7 @@ function exportarExcel(aba) {
       ];
     })];
     const ws = buildSheet(rows, heads);
-    ws['!cols'] = heads.map(function(h, i) { return i === 13 ? { wch: 80 } : { wch: 16 }; });
+    ws['!cols'] = heads.map(function(h, i) { return i === 14 ? { wch: 80 } : { wch: 16 }; });
     XLSX.utils.book_append_sheet(wb, ws, 'Orçamentos');
 
     XLSX.writeFile(wb, 'partforge_orcamentos.xlsx');
