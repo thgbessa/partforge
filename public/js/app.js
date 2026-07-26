@@ -1862,9 +1862,17 @@ function renderLogistica(tab) {
       <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${acoes}
         <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">✕ Excluir</button>
       </div>
     </div>`;
   }).join('');
+}
+
+function deleteMovimentacao(id) {
+  if (!confirm('Excluir esta solicitação? Essa ação não pode ser desfeita.')) return;
+  API.delete('/movimentacoes/' + id)
+    .then(() => { toast('Solicitação excluída', 'info'); loadAndRenderHistorico(); })
+    .catch(err => toast(err.message, 'error'));
 }
 
 // ============================================================
@@ -5098,7 +5106,7 @@ function getMobOrcamentos() {
 }
 
 function getMobPedidos() {
-  return (db.movimentacoes||[]).filter(m=>m.tecnico&&m.tecnico.trim()!=='');
+  return (db.movimentacoes||[]).filter(m=>m.origem==='mobile');
 }
 
 function tocarSomAlerta() {
