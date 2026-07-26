@@ -63,9 +63,9 @@ app.listen(PORT, '0.0.0.0', () => {
         let html = '<h2>Relatorio Diario PartForge - ' + range.label + '</h2>';
         html += '<h3>Pecas Enviadas (' + pecasEnviadas.length + ')</h3>';
         if (pecasEnviadas.length) {
-          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Peca</th><th>Qtd</th><th>Custo USD</th><th>Valor Frete</th><th>Tecnico</th><th>Equipamento</th></tr>';
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Peca</th><th>Qtd</th><th>Custo USD</th><th>Valor Frete</th><th>Tecnico</th><th>Equipamento</th></tr>';
           pecasEnviadas.forEach(function(m) {
-            html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>' + CIFRAO + parseFloat(m.peca_preco_usd || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_modelo || '') + '</td></tr>';
+            var dataM = new Date(m.created_at).toLocaleDateString('pt-BR'); html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + dataM + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>' + CIFRAO + parseFloat(m.peca_preco_usd || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_modelo || '') + '</td></tr>';
           });
           html += '</table>';
         } else {
@@ -74,7 +74,7 @@ app.listen(PORT, '0.0.0.0', () => {
 
         html += '<h3>Orcamentos Criados (' + orcamentos.length + ')</h3>';
         if (orcamentos.length) {
-          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Numero</th><th>Cliente</th><th>Descricao Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr>';
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Cliente</th><th>Descricao Item</th><th>Qtd</th><th>Valor</th><th>Status</th></tr>';
           orcamentos.forEach(function(o) {
             const itens = (function() {
               try { return JSON.parse(o.itens || '[]'); } catch (e) { return Array.isArray(o.itens) ? o.itens : []; }
@@ -83,10 +83,10 @@ app.listen(PORT, '0.0.0.0', () => {
               itens.forEach(function(it) {
                 const qtd = parseFloat(it.qtd || 0);
                 const valor = parseFloat(it.valor || 0);
-                html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
+                html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
               });
             } else {
-              html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.cliente || '') + '</td><td colspan="2">(sem itens)</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
+              html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td colspan="2">(sem itens)</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (o.status || '') + '</td></tr>';
             }
           });
           html += '</table>';
