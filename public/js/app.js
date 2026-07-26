@@ -4593,6 +4593,24 @@ function importarPecas(rows, sheetName) {
       }
     }
 
+    // Calculo automatico de preco: USD x 5.27 (dolar) x 2.00 (taxa) x 2.00 (markup)
+    (function calcularPrecoAutomatico() {
+      const TAXA_PADRAO = 2.00, DOLAR_PADRAO = 5.27, MARKUP_PADRAO = 2.00;
+      const custoUsd = parseFloat(data.custo_usd) || 0;
+      const custoDireto = parseFloat(data.custo) || 0;
+      if (custoUsd > 0) {
+        const custo = custoUsd * DOLAR_PADRAO * TAXA_PADRAO;
+        data.taxa = TAXA_PADRAO;
+        data.dolar = DOLAR_PADRAO;
+        data.markup = MARKUP_PADRAO;
+        data.custo = parseFloat(custo.toFixed(2));
+        data.valor_venda = parseFloat((custo * MARKUP_PADRAO).toFixed(2));
+      } else if (custoDireto > 0) {
+        data.markup = MARKUP_PADRAO;
+        data.valor_venda = parseFloat((custoDireto * MARKUP_PADRAO).toFixed(2));
+      }
+    })();
+
     const existing = db.pecas.find(p => String(p.codigo) === codigo);
     if (existing) {
       Object.assign(existing, data);
