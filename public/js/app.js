@@ -330,7 +330,7 @@ function openModalPeca(id) {
   document.getElementById('peca-custo').value       = p?.custo       || '';
   document.getElementById('peca-valor-venda').value = p?.valor_venda || '';
   document.getElementById('peca-peso-g').value      = p?.peso_g      || '';
-  document.getElementById('peca-minimo').value      = p?.minimo      || 0;
+  document.getElementById('peca-minimo').value      = (p?.minimo !== undefined && p?.minimo !== null) ? p.minimo : 5;
   // Limpar flags de edição manual
   ['peca-custo','peca-valor-venda'].forEach(id => {
     const el = document.getElementById(id);
@@ -378,7 +378,7 @@ function salvarPeca() {
     custo:       parseFloat(document.getElementById('peca-custo').value)       || 0,
     valor_venda: parseFloat(document.getElementById('peca-valor-venda').value) || 0,
     preco_usd:   parseFloat(document.getElementById('peca-preco-usd').value)   || 0,
-    minimo:      parseFloat(document.getElementById('peca-minimo').value)      || 0,
+    minimo:      parseFloat(document.getElementById('peca-minimo').value)      || 5,
     imagem:      window._pecaImgData || (editId ? (db.pecas.find(x=>x.id===editId)?.imagem||'') : ''),
   };
 
@@ -3687,7 +3687,7 @@ function calcularDemandaTotal() {
     ...db.pecas.filter(p => {
       const qty = Object.values(db.estoque).length > 0
         ? (db.estoque[p.id] || 0) : 0;
-      return p.minimo > 0 && qty < p.minimo;
+      return p.minimo > 0 && qty > 0 && qty < p.minimo;
     }).map(p => p.id)
   ]);
 
@@ -3710,16 +3710,16 @@ function calcularDemandaTotal() {
       0,
       estoqueAlvo - estoqueAtual,
       pendMap[pecaId] || 0,             // garante atender as pendências
-      (p.minimo > 0 && estoqueAtual < p.minimo) ? (p.minimo - estoqueAtual) : 0
+      (p.minimo > 0 && estoqueAtual > 0 && estoqueAtual < p.minimo) ? (p.minimo - estoqueAtual) : 0
     );
 
-    if (qtdSugerida <= 0 && !pendMap[pecaId] && !(p.minimo > 0 && estoqueAtual < p.minimo)) return;
+    if (qtdSugerida <= 0 && !pendMap[pecaId] && !(p.minimo > 0 && estoqueAtual > 0 && estoqueAtual < p.minimo)) return;
 
     // Origens desta sugestão
     const origens = [];
     if (cfg.incluiDoadora === 'sim' && consumoDoad[pecaId]) origens.push('doadora');
     if (cfg.incluiPendente === 'sim' && pendMap[pecaId])    origens.push('pendente');
-    if (p.minimo > 0 && estoqueAtual < p.minimo)            origens.push('minimo');
+    if (p.minimo > 0 && estoqueAtual > 0 && estoqueAtual < p.minimo) origens.push('minimo');
 
     resultado.push({
       pecaId,
@@ -4871,7 +4871,7 @@ function persistPecas() {
   const payload = db.pecas.map(function(p) {
     return {
       id: p.id, codigo: p.codigo || '', nome: p.nome || '', unidade: p.unidade || 'UN',
-      grupo: p.grupo || '', fonte: p.fonte || '', linha: p.linha || '', minimo: p.minimo || 0,
+      grupo: p.grupo || '', fonte: p.fonte || '', linha: p.linha || '', minimo: p.minimo || 5,
       taxa: p.taxa || 0, dolar: p.dolar || 0, markup: p.markup || 0, custo: p.custo || 0,
       valor_venda: p.valor_venda || 0, preco_usd: p.preco_usd || p.custo_usd || 0
     };
