@@ -122,6 +122,7 @@ function navigate(page, el) {
   } else if (page === 'orcamento') {
     actionsEl.innerHTML = `
       <button class="btn btn-ghost" onclick="abrirConfigOrcamento()" title="Configurar condições gerais e taxa/markup">⚙ Configurar</button>
+      <button class="btn btn-excel" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('orcamentos')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     renderOrcamentos();
@@ -4572,6 +4573,12 @@ function importarExcel(aba) {
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
           importarEstoque(rows, sheetName);
+        } else if (aba === 'orcamentos') {
+          sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('orcamento')) || wb.SheetNames[0];
+          ws = wb.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+          if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
+          importarOrcamentos(rows, sheetName);
         }
 
       } catch(err) {
@@ -4583,6 +4590,78 @@ function importarExcel(aba) {
   input.click();
 }
 
+function importarOrcamentos(rows, sheetName) {
+  const norm = function(str) { return String(str||'').trim().toLowerCase(); };
+  const rawHeader = rows[0];
+  const idx = {};
+  rawHeader.forEach(function(h, i) {
+    const hn = norm(h);
+    if (hn === 'nº de orçamento' || hn === 'numero' || hn === 'número') idx.numero = i;
+    else if (hn === 'status') idx.status = i;
+    else if (hn === 'cliente') idx.cliente = i;
+    else if (hn === 'série equip.' || hn === 'serie equip.') idx.equip_serie = i;
+    else if (hn === 'nome equip.') idx.equip_nome = i;
+    else if (hn === 'os') idx.os = i;
+    else if (hn === 'data') idx.data = i;
+    else if (hn === 'validade') idx.validade = i;
+    else if (hn === 'pagamento') idx.pagamento = i;
+    else if (hn === 'entrega') idx.entrega = i;
+    else if (hn === 'frete') idx.frete = i;
+    else if (hn === 'itens (detalhe)') idx.itens = i;
+    else if (hn === 'observações' || hn === 'observacoes') idx.obs = i;
+  });
+  if (idx.numero === undefined) { toast('Coluna Nº de Orçamento não encontrada', 'error'); return; }
+  const labelParaStatus = {};
+  Object.keys(ORC_STATUS).forEach(function(code) { labelParaStatus[norm(ORC_STATUS[code].label)] = code; });
+  function parseItens(texto) {
+    if (!texto) return [];
+    return String(texto).split(' | ').map(function(bloco) {
+      const m = bloco.match(/^(.*?) - (.*?) \(Qtd: ([\d.]+), Unit: R\$ ([\d.,]+), Total: R\$ ([\d.,]+)\)$/);
+      if (!m) return null;
+      return { cod: m[1].trim(), desc: m[2].trim(), qtd: parseFloat(m[3])||1, valor: parseFloat(m[4].replace(',','.'))||0, custoUnit: 0 };
+    }).filter(Boolean);
+  }
+  let criados = 0, atualizados = 0, erros = 0;
+  const linhas = rows.slice(1);
+  function processarLinha(i) {
+    if (i >= linhas.length) {
+      toast('Orçamentos importados: ' + criados + ' criados, ' + atualizados + ' atualizados' + (erros?', ' + erros + ' erros':''), 'success');
+      loadAndRenderOrcamentos();
+      return;
+    }
+    const row = linhas[i];
+    const numero = String(row[idx.numero]||'').trim();
+    if (!numero) { processarLinha(i+1); return; }
+    const statusLabel = norm(row[idx.status]);
+    const statusCode = labelParaStatus[statusLabel] || 'RASCUNHO';
+    const itens = idx.itens !== undefined ? parseItens(row[idx.itens]) : [];
+    const payload = {
+      numero: numero,
+      status: statusCode,
+      cliente: idx.cliente !== undefined ? row[idx.cliente] : '',
+      equip_serie: idx.equip_serie !== undefined ? row[idx.equip_serie] : '',
+      equip_nome: idx.equip_nome !== undefined ? row[idx.equip_nome] : '',
+      os: idx.os !== undefined ? row[idx.os] : '',
+      data: idx.data !== undefined ? row[idx.data] : '',
+      validade: idx.validade !== undefined ? row[idx.validade] : '30 dias',
+      pagamento: idx.pagamento !== undefined ? row[idx.pagamento] : '30 dias',
+      entrega: idx.entrega !== undefined ? row[idx.entrega] : 'A combinar',
+      frete: idx.frete !== undefined ? row[idx.frete] : 'FOB',
+      obs: idx.obs !== undefined ? row[idx.obs] : '',
+      itens: itens
+    };
+    const existente = db.orcamentos.find(function(o) { return String(o.numero) === numero; });
+    const prom = existente ? API.put('/orcamentos/' + existente.id, payload) : API.post('/orcamentos', payload);
+    prom.then(function() {
+      if (existente) atualizados++; else criados++;
+      processarLinha(i+1);
+    }).catch(function() {
+      erros++;
+      processarLinha(i+1);
+    });
+  }
+  processarLinha(0);
+}
 function importarPecas(rows, sheetName) {
   // Mapeamento flexível: normaliza header e cruza com ELOCA_MAP
   const rawHeader = rows[0];
@@ -5070,6 +5149,7 @@ function navigate(page, el) {
   } else if (page === 'orcamento') {
     if (actionsEl) actionsEl.innerHTML = `
       <button class="btn btn-ghost" onclick="abrirConfigOrcamento()" title="Configurar condições gerais">⚙ Configurar</button>
+      <button class="btn btn-excel" onclick="importarExcel('orcamentos')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('orcamentos')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     loadAndRenderOrcamentos();
