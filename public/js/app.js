@@ -5086,7 +5086,20 @@ function navigate(page, el) {
 //  BACKUP / RESTORE via API
 // ============================================================
 function exportarBancoDados() {
-  window.open('/api/backup', '_blank');
+  API.get('/backup').then(function(data) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'partforge_backup_' + new Date().toISOString().slice(0,10) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Backup baixado com sucesso!');
+  }).catch(function(err) {
+    toast('Erro ao gerar backup: ' + err.message, 'error');
+  });
 }
 
 function importarBancoDados(input) {
