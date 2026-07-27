@@ -50,6 +50,17 @@ app.listen(PORT, '0.0.0.0', () => {
 
     async function gerarEEnviarRelatorioDiario() {
       try {
+        const CIFRAO = String.fromCharCode(36);
+        const ORC_STATUS_LABELS = {
+          RASCUNHO: 'Rascunho',
+          ENVIADO: 'Aguard. Aprov. Cliente',
+          APROVADO_TECNICO: 'Aprovado - Aguard. Tecnico',
+          APROVADO_PECA: 'Aprovado - Aguard. Peca',
+          APROVADO_PAGAMENTO: 'Aprovado - Aguard. Pagamento',
+          A_FATURAR: 'A Faturar',
+          FATURADO: 'Faturado',
+          CANCELADO: 'Cancelado'
+        };
         const range = getYesterdayRangeBRT();
         const pecasEnviadas = db.query(
           "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status='DESPACHADA' AND m.created_at BETWEEN ? AND ?",
@@ -85,10 +96,10 @@ app.listen(PORT, '0.0.0.0', () => {
               itens.forEach(function(it) {
                 const qtd = parseFloat(it.qtd || 0);
                 const valor = parseFloat(it.valor || 0);
-                html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + (o.status || '') + '</td><td>' + diasStatus + '</td></tr>';
+                html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + (ORC_STATUS_LABELS[o.status] || o.status || '') + '</td><td>' + diasStatus + '</td></tr>';
               });
             } else {
-              html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td colspan="2">(sem itens)</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (o.status || '') + '</td><td>' + diasStatus + '</td></tr>';
+              html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td colspan="2">(sem itens)</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (ORC_STATUS_LABELS[o.status] || o.status || '') + '</td><td>' + diasStatus + '</td></tr>';
             }
           });
           html += '</table>';
