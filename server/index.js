@@ -67,7 +67,7 @@ app.listen(PORT, '0.0.0.0', () => {
           [range.startMs, range.endMs]
         );
         const orcamentos = db.query(
-          "SELECT * FROM orcamentos WHERE created_at BETWEEN ? AND ?",
+          "SELECT * FROM orcamentos WHERE updated_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
         );
 
@@ -83,7 +83,7 @@ app.listen(PORT, '0.0.0.0', () => {
           html += '<p>Nenhuma peca enviada no dia.</p>';
         }
 
-        html += '<h3>Orcamentos Criados (' + orcamentos.length + ')</h3>';
+        html += '<h3>Orcamentos Criados/Atualizados (' + orcamentos.length + ')</h3>';
         if (orcamentos.length) {
           html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Cliente</th><th>Descricao Item</th><th>Qtd</th><th>Valor</th><th>Status</th><th>Dias no Status</th></tr>';
           orcamentos.forEach(function(o) {
