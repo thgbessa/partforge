@@ -287,19 +287,19 @@ router.get('/orcamentos', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM orcamentos WHERE 1=1'; const p=[];
   if (status) { sql+=' AND status=?'; p.push(status); }
   if (q) { sql+=' AND (numero LIKE ? OR cliente LIKE ? OR equip_serie LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`); }
-  res.json(db.query(sql+' ORDER BY created_at DESC',p).map(o=>({...o,itens:P(o.itens)})));
+  res.json(db.query(sql+' ORDER BY created_at DESC',p).map(o=>({...o,itens:P(o.itens),equipamentos:P(o.equipamentos)||[]})));
 });
 
 router.post('/orcamentos', autenticar, (req, res) => {
   const o=req.body; if (!o.numero) return res.status(400).json({erro:'Número obrigatório'});
   const id=uid();
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
-  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by,status_changed_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by,status_changed_at,equipamentos)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',
      o.data||'',o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',
      o.frete||'FOB',o.obs_condicoes||'',o.condicoes||'',o.assinatura||req.user.nome,
-     total,J(o.itens||[]),o.solicitacao_id||'',now(),req.user.id,now()]);
+     total,J(o.itens||[]),o.solicitacao_id||'',now(),req.user.id,now(),J(o.equipamentos||[])]);
   res.status(201).json({id});
 });
 
@@ -309,10 +309,10 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
   const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== (o.status||'ABERTO');
   db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
-    validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=? WHERE id=?`,
+    validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=?,equipamentos=? WHERE id=?`,
     [o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',o.data||'',
      o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',o.frete||'FOB',
-     o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),req.params.id]);
+     o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),J(o.equipamentos||[]),req.params.id]);
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   res.json({ok:true});
 });
