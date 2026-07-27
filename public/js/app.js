@@ -506,6 +506,15 @@ function deletePeca(id) {
     .then(() => { toast('Peça removida', 'info'); loadAndRenderPecas(); })
     .catch(err => toast(err.message, 'error'));
 }
+const EQUIP_TEXT_FIELDS = [
+  'codigo','nome','cod-produto','serie','marca','modelo','grupo','grupo2',
+  'local','setor','ip','nome-fantasia','contrato','local-contrato','ult-os',
+  'os-aberta','os-instalacao','fornecedor','nf-compra','data-compra',
+  'termino-garantia','envio','ult-retorno','endereco','numero','complemento',
+  'bairro','municipio','uf','cep'
+];
+const EQUIP_SEL_FIELDS = ['status','proprietario','usado'];
+const EQUIP_NUM_FIELDS = ['ano-fab','valor-compra','valor-mercado'];
 function openModalEquip(id) {
   editId = id || null;
   const e = id ? db.equipamentos.find(x => x.id === id) : null;
