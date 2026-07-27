@@ -96,6 +96,30 @@ app.listen(PORT, '0.0.0.0', () => {
           html += '<p>Nenhum orcamento criado no dia.</p>';
         }
 
+        const estoqueAtualizado = db.query("SELECT e.peca_id, e.quantidade, e.updated_at, p.codigo, p.nome, p.fonte FROM estoque e LEFT JOIN pecas p ON p.id = e.peca_id WHERE e.updated_at BETWEEN ? AND ?", [range.startMs, range.endMs]);
+        html += '<h3>Estoque Atualizado (' + estoqueAtualizado.length + ')</h3>';
+        if (estoqueAtualizado.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Codigo</th><th>Peca</th><th>Fonte</th><th>Qtd Atual</th></tr>';
+          estoqueAtualizado.forEach(function(e) {
+            html += '<tr><td>' + (e.codigo || '') + '</td><td>' + (e.nome || '') + '</td><td>' + (e.fonte || '') + '</td><td>' + (e.quantidade || 0) + '</td></tr>';
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhuma peca teve estoque atualizado no dia.</p>';
+        }
+
+        const equipamentosCadastrados = db.query('SELECT * FROM equipamentos WHERE created_at BETWEEN ? AND ?', [range.startMs, range.endMs]);
+        html += '<h3>Equipamentos Cadastrados (' + equipamentosCadastrados.length + ')</h3>';
+        if (equipamentosCadastrados.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Modelo</th><th>Marca</th><th>Serie</th><th>Cliente</th></tr>';
+          equipamentosCadastrados.forEach(function(eq) {
+            html += '<tr><td>' + (eq.modelo || '') + '</td><td>' + (eq.marca || '') + '</td><td>' + (eq.serie || '') + '</td><td>' + (eq.cliente || '') + '</td></tr>';
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhum equipamento cadastrado no dia.</p>';
+        }
+
         const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         if (!destinatarios.length || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
           console.log('Relatorio diario: configuracao incompleta (GMAIL_USER, GMAIL_APP_PASSWORD ou RELATORIO_DESTINATARIOS ausente)');
