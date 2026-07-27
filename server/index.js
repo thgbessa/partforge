@@ -99,9 +99,9 @@ app.listen(PORT, '0.0.0.0', () => {
         const estoqueAtualizado = db.query("SELECT e.peca_id, e.quantidade, e.updated_at, p.codigo, p.nome, p.fonte FROM estoque e LEFT JOIN pecas p ON p.id = e.peca_id WHERE e.updated_at BETWEEN ? AND ?", [range.startMs, range.endMs]);
         html += '<h3>Estoque Atualizado (' + estoqueAtualizado.length + ')</h3>';
         if (estoqueAtualizado.length) {
-          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Codigo</th><th>Peca</th><th>Fonte</th><th>Qtd Atual</th></tr>';
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Codigo</th><th>Peca</th><th>Fonte</th><th>Qtd Atual</th><th>Data Atualizacao</th></tr>';
           estoqueAtualizado.forEach(function(e) {
-            html += '<tr><td>' + (e.codigo || '') + '</td><td>' + (e.nome || '') + '</td><td>' + (e.fonte || '') + '</td><td>' + (e.quantidade || 0) + '</td></tr>';
+            var dataE = new Date(e.updated_at).toLocaleString('pt-BR'); html += '<tr><td>' + (e.codigo || '') + '</td><td>' + (e.nome || '') + '</td><td>' + (e.fonte || '') + '</td><td>' + (e.quantidade || 0) + '</td><td>' + dataE + '</td></tr>';
           });
           html += '</table>';
         } else {
