@@ -2135,6 +2135,8 @@ function verEventos(id) {
 let editOrcId = null;
 let orcItens  = [];
 let editandoItemOrcIdx = null;
+let orcEquipamentos = [];
+let editandoEquipOrcIdx = null;
 
 const ORC_STATUS = {
   RASCUNHO:            { label:'Rascunho',                       badge:'badge-gray'   },
@@ -2205,8 +2207,12 @@ function abrirModalOrcamento(id) {
   if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
   document.getElementById('orc-status').value      = o?.status     || 'RASCUNHO';
   document.getElementById('orc-cliente').value     = o?.cliente    || '';
-  document.getElementById('orc-serie').value       = o?.equipSerie || '';
-  document.getElementById('orc-equip-nome').value  = o?.equipNome  || '';
+  orcEquipamentos = o ? (Array.isArray(o.equipamentos) && o.equipamentos.length ? JSON.parse(JSON.stringify(o.equipamentos)) : (o.equip_serie || o.equip_nome ? [{ serie: o.equip_serie||'', nome: o.equip_nome||'' }] : [])) : [];
+  editandoEquipOrcIdx = null;
+  document.getElementById('orc-serie').value       = '';
+  document.getElementById('orc-equip-nome').value  = '';
+  const btnEq = document.getElementById('orc-add-equip-btn'); if (btnEq) btnEq.textContent = '+ Adicionar Equipamento a Lista';
+  renderEquipamentosOrc();
   document.getElementById('orc-os').value          = o?.os         || '';
   document.getElementById('orc-data').value        = o?.data       || new Date().toISOString().slice(0,10);
   document.getElementById('orc-obs').value         = o?.obs        || '';
@@ -2237,7 +2243,7 @@ function abrirModalOrcamento(id) {
 
 function fecharModalOrcamento() {
   document.getElementById('modal-orcamento').style.display = 'none';
-  editOrcId = null; orcItens = [];
+  editOrcId = null; orcItens = []; orcEquipamentos = []; editandoEquipOrcIdx = null;
 }
 
 function resetarCondicoesOrc() {
@@ -2354,6 +2360,53 @@ function fecharDropdownEquipOrc() {
   const dd = document.getElementById('orc-equip-dropdown');
   if (dd) dd.style.display = 'none';
 }
+function adicionarEquipOrc() {
+  const serie = document.getElementById('orc-serie').value.trim();
+  const nome  = document.getElementById('orc-equip-nome').value.trim();
+  if (!serie && !nome) { toast('Busque e selecione um equipamento primeiro', 'error'); return; }
+  if (editandoEquipOrcIdx !== null) {
+    orcEquipamentos[editandoEquipOrcIdx] = { serie, nome };
+    editandoEquipOrcIdx = null;
+    const btn = document.getElementById('orc-add-equip-btn');
+    if (btn) btn.textContent = '+ Adicionar Equipamento a Lista';
+  } else {
+    orcEquipamentos.push({ serie, nome });
+  }
+  document.getElementById('orc-serie').value = '';
+  document.getElementById('orc-equip-nome').value = '';
+  renderEquipamentosOrc();
+}
+function renderEquipamentosOrc() {
+  const el = document.getElementById('orc-equip-lista');
+  if (!el) return;
+  if (!orcEquipamentos.length) {
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>Serie</th><th>Equipamento</th><th></th></tr></thead><tbody>' +
+    orcEquipamentos.map(function(eq, i) {
+      return '<tr><td class="mono" style="font-size:11px;color:var(--accent)">' + (eq.serie||'-') + '</td>' +
+        '<td style="font-size:12px">' + (eq.nome||'-') + '</td>' +
+        '<td><button class="btn btn-ghost btn-sm" onclick="editarEquipOrc(' + i + ')">✎</button> ' +
+        '<button class="btn btn-danger btn-sm" onclick="removerEquipOrc(' + i + ')">✕</button></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function editarEquipOrc(idx) {
+  const eq = orcEquipamentos[idx];
+  if (!eq) return;
+  editandoEquipOrcIdx = idx;
+  document.getElementById('orc-serie').value = eq.serie || '';
+  document.getElementById('orc-equip-nome').value = eq.nome || '';
+  const btn = document.getElementById('orc-add-equip-btn');
+  if (btn) btn.textContent = 'Salvar edicao do equipamento';
+}
+function removerEquipOrc(idx) {
+  orcEquipamentos.splice(idx, 1);
+  editandoEquipOrcIdx = null;
+  const btn = document.getElementById('orc-add-equip-btn');
+  if (btn) btn.textContent = '+ Adicionar Equipamento a Lista';
+  renderEquipamentosOrc();
+}
 
 function renderItensOrc() {
   const el = document.getElementById('orc-itens-lista');
@@ -2414,8 +2467,9 @@ function salvarOrcamento() {
     numero, total,
     status:     document.getElementById('orc-status').value,
     cliente:    document.getElementById('orc-cliente').value.trim(),
-    equip_serie: document.getElementById('orc-serie').value.trim(),
-    equip_nome:  document.getElementById('orc-equip-nome').value.trim(),
+    equip_serie: (orcEquipamentos[0]?.serie) || '',
+    equip_nome:  (orcEquipamentos[0]?.nome) || '',
+    equipamentos: [...orcEquipamentos],
     os:         document.getElementById('orc-os').value.trim(),
     data:       document.getElementById('orc-data').value,
     obs:        document.getElementById('orc-obs').value.trim(),
