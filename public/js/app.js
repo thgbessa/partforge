@@ -2181,7 +2181,7 @@ function renderOrcamentos(q='') {
         <td><span class="badge ${st.badge}">${st.label}</span></td>
         <td class="mono" style="font-size:12px">${(function(){ var base = o.status_changed_at || o.created_at || Date.now(); var dias = Math.floor((Date.now() - base) / 86400000); return dias + (dias===1?' dia':' dias'); })()}</td>
         <td style="font-size:12px">${o.cliente||'—'}</td>
-        <td class="mono">${o.equipSerie||'—'}</td>
+        <td class="mono">${(o.equipamentos&&o.equipamentos.length)?(o.equipamentos[0].serie||'—')+(o.equipamentos.length>1?' +'+(o.equipamentos.length-1):''):(o.equip_serie||'—')}</td>
         <td class="mono">${o.os||'—'}</td>
         <td class="mono">${(o.itens||[]).length}</td>
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${parseFloat(o.total||0).toFixed(2)}</td>
@@ -2664,8 +2664,8 @@ function gerarPDFOrcamento(id) {
   const labelW = 32;
   const infoRows = [
     ['Cliente',      o.cliente    || '—'],
-    ['Equipamento',  o.equipNome  || '—'],
-    ['Nº de Série',  o.equipSerie || '—'],
+    ['Equipamento',  o.equip_nome  || '—'],
+    ['Nº de Série',  o.equip_serie || '—'],
     ['OS',           o.os         || '—'],
   ];
   infoRows.forEach(([label, val]) => {
@@ -5369,7 +5369,7 @@ function renderMobOrc() {
       return '<tr style="'+(isNovo?'background:rgba(249,115,22,0.05);':'')+'">' +
         '<td><span style="font-family:var(--mono);color:var(--accent)">'+o.numero+'</span>'+(isNovo?'<span style="background:var(--accent);color:#fff;font-size:9px;padding:1px 5px;border-radius:4px;margin-left:6px">NOVO</span>':'')+'</td>'+
         '<td>'+(o.cliente||'—')+'</td>'+
-        '<td>'+(o.equipNome||o.equipSerie||'—')+'</td>'+
+        '<td>'+(o.equip_nome||o.equip_serie||'—')+'</td>'+
         '<td style="font-family:var(--mono);color:var(--green)">R$ '+parseFloat(o.total||0).toFixed(2)+'</td>'+
         '<td>'+(o.data||'—')+'</td>'+
         '<td><span class="status-badge status-'+(o.status||'').toLowerCase()+'">'+(o.status||'—')+'</span></td>'+
