@@ -2134,6 +2134,7 @@ function verEventos(id) {
 // ============================================================
 let editOrcId = null;
 let orcItens  = [];
+let editandoItemOrcIdx = null;
 
 const ORC_STATUS = {
   RASCUNHO:            { label:'Rascunho',                       badge:'badge-gray'   },
@@ -2371,7 +2372,7 @@ function renderItensOrc() {
           <td class="mono">${it.qtd}</td>
           <td class="mono">R$ ${parseFloat(it.valor||0).toFixed(2)}</td>
           <td class="mono" style="color:var(--accent);font-weight:700">R$ ${(it.qtd*(parseFloat(it.valor)||0)).toFixed(2)}</td>
-          <td><button class="btn btn-danger btn-sm" onclick="removerItemOrc(${i})">✕</button></td></tr>`;
+          <td><button class="btn btn-ghost btn-sm" onclick="editarItemOrc(${i})">✎</button> <button class="btn btn-danger btn-sm" onclick="removerItemOrc(${i})">✕</button></td></tr>`;
       }).join('')}</tbody></table>`;
   }
   const total = orcItens.reduce((s,it) => s + it.qtd*(parseFloat(it.valor)||0), 0);
@@ -2385,14 +2386,25 @@ function adicionarItemOrc() {
   const valor = parseFloat(document.getElementById('orc-item-valor').value)||0;
   if (!desc) { toast('Informe a descrição do item', 'error'); return; }
   const peca  = cod ? db.pecas.find(p=>p.codigo===cod) : null;
-  orcItens.push({ cod, desc, qtd, valor, custoUnit: peca?.custo||0 });
+  if (editandoItemOrcIdx !== null) { orcItens[editandoItemOrcIdx] = { cod, desc, qtd, valor, custoUnit: peca?.custo||0 }; editandoItemOrcIdx = null; const btnAdd = document.getElementById('orc-add-item-btn'); if (btnAdd) btnAdd.textContent = 'Add'; } else { orcItens.push({ cod, desc, qtd, valor, custoUnit: peca?.custo||0 }); }
   ['orc-item-cod','orc-item-desc','orc-item-valor'].forEach(fid => { const el=document.getElementById(fid); if(el) el.value=''; });
   const qtdEl = document.getElementById('orc-item-qtd'); if (qtdEl) qtdEl.value='1';
   const imgEl = document.getElementById('orc-item-img'); if (imgEl) { imgEl.style.display='none'; imgEl.innerHTML=''; }
   renderItensOrc();
 }
 
-function removerItemOrc(idx) { orcItens.splice(idx,1); renderItensOrc(); }
+function removerItemOrc(idx) { orcItens.splice(idx,1); editandoItemOrcIdx = null; renderItensOrc(); }
+function editarItemOrc(idx) {
+  const it = orcItens[idx];
+  if (!it) return;
+  editandoItemOrcIdx = idx;
+  document.getElementById('orc-item-cod').value = it.cod || '';
+  document.getElementById('orc-item-desc').value = it.desc || '';
+  document.getElementById('orc-item-qtd').value = it.qtd || 1;
+  document.getElementById('orc-item-valor').value = it.valor || 0;
+  const btnAdd = document.getElementById('orc-add-item-btn');
+  if (btnAdd) btnAdd.textContent = 'Salvar edicao';
+}
 
 function salvarOrcamento() {
   const numero = document.getElementById('orc-numero').value.trim();
