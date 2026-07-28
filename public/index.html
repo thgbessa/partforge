@@ -335,14 +335,24 @@
             </div>
             <div class="form-group">
               <label class="form-label">Técnico Solicitante</label>
-              <div style="position:relative">
-                <input class="form-input" id="mov-tecnico" placeholder="Nome do técnico" autocomplete="off"
-                  oninput="filtrarTecnicosMov(this.value,'mov')" onfocus="filtrarTecnicosMov(this.value,'mov')"
-                  onblur="setTimeout(()=>fecharDropdownTecnico('mov'),200)">
-                <div id="mov-tecnico-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;
-                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
-                  max-height:160px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
-              </div>
+              <select class="form-select" id="mov-tecnico">
+                  <option value="">Selecione...</option>
+                  <option value="HENRIQUE">HENRIQUE</option>
+                  <option value="WESLEY">WESLEY</option>
+                  <option value="FABRICIO">FABRICIO</option>
+                  <option value="SAULO">SAULO</option>
+                  <option value="ALAN">ALAN</option>
+                  <option value="NEY">NEY</option>
+                  <option value="RICARDO SALES">RICARDO SALES</option>
+                  <option value="RICARDO TORRES">RICARDO TORRES</option>
+                  <option value="ROGERIO">ROGERIO</option>
+                  <option value="LEANDRO">LEANDRO</option>
+                  <option value="BRUNO">BRUNO</option>
+                  <option value="NATANAEL">NATANAEL</option>
+                  <option value="ATL">ATL</option>
+                  <option value="ALEXANDRE">ALEXANDRE</option>
+                  <option value="SUPRIBIO">SUPRIBIO</option>
+              </select>
             </div>
             <div class="form-group">
               <label class="form-label">E-mail do Técnico</label>
