@@ -943,44 +943,88 @@ const PIPELINE_STATUS = {
 
 let actionModalTarget = null; // id da solicitação sendo editada
 
-function criarSolicitacao() {
+let movItens = [];
+function adicionarItemMov() {
   const pecaId = document.getElementById('mov-peca').value;
-  const qtd    = parseInt(document.getElementById('mov-qtd').value) || 0;
-  if (!pecaId)  { toast('Selecione uma peça', 'error'); return; }
-  if (qtd <= 0) { toast('Informe uma quantidade válida', 'error'); return; }
-
-  const peca    = db.pecas.find(x => x.id === pecaId);
+  const qtd = parseInt(document.getElementById('mov-qtd').value) || 0;
+  if (!pecaId) { toast('Selecione uma peca', 'error'); return; }
+  if (qtd <= 0) { toast('Informe uma quantidade valida', 'error'); return; }
+  const peca = db.pecas.find(function(x) { return x.id === pecaId; });
+  movItens.push({
+    peca_id: pecaId,
+    peca_codigo: peca?.codigo || pecaId,
+    peca_nome: peca?.nome || '?',
+    peca_unidade: peca?.unidade || 'UN',
+    peca_fonte: peca?.fonte || '',
+    peca_custo: peca?.custo || 0,
+    qtd: qtd
+  });
+  document.getElementById('mov-peca-search').value = '';
+  document.getElementById('mov-peca').value = '';
+  document.getElementById('mov-peca').dataset.label = '';
+  var selEl = document.getElementById('mov-peca-selected');
+  if (selEl) selEl.style.display = 'none';
+  document.getElementById('mov-qtd').value = '';
+  renderItensMov();
+}
+function renderItensMov() {
+  const el = document.getElementById('mov-itens-lista');
+  if (!el) return;
+  if (!movItens.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<table class="data-table"><thead><tr><th>P/N</th><th>Peca</th><th>Qtd</th><th></th></tr></thead><tbody>' +
+    movItens.map(function(it, i) {
+      return '<tr><td class="mono" style="font-size:11px;color:var(--accent)">' + (it.peca_codigo||'') + '</td>' +
+        '<td style="font-size:12px">' + (it.peca_nome||'') + '</td>' +
+        '<td class="mono">' + it.qtd + '</td>' +
+        '<td><button class="btn btn-danger btn-sm" onclick="removerItemMov(' + i + ')">✕</button></td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function removerItemMov(idx) {
+  movItens.splice(idx, 1);
+  renderItensMov();
+}
+function criarSolicitacao() {
+  var listaFinal = movItens.slice();
+  var pecaIdAtual = document.getElementById('mov-peca').value;
+  var qtdAtual = parseInt(document.getElementById('mov-qtd').value) || 0;
+  if (!listaFinal.length && pecaIdAtual && qtdAtual > 0) {
+    var pecaAtual = db.pecas.find(function(x) { return x.id === pecaIdAtual; });
+    listaFinal.push({
+      peca_id: pecaIdAtual, peca_codigo: pecaAtual?.codigo || pecaIdAtual,
+      peca_nome: pecaAtual?.nome || '?', peca_unidade: pecaAtual?.unidade || 'UN',
+      peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, qtd: qtdAtual
+    });
+  }
+  if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
   const equipId = document.getElementById('mov-equip').value;
   const equip   = equipId ? db.equipamentos.find(x => x.id === equipId) : null;
   const tecnico = document.getElementById('mov-tecnico').value.trim() || currentUser?.nome || '';
   const obs     = document.getElementById('mov-obs').value.trim();
-  const estoqueAtual = db.estoque[pecaId] || 0;
-  const temEstoque   = estoqueAtual >= qtd;
-
-  const data = {
-    peca_id:      pecaId,
-    peca_codigo:  peca?.codigo  || pecaId,
-    peca_nome:    peca?.nome    || '?',
-    peca_unidade: peca?.unidade || 'UN',
-    peca_fonte:   peca?.fonte   || '',
-    peca_custo:   peca?.custo   || 0,
-    qtd,
-    equip_id:      equipId || '',
-    equip_serie:   equip?.serie  || equip?.codigo || '',
-    equip_cliente: equip?.nome_fantasia || equip?.cliente || '',
-    equip_modelo:  equip?.modelo || '',
-    tecnico,
-    obs,
-    tem_estoque: temEstoque,
-  };
-
-  API.post('/movimentacoes', data)
-    .then(res => {
-      toast(`Solicitação #${res.seq_num} criada — ${temEstoque ? 'peça em estoque' : '⚠ estoque insuficiente'}`, temEstoque ? 'success' : 'info');
+  var criadas = 0, erros = 0;
+  function processarProximo(i) {
+    if (i >= listaFinal.length) {
+      toast('Solicitacoes criadas: ' + criadas + (erros ? ', erros: ' + erros : ''), erros ? 'info' : 'success');
+      movItens = [];
+      renderItensMov();
       populateMovSelects();
       loadAndRenderDashboard();
-    })
-    .catch(err => toast(err.message, 'error'));
+      return;
+    }
+    var item = listaFinal[i];
+    var estoqueAtual = db.estoque[item.peca_id] || 0;
+    var temEstoque = estoqueAtual >= item.qtd;
+    var data = {
+      peca_id: item.peca_id, peca_codigo: item.peca_codigo, peca_nome: item.peca_nome,
+      peca_unidade: item.peca_unidade, peca_fonte: item.peca_fonte, peca_custo: item.peca_custo,
+      qtd: item.qtd,
+      equip_id: equipId || '', equip_serie: equip?.serie || equip?.codigo || '',
+      equip_cliente: equip?.nome_fantasia || equip?.cliente || '', equip_modelo: equip?.modelo || '',
+      tecnico: tecnico, obs: obs, tem_estoque: temEstoque
+    };
+    API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
+      .catch(function() { erros++; processarProximo(i + 1); });
+  }
+  processarProximo(0);
 }
 function populateMovSelects() {
   document.getElementById('mov-peca-search').value = '';
