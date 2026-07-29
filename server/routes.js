@@ -324,6 +324,36 @@ router.put('/orcamentos/:id/status', autenticar, isAdmin, (req, res) => {
 router.delete('/orcamentos/:id', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM orcamentos WHERE id=?',[req.params.id]); res.json({ok:true});
 });
+// -- SOLICITACOES DE COMPRA --
+router.get('/solicitacoes-compra', autenticar, (req, res) => {
+  const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
+  if (status) { sql+=' AND status=?'; p.push(status); }
+  if (q) { sql+=' AND (numero LIKE ? OR demanda_nome LIKE ? OR equip_serie LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`); }
+  res.json(db.query(sql+' ORDER BY created_at DESC',p).map(sc=>({...sc,itens:P(sc.itens)})));
+});
+router.post('/solicitacoes-compra', autenticar, (req, res) => {
+  const sc=req.body; if (!sc.numero) return res.status(400).json({erro:'Numero obrigatorio'});
+  const id=uid();
+  db.run(`INSERT INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,itens,obs,created_at,updated_at,status_changed_at,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',J(sc.itens||[]),sc.obs||'',now(),now(),now(),req.user.id]);
+  res.status(201).json({id});
+});
+router.put('/solicitacoes-compra/:id', autenticar, (req, res) => {
+  const sc=req.body;
+  const existente = db.get('SELECT status FROM solicitacoes_compra WHERE id=?', [req.params.id]);
+  const statusMudou = existente && existente.status !== (sc.status||'SOLICITADO');
+  db.run(`UPDATE solicitacoes_compra SET numero=?,status=?,demanda=?,demanda_nome=?,equip_serie=?,itens=?,obs=?,updated_at=? WHERE id=?`,
+    [sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',J(sc.itens||[]),sc.obs||'',now(),req.params.id]);
+  if (statusMudou) db.run('UPDATE solicitacoes_compra SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
+  res.json({ok:true});
+});
+router.put('/solicitacoes-compra/:id/status', autenticar, (req, res) => {
+  db.run('UPDATE solicitacoes_compra SET status=?,status_changed_at=?,updated_at=? WHERE id=?',[req.body.status,now(),now(),req.params.id]); res.json({ok:true});
+});
+router.delete('/solicitacoes-compra/:id', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM solicitacoes_compra WHERE id=?',[req.params.id]); res.json({ok:true});
+});
 
 // ── PEDIDOS ───────────────────────────────────────────────────
 router.get('/pedidos', autenticar, (req, res) => {
