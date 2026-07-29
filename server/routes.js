@@ -334,17 +334,17 @@ router.get('/solicitacoes-compra', autenticar, (req, res) => {
 router.post('/solicitacoes-compra', autenticar, (req, res) => {
   const sc=req.body; if (!sc.numero) return res.status(400).json({erro:'Numero obrigatorio'});
   const id=uid();
-  db.run(`INSERT INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,itens,obs,created_at,updated_at,status_changed_at,created_by)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id,sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',J(sc.itens||[]),sc.obs||'',now(),now(),now(),req.user.id]);
+  db.run(`INSERT INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,equip_nome,equip_cliente,itens,obs,created_at,updated_at,status_changed_at,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',sc.equip_nome||'',sc.equip_cliente||'',J(sc.itens||[]),sc.obs||'',now(),now(),now(),req.user.id]);
   res.status(201).json({id});
 });
 router.put('/solicitacoes-compra/:id', autenticar, (req, res) => {
   const sc=req.body;
   const existente = db.get('SELECT status FROM solicitacoes_compra WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== (sc.status||'SOLICITADO');
-  db.run(`UPDATE solicitacoes_compra SET numero=?,status=?,demanda=?,demanda_nome=?,equip_serie=?,itens=?,obs=?,updated_at=? WHERE id=?`,
-    [sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',J(sc.itens||[]),sc.obs||'',now(),req.params.id]);
+  db.run(`UPDATE solicitacoes_compra SET numero=?,status=?,demanda=?,demanda_nome=?,equip_serie=?,equip_nome=?,equip_cliente=?,itens=?,obs=?,updated_at=? WHERE id=?`,
+    [sc.numero,sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',sc.equip_nome||'',sc.equip_cliente||'',J(sc.itens||[]),sc.obs||'',now(),req.params.id]);
   if (statusMudou) db.run('UPDATE solicitacoes_compra SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   res.json({ok:true});
 });

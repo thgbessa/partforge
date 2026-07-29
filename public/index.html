@@ -455,7 +455,7 @@
           <div class="modal-body">
             <div class="form-grid">
               <div class="form-group">
-                <label class="form-label">Número</label>
+                <label class="form-label">Nº Solicitação eLoca</label>
                 <input class="form-input" id="sc-numero" placeholder="Ex: 1">
               </div>
               <div class="form-group">
@@ -488,9 +488,19 @@
                   background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
                   max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
               </div>
-              <div class="form-group">
+              <div class="form-group" style="position:relative">
                 <label class="form-label">Nº de Série (Equip.)</label>
-                <input class="form-input" id="sc-equip-serie" placeholder="Opcional">
+                <input class="form-input" id="sc-equip-serie" placeholder="Buscar por série, código ou nome... (opcional)" autocomplete="off"
+                  oninput="filtrarEquipSC(this.value)" onfocus="filtrarEquipSC(this.value)"
+                  onblur="setTimeout(()=>fecharDropdownEquipSC(),200)">
+                <input type="hidden" id="sc-equip-nome">
+                <input type="hidden" id="sc-equip-cliente">
+                <div id="sc-equip-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
+                <div id="sc-equip-card" style="display:none;margin-top:6px;padding:8px 10px;
+                  background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+                  font-size:11px;line-height:1.7"></div>
               </div>
               <div class="form-group full">
                 <label class="form-label">Observação</label>
@@ -1559,4 +1569,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000024"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000025"></script></html>

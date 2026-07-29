@@ -2832,6 +2832,11 @@ function gerarPDFOrcamento(id) {
 //  SOLICITAÇÕES DE COMPRA — CRUD
 // ============================================================
 
+const TECNICOS_SC = [
+  'HENRIQUE','WESLEY','FABRICIO','SAULO','ALAN','NEY','RICARDO SALES','RICARDO TORRES',
+  'ROGERIO','LEANDRO','BRUNO','NATANAEL','ATL','ALEXANDRE','SUPRIBIO'
+];
+
 const STATUS_SC = {
   SOLICITADO:           { label: 'Solicitado',            badge: 'badge-gray'   },
   AGUARDANDO_APROVACAO: { label: 'Aguard. Aprov.',         badge: 'badge-orange' },
@@ -2894,7 +2899,7 @@ function renderSolicitacoesCompra(q = '') {
         <td><span class="badge ${st.badge}">${st.label}</span></td>
         <td class="mono" style="font-size:12px">${diasLabel}</td>
         <td style="font-size:12px">${demandaBadge}</td>
-        <td class="mono">${sc.equip_serie || '—'}</td>
+        <td class="mono" style="font-size:11px">${sc.equip_serie || '—'}${sc.equip_cliente ? `<div style="font-family:var(--body);font-size:10px;color:var(--text3)">${sc.equip_cliente}</div>` : ''}</td>
         <td class="mono">${(sc.itens || []).length}</td>
         <td class="mono" style="font-size:11px">${sc.created_at ? new Date(sc.created_at).toLocaleDateString('pt-BR') : '—'}</td>
         <td style="text-align:right;white-space:nowrap">
@@ -2925,6 +2930,19 @@ function abrirModalSolicitacaoCompra(id) {
   document.getElementById('sc-demanda').value = sc?.demanda || 'TECNICO';
   document.getElementById('sc-demanda-nome-search').value = sc?.demanda_nome || '';
   document.getElementById('sc-equip-serie').value = sc?.equip_serie || '';
+  const scNomeEl = document.getElementById('sc-equip-nome');
+  scNomeEl.value = sc?.equip_nome || '';
+  scNomeEl.dataset.serie = sc?.equip_serie || '';
+  document.getElementById('sc-equip-cliente').value = sc?.equip_cliente || '';
+  const scEquipCard = document.getElementById('sc-equip-card');
+  if (sc?.equip_serie) {
+    scEquipCard.style.display = 'block';
+    scEquipCard.innerHTML = `<strong style="color:var(--accent);font-family:var(--mono)">${sc.equip_serie}</strong>
+      ${sc.equip_nome ? ' · ' + sc.equip_nome : ''}
+      ${sc.equip_cliente ? ' · <span style="color:var(--text3)">' + sc.equip_cliente + '</span>' : ''}`;
+  } else {
+    scEquipCard.style.display = 'none';
+  }
   document.getElementById('sc-obs').value = sc?.obs || '';
 
   ['sc-item-cod', 'sc-item-desc', 'sc-item-obs'].forEach(id2 => {
@@ -2971,9 +2989,7 @@ function filtrarDemandaNomeSC(q) {
   const ql = (q || '').toLowerCase().trim();
   let list = [];
   if (demanda === 'TECNICO') {
-    list = (db.usuarios || [])
-      .filter(u => !ql || u.nome.toLowerCase().includes(ql))
-      .map(u => u.nome);
+    list = TECNICOS_SC.filter(t => !ql || t.toLowerCase().includes(ql));
   } else if (demanda === 'CLIENTE') {
     const clientesSet = new Set();
     (db.equipamentos || []).forEach(e => {
@@ -3000,6 +3016,73 @@ function selecionarDemandaNomeSC(nome) {
 
 function fecharDropdownDemandaSC() {
   const dd = document.getElementById('sc-demanda-nome-dd');
+  if (dd) dd.style.display = 'none';
+}
+
+// ── AUTOCOMPLETE DE EQUIPAMENTO (puxa Equipamento e Cliente automaticamente) ──
+function filtrarEquipSC(q) {
+  const dd = document.getElementById('sc-equip-dropdown');
+  if (!dd) return;
+
+  // Se o texto digitado não bate mais com o equipamento selecionado, limpa o auto-preenchido
+  const nomeEl = document.getElementById('sc-equip-nome');
+  const clienteEl = document.getElementById('sc-equip-cliente');
+  if (nomeEl && nomeEl.dataset.serie !== q) {
+    nomeEl.value = ''; nomeEl.dataset.serie = '';
+    if (clienteEl) clienteEl.value = '';
+    const card = document.getElementById('sc-equip-card');
+    if (card) card.style.display = 'none';
+  }
+
+  const ql = (q || '').toLowerCase().trim();
+  const list = (db.equipamentos || []).filter(e =>
+    !ql ||
+    String(e.serie || '').toLowerCase().includes(ql) ||
+    String(e.codigo || '').toLowerCase().includes(ql) ||
+    String(e.nome || '').toLowerCase().includes(ql) ||
+    String(e.nome_fantasia || '').toLowerCase().includes(ql)
+  ).slice(0, 40);
+
+  if (!list.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = list.map(e => {
+    const serie = e.serie || e.codigo || '';
+    const cliente = e.nome_fantasia ? e.nome_fantasia.replace(/\[\d+\]$/, '').trim() : '';
+    return `<div onmousedown="selecionarEquipSC('${e.id}')"
+      style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div><span style="font-family:var(--mono);color:var(--accent);font-weight:700">${serie}</span>
+        <span style="margin-left:8px;color:var(--text)">${e.nome || ''}</span></div>
+      ${cliente ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${cliente}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selecionarEquipSC(id) {
+  const e = (db.equipamentos || []).find(x => x.id === id);
+  if (!e) return;
+  const serie = e.serie || e.codigo || '';
+  const cliente = e.nome_fantasia ? e.nome_fantasia.replace(/\[\d+\]$/, '').trim() : '';
+
+  const input = document.getElementById('sc-equip-serie');
+  input.value = serie;
+
+  const nomeEl = document.getElementById('sc-equip-nome');
+  nomeEl.value = e.nome || '';
+  nomeEl.dataset.serie = serie;
+
+  document.getElementById('sc-equip-cliente').value = cliente;
+  fecharDropdownEquipSC();
+
+  const card = document.getElementById('sc-equip-card');
+  card.style.display = 'block';
+  card.innerHTML = `<strong style="color:var(--accent);font-family:var(--mono)">${serie}</strong>
+    ${e.nome ? ' · ' + e.nome : ''}
+    ${cliente ? ' · <span style="color:var(--text3)">' + cliente + '</span>' : ''}`;
+}
+
+function fecharDropdownEquipSC() {
+  const dd = document.getElementById('sc-equip-dropdown');
   if (dd) dd.style.display = 'none';
 }
 
@@ -3084,6 +3167,8 @@ function salvarSolicitacaoCompra() {
     demanda,
     demanda_nome: demandaNome,
     equip_serie:  document.getElementById('sc-equip-serie').value.trim(),
+    equip_nome:   document.getElementById('sc-equip-nome').value.trim(),
+    equip_cliente: document.getElementById('sc-equip-cliente').value.trim(),
     obs:          document.getElementById('sc-obs').value.trim(),
     itens:        [...scItens],
   };
