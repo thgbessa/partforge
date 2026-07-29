@@ -5252,8 +5252,14 @@ function importarPecas(rows, sheetName) {
       if (val === undefined || val === null) val = '';
       val = String(val).trim();
       if (NUMERIC_FIELDS.has(internalKey)) {
-        // Remove R$, $, pontos de milhar, troca vírgula por ponto
-        val = val.replace(/[R$\s]/g,'').replace(/\./g,'').replace(',','.') || '0';
+        // Remove R$, $, espaços
+        val = val.replace(/[R$\s]/g,'');
+        if (val.includes(',')) {
+          // Formato BR (1.234,56): pontos são separador de milhar, vírgula é decimal
+          val = val.replace(/\./g,'').replace(',','.');
+        }
+        // Sem vírgula: já é decimal simples (751.68, 0.05...) — mantém o ponto como está
+        val = val || '0';
         data[internalKey] = parseFloat(val) || 0;
       } else {
         data[internalKey] = val;
@@ -5387,7 +5393,11 @@ function importarEquipamentos(rows, sheetName) {
       // Limpa datas inválidas do eLoca (0000-00-00)
       if (val === '0000-00-00' || val === '0') val = '';
       if (EQUIP_NUMERIC.has(internalKey)) {
-        const clean = val.replace(/[R$\s.]/g,'').replace(',','.') || '0';
+        let clean = val.replace(/[R$\s]/g,'');
+        if (clean.includes(',')) {
+          clean = clean.replace(/\./g,'').replace(',','.');
+        }
+        clean = clean || '0';
         data[internalKey] = parseFloat(clean)||0;
       } else {
         data[internalKey] = val;
