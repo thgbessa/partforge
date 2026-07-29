@@ -80,6 +80,10 @@
           <span class="icon">📋</span> Orçamentos
           <span class="nav-badge" id="badge-orcamento">0</span>
         </div>
+        <div class="nav-item" onclick="navigate('solicitacoescompra', this)">
+          <span class="icon">🛍</span> Solicitações de Compra
+          <span class="nav-badge" id="badge-solicitacoescompra">0</span>
+        </div>
         <div class="nav-item" onclick="navigate('mobile-requests', this)">
           <span class="icon">📱</span> Solicitações Mobile
           <span class="nav-badge" id="badge-mobile" style="background:var(--accent);display:none">0</span>
@@ -416,6 +420,112 @@
         </div>
         <div id="log-content">
           <div class="empty-state"><div class="empty-icon">◈</div><div class="empty-title">Carregando...</div></div>
+        </div>
+      </div>
+
+      <!-- SOLICITAÇÕES DE COMPRA -->
+      <div class="page" id="page-solicitacoescompra">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por número, demanda, S/N..."
+              oninput="renderSolicitacoesCompra(this.value)">
+          </div>
+          <select class="form-select" style="width:180px" id="sc-filter-status" onchange="renderSolicitacoesCompra()">
+            <option value="">Todos os status</option>
+            <option value="SOLICITADO">Solicitado</option>
+            <option value="AGUARDANDO_APROVACAO">Aguard. Aprov.</option>
+            <option value="APROVADO">Aprovado</option>
+            <option value="APROVADO_PARCIAL">Aprovado Parcial</option>
+            <option value="RECUSADO">Recusado</option>
+            <option value="RECEBIDO">Recebido/Finalizado</option>
+            <option value="FINALIZADO">Finalizado</option>
+          </select>
+        </div>
+        <div class="table-wrap" id="solicitacoescompra-table"></div>
+      </div>
+
+      <!-- MODAL SOLICITAÇÃO DE COMPRA -->
+      <div class="modal-overlay" id="modal-solicitacaocompra">
+        <div class="modal" style="max-width:760px">
+          <div class="modal-header">
+            <span class="modal-title" id="modal-sc-title">Nova Solicitação de Compra</span>
+            <button class="modal-close" onclick="fecharModalSolicitacaoCompra()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Número</label>
+                <input class="form-input" id="sc-numero" placeholder="Ex: 1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="sc-status">
+                  <option value="SOLICITADO">Solicitado</option>
+                  <option value="AGUARDANDO_APROVACAO">Aguard. Aprov.</option>
+                  <option value="APROVADO">Aprovado</option>
+                  <option value="APROVADO_PARCIAL">Aprovado Parcial</option>
+                  <option value="RECUSADO">Recusado</option>
+                  <option value="RECEBIDO">Recebido/Finalizado</option>
+                  <option value="FINALIZADO">Finalizado</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Demanda *</label>
+                <select class="form-select" id="sc-demanda" onchange="toggleDemandaSC()">
+                  <option value="TECNICO">Técnico</option>
+                  <option value="CLIENTE">Cliente</option>
+                  <option value="ESTOQUE">Estoque</option>
+                  <option value="OUTROS">Outros</option>
+                </select>
+              </div>
+              <div class="form-group" style="position:relative">
+                <label class="form-label" id="sc-demanda-nome-label">Técnico *</label>
+                <input class="form-input" id="sc-demanda-nome-search" placeholder="Buscar ou digitar..." autocomplete="off"
+                  oninput="filtrarDemandaNomeSC(this.value)" onfocus="filtrarDemandaNomeSC(this.value)"
+                  onblur="setTimeout(()=>fecharDropdownDemandaSC(),200)">
+                <div id="sc-demanda-nome-dd" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.4);margin-top:2px"></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Nº de Série (Equip.)</label>
+                <input class="form-input" id="sc-equip-serie" placeholder="Opcional">
+              </div>
+              <div class="form-group full">
+                <label class="form-label">Observação</label>
+                <textarea class="form-textarea" id="sc-obs" style="min-height:50px"></textarea>
+              </div>
+            </div>
+
+            <div class="section-title" style="margin:18px 0 12px;font-size:12px">ITENS DA SOLICITAÇÃO</div>
+            <div id="sc-itens-lista" style="margin-bottom:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 2fr 90px 1fr 90px;gap:8px;align-items:end">
+              <div>
+                <label class="form-label" style="font-size:9px">CÓDIGO (opcional)</label>
+                <input class="form-input" id="sc-item-cod" placeholder="P/N" style="font-family:var(--mono);font-size:12px">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">DESCRIÇÃO *</label>
+                <input class="form-input" id="sc-item-desc" placeholder="Descrição do item">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">QTD</label>
+                <input class="form-input" type="number" min="1" id="sc-item-qtd" value="1">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">OBS. DO ITEM</label>
+                <input class="form-input" id="sc-item-obs" placeholder="Opcional">
+              </div>
+              <div>
+                <button id="sc-add-item-btn" class="btn btn-primary btn-sm" onclick="adicionarItemSC()" style="width:100%">⊕ Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" onclick="fecharModalSolicitacaoCompra()">Cancelar</button>
+            <button class="btn btn-primary" onclick="salvarSolicitacaoCompra()">✓ Salvar Solicitação</button>
+          </div>
         </div>
       </div>
 

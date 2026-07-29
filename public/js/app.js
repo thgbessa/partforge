@@ -11,6 +11,7 @@ let db = {
   seqCounter: 0,    // contador sequencial de solicitações
   usuarios: [],     // { id, nome, cargo, tel, email, senhaHash }
   orcamentos: [],   // { id, numero, cliente, equipSerie, itens[], status, total, ... }
+  solicitacoesCompra: [],  // { id, numero, status, demanda, demanda_nome, equip_serie, itens[], obs, ... }
   doadoras: [],     // { id, modelo, serie, marca, linha, classificacao:'USO'|'SUCATA', fator, obs, createdAt }
   retiradas: [],    // { id, doadId, doadModelo, doadSerie, doadClass, pecaId, pecaCodigo, pecaNome, qtd, custoUnit, custoTotal, tecnico, obs, data }
   pedidos: [],      // { id, numero, data, itens[], status:'ABERTO'|'PARCIAL'|'CONCLUIDO'|'CANCELADO', obs }
@@ -1640,6 +1641,7 @@ function fazerLogout() {
   db.pecas = []; db.equipamentos = []; db.movimentacoes = [];
   db.orcamentos = []; db.pedidos = []; db.usuarios = [];
   db.doadoras = []; db.estoque = {}; db.depositos = {};
+  db.solicitacoesCompra = [];
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-email').value = '';
   document.getElementById('login-senha').value = '';
@@ -2825,6 +2827,338 @@ function gerarPDFOrcamento(id) {
   doc.save(fname);
   toast('PDF gerado: ' + fname, 'success');
 }
+
+// ============================================================
+//  SOLICITAÇÕES DE COMPRA — CRUD
+// ============================================================
+
+const STATUS_SC = {
+  SOLICITADO:           { label: 'Solicitado',            badge: 'badge-gray'   },
+  AGUARDANDO_APROVACAO: { label: 'Aguard. Aprov.',         badge: 'badge-orange' },
+  APROVADO:             { label: 'Aprovado',               badge: 'badge-green'  },
+  APROVADO_PARCIAL:     { label: 'Aprovado Parcial',        badge: 'badge-blue'   },
+  RECUSADO:             { label: 'Recusado',                badge: 'badge-red'    },
+  RECEBIDO:             { label: 'Recebido/Finalizado',     badge: 'badge-teal'   },
+  FINALIZADO:           { label: 'Finalizado',              badge: 'badge-green'  },
+};
+
+let editScId = null;
+let scItens = [];
+let editandoItemScIdx = null;
+
+// ── LISTAGEM ─────────────────────────────────────────────────
+function renderSolicitacoesCompra(q = '') {
+  const el = document.getElementById('solicitacoescompra-table');
+  if (!el) return;
+  const sf = document.getElementById('sc-filter-status')?.value || '';
+  let list = [...(db.solicitacoesCompra || [])].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  if (sf) list = list.filter(x => x.status === sf);
+  const ql = (q || document.querySelector('#page-solicitacoescompra .search-input')?.value || '').toLowerCase().trim();
+  if (ql) {
+    list = list.filter(x =>
+      String(x.numero || '').toLowerCase().includes(ql) ||
+      String(x.demanda_nome || '').toLowerCase().includes(ql) ||
+      String(x.equip_serie || '').toLowerCase().includes(ql)
+    );
+  }
+
+  const badgeEl = document.getElementById('badge-solicitacoescompra');
+  if (badgeEl) {
+    badgeEl.textContent = (db.solicitacoesCompra || [])
+      .filter(x => !['FINALIZADO', 'RECUSADO'].includes(x.status)).length || '0';
+  }
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🛒</div>
+      <div class="empty-title">Nenhuma Solicitação de Compra</div>
+      <div class="empty-sub">Crie a primeira solicitação</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Nº</th><th>Status</th><th>Dias no Status</th><th>Demanda</th>
+      <th>S/N Equip.</th><th>Itens</th><th>Data</th><th></th>
+    </tr></thead>
+    <tbody>
+    ${list.map(sc => {
+      const st = STATUS_SC[sc.status] || STATUS_SC.SOLICITADO;
+      const base = sc.status_changed_at || sc.created_at || Date.now();
+      const dias = Math.floor((Date.now() - base) / 86400000);
+      const diasLabel = dias + (dias === 1 ? ' dia' : ' dias');
+      const demandaBadge = sc.demanda
+        ? `<span class="badge badge-gray" style="font-size:9px">${sc.demanda}</span> ${sc.demanda_nome || ''}`
+        : (sc.demanda_nome || '—');
+      return `<tr>
+        <td><strong style="font-family:var(--mono)">${sc.numero}</strong></td>
+        <td><span class="badge ${st.badge}">${st.label}</span></td>
+        <td class="mono" style="font-size:12px">${diasLabel}</td>
+        <td style="font-size:12px">${demandaBadge}</td>
+        <td class="mono">${sc.equip_serie || '—'}</td>
+        <td class="mono">${(sc.itens || []).length}</td>
+        <td class="mono" style="font-size:11px">${sc.created_at ? new Date(sc.created_at).toLocaleDateString('pt-BR') : '—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalSolicitacaoCompra('${sc.id}')">Editar</button>
+          <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusSC(event,'${sc.id}')">Status ▾</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSolicitacaoCompra('${sc.id}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+function proximoNumeroSC() {
+  const nums = (db.solicitacoesCompra || []).map(x => parseInt(x.numero) || 0).filter(n => n > 0);
+  return String(nums.length ? Math.max(...nums) + 1 : 1);
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function abrirModalSolicitacaoCompra(id) {
+  editScId = id || null;
+  const sc = id ? (db.solicitacoesCompra || []).find(x => x.id === id) : null;
+  scItens = sc ? JSON.parse(JSON.stringify(sc.itens || [])) : [];
+  editandoItemScIdx = null;
+
+  document.getElementById('modal-sc-title').textContent = sc ? 'Editar Solicitação de Compra' : 'Nova Solicitação de Compra';
+  document.getElementById('sc-numero').value = sc ? sc.numero : proximoNumeroSC();
+  document.getElementById('sc-status').value = sc?.status || 'SOLICITADO';
+  document.getElementById('sc-demanda').value = sc?.demanda || 'TECNICO';
+  document.getElementById('sc-demanda-nome-search').value = sc?.demanda_nome || '';
+  document.getElementById('sc-equip-serie').value = sc?.equip_serie || '';
+  document.getElementById('sc-obs').value = sc?.obs || '';
+
+  ['sc-item-cod', 'sc-item-desc', 'sc-item-obs'].forEach(id2 => {
+    const el = document.getElementById(id2); if (el) el.value = '';
+  });
+  const qtdEl = document.getElementById('sc-item-qtd'); if (qtdEl) qtdEl.value = '1';
+  const btnAdd = document.getElementById('sc-add-item-btn'); if (btnAdd) btnAdd.textContent = '⊕ Add';
+
+  toggleDemandaSC();
+  renderItensSC();
+  document.getElementById('modal-solicitacaocompra').style.display = 'flex';
+}
+
+function fecharModalSolicitacaoCompra() {
+  document.getElementById('modal-solicitacaocompra').style.display = 'none';
+  editScId = null; scItens = []; editandoItemScIdx = null;
+}
+
+// ── CAMPO "DEMANDA" CONDICIONAL ──────────────────────────────
+function toggleDemandaSC() {
+  const demanda = document.getElementById('sc-demanda')?.value;
+  const label = document.getElementById('sc-demanda-nome-label');
+  if (!label) return;
+  const labels = {
+    TECNICO: 'Técnico *',
+    CLIENTE: 'Cliente *',
+    ESTOQUE: 'Estoque — descrição',
+    OUTROS:  'Outros — descrição',
+  };
+  label.textContent = labels[demanda] || 'Nome';
+  fecharDropdownDemandaSC();
+}
+
+function filtrarDemandaNomeSC(q) {
+  const demanda = document.getElementById('sc-demanda')?.value;
+  const dd = document.getElementById('sc-demanda-nome-dd');
+  if (!dd) return;
+
+  if (demanda === 'ESTOQUE' || demanda === 'OUTROS') {
+    dd.style.display = 'none';
+    return;
+  }
+
+  const ql = (q || '').toLowerCase().trim();
+  let list = [];
+  if (demanda === 'TECNICO') {
+    list = (db.usuarios || [])
+      .filter(u => !ql || u.nome.toLowerCase().includes(ql))
+      .map(u => u.nome);
+  } else if (demanda === 'CLIENTE') {
+    const clientesSet = new Set();
+    (db.equipamentos || []).forEach(e => {
+      if (e.nome_fantasia) clientesSet.add(e.nome_fantasia.replace(/\[\d+\]$/, '').trim());
+    });
+    (db.orcamentos || []).forEach(o => { if (o.cliente) clientesSet.add(o.cliente); });
+    list = [...clientesSet].filter(c => !ql || c.toLowerCase().includes(ql));
+  }
+
+  if (!list.length) { dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = list.slice(0, 30).map(nome => `<div
+      onmousedown="selecionarDemandaNomeSC('${nome.replace(/'/g, "\\'")}')"
+      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${nome}</div>`
+  ).join('');
+}
+
+function selecionarDemandaNomeSC(nome) {
+  const el = document.getElementById('sc-demanda-nome-search');
+  if (el) el.value = nome;
+  fecharDropdownDemandaSC();
+}
+
+function fecharDropdownDemandaSC() {
+  const dd = document.getElementById('sc-demanda-nome-dd');
+  if (dd) dd.style.display = 'none';
+}
+
+// ── ITENS ────────────────────────────────────────────────────
+function adicionarItemSC() {
+  const cod  = document.getElementById('sc-item-cod').value.trim();
+  const desc = document.getElementById('sc-item-desc').value.trim();
+  const qtd  = parseInt(document.getElementById('sc-item-qtd').value) || 1;
+  const obs  = document.getElementById('sc-item-obs').value.trim();
+  if (!desc) { toast('Informe a descrição do item', 'error'); return; }
+
+  if (editandoItemScIdx !== null) {
+    scItens[editandoItemScIdx] = { cod, desc, qtd, obs };
+    editandoItemScIdx = null;
+    const btn = document.getElementById('sc-add-item-btn');
+    if (btn) btn.textContent = '⊕ Add';
+  } else {
+    scItens.push({ cod, desc, qtd, obs });
+  }
+
+  ['sc-item-cod', 'sc-item-desc', 'sc-item-obs'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  const qtdEl = document.getElementById('sc-item-qtd'); if (qtdEl) qtdEl.value = '1';
+  renderItensSC();
+}
+
+function editarItemSC(idx) {
+  const it = scItens[idx]; if (!it) return;
+  editandoItemScIdx = idx;
+  document.getElementById('sc-item-cod').value  = it.cod  || '';
+  document.getElementById('sc-item-desc').value = it.desc || '';
+  document.getElementById('sc-item-qtd').value  = it.qtd  || 1;
+  document.getElementById('sc-item-obs').value  = it.obs  || '';
+  const btn = document.getElementById('sc-add-item-btn');
+  if (btn) btn.textContent = 'Salvar edição';
+}
+
+function removerItemSC(idx) {
+  scItens.splice(idx, 1);
+  editandoItemScIdx = null;
+  renderItensSC();
+}
+
+function renderItensSC() {
+  const el = document.getElementById('sc-itens-lista');
+  if (!el) return;
+  if (!scItens.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item adicionado</div>`;
+    return;
+  }
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>P/N</th><th>Descrição</th><th>Qtd</th><th>Obs.</th><th></th></tr></thead>
+    <tbody>${scItens.map((it, i) => `<tr>
+      <td class="mono" style="font-size:11px;color:var(--accent)">${it.cod || '—'}</td>
+      <td style="font-size:12px">${it.desc}</td>
+      <td class="mono">${it.qtd}</td>
+      <td style="font-size:11px;color:var(--text3)">${it.obs || '—'}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="editarItemSC(${i})">✎</button>
+        <button class="btn btn-danger btn-sm" onclick="removerItemSC(${i})">✕</button>
+      </td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+// ── SALVAR / STATUS / EXCLUIR ────────────────────────────────
+function salvarSolicitacaoCompra() {
+  const numero = document.getElementById('sc-numero').value.trim();
+  if (!numero) { toast('Informe o número', 'error'); return; }
+
+  const demanda = document.getElementById('sc-demanda').value;
+  const demandaNome = document.getElementById('sc-demanda-nome-search')?.value.trim() || '';
+  if ((demanda === 'TECNICO' || demanda === 'CLIENTE') && !demandaNome) {
+    toast('Selecione ' + (demanda === 'TECNICO' ? 'o técnico' : 'o cliente'), 'error');
+    return;
+  }
+  if (!scItens.length) { toast('Adicione ao menos um item', 'error'); return; }
+
+  const data = {
+    numero,
+    status:       document.getElementById('sc-status').value,
+    demanda,
+    demanda_nome: demandaNome,
+    equip_serie:  document.getElementById('sc-equip-serie').value.trim(),
+    obs:          document.getElementById('sc-obs').value.trim(),
+    itens:        [...scItens],
+  };
+
+  const fn = editScId
+    ? API.put('/solicitacoes-compra/' + editScId, data)
+    : API.post('/solicitacoes-compra', data);
+
+  fn.then(() => {
+    toast('Solicitação de compra salva');
+    fecharModalSolicitacaoCompra();
+    loadAndRenderSolicitacoesCompra();
+  }).catch(err => toast(err.message, 'error'));
+}
+
+function abrirMenuStatusSC(ev, id) {
+  ev.stopPropagation();
+  fecharMenuStatusSC();
+  const btn = ev.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.id = 'status-sc-menu';
+  menu.style.cssText = 'position:fixed;top:' + (rect.bottom + 4) + 'px;left:' + rect.left +
+    'px;background:var(--surface);border:1px solid var(--border2);border-radius:4px;' +
+    'box-shadow:0 8px 24px rgba(0,0,0,0.4);z-index:500;min-width:200px';
+  menu.innerHTML = Object.keys(STATUS_SC).map(st =>
+    `<div style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text)"
+      onmouseover="this.style.background='var(--border2)'" onmouseout="this.style.background='transparent'"
+      onclick="definirStatusSC('${id}','${st}')">${STATUS_SC[st].label}</div>`
+  ).join('');
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', fecharMenuStatusSC, { once: true }), 0);
+}
+
+function fecharMenuStatusSC() {
+  const m = document.getElementById('status-sc-menu');
+  if (m) m.remove();
+}
+
+function definirStatusSC(id, status) {
+  fecharMenuStatusSC();
+  API.put('/solicitacoes-compra/' + id + '/status', { status })
+    .then(() => {
+      const sc = (db.solicitacoesCompra || []).find(x => x.id === id);
+      if (sc) sc.status = status;
+      toast('Status atualizado');
+      renderSolicitacoesCompra();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
+function deleteSolicitacaoCompra(id) {
+  if (!confirm('Excluir esta solicitação de compra?')) return;
+  API.delete('/solicitacoes-compra/' + id)
+    .then(() => { toast('Solicitação excluída', 'info'); loadAndRenderSolicitacoesCompra(); })
+    .catch(err => toast(err.message, 'error'));
+}
+
+// ── CARREGAMENTO (API) ───────────────────────────────────────
+async function loadAndRenderSolicitacoesCompra(q = '', status = '') {
+  setSyncing(true);
+  try {
+    const params = {};
+    if (q) params.q = q;
+    if (status) params.status = status;
+    const qs = Object.keys(params).length ? '?' + new URLSearchParams(params).toString() : '';
+    db.solicitacoesCompra = await API.get('/solicitacoes-compra' + qs);
+    renderSolicitacoesCompra(q);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setSyncing(false);
+  }
+}
+
 // ============================================================
 //  IMAGEM DE PEÇA
 // ============================================================
@@ -5214,6 +5548,7 @@ function navigate(page, el) {
     historico:    ['Histórico',    '/ solicitações'],
     logistica:    ['Logística',    '/ painel de despacho'],
     orcamento:    ['Orçamentos',   '/ cadastro e faturamento'],
+    solicitacoescompra: ['Solicitações de Compra', '/ demanda técnico, cliente e estoque'],
     usuarios:     ['Usuários',     '/ cadastro e permissões'],
     compras:      ['Compras',      '/ pedidos e sugestões'],
     doadoras:     ['Máq. Doadoras','/ retirada de peças'],
@@ -5277,6 +5612,9 @@ function navigate(page, el) {
       <button class="btn btn-excel" onclick="exportarExcel('orcamentos')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     loadAndRenderOrcamentos();
+  } else if (page === 'solicitacoescompra') {
+    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalSolicitacaoCompra()">⊕ Nova Solicitação</button>`;
+    loadAndRenderSolicitacoesCompra();
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalUsuario()">⊕ Novo Usuário</button>`;
