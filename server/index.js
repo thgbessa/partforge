@@ -28,6 +28,18 @@ app.listen(PORT, '0.0.0.0', () => {
     const db     = require('./database');
     const routes = require('./routes');
     app.use('/api', routes);
+
+    // ── Gatilho manual de teste do relatorio diario (acesse pelo navegador) ──
+    app.get('/api/admin/relatorio-teste', async (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      const range = req.query.dia === 'hoje' ? getTodayRangeBRT() : getYesterdayRangeBRT();
+      const resultado = await gerarEEnviarRelatorioDiario(range);
+      res.json(resultado);
+    });
+
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
     console.log('Banco iniciado, rotas ativas');
 
@@ -48,7 +60,21 @@ app.listen(PORT, '0.0.0.0', () => {
       };
     }
 
-    async function gerarEEnviarRelatorioDiario() {
+    function getTodayRangeBRT() {
+      const now = new Date();
+      const brtOffsetMs = 3 * 60 * 60 * 1000;
+      const brtNow = new Date(now.getTime() - brtOffsetMs);
+      const y = new Date(Date.UTC(brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate()));
+      const startBRT = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), y.getUTCDate(), 0, 0, 0));
+      const endBRT = new Date(Date.UTC(y.getUTCFullYear(), y.getUTCMonth(), y.getUTCDate(), 23, 59, 59, 999));
+      return {
+        startMs: startBRT.getTime() + brtOffsetMs,
+        endMs: endBRT.getTime() + brtOffsetMs,
+        label: y.toISOString().slice(0, 10).split('-').reverse().join('/') + ' (hoje - teste)'
+      };
+    }
+
+    async function gerarEEnviarRelatorioDiario(rangeOverride) {
       try {
         const CIFRAO = String.fromCharCode(36);
         const ORC_STATUS_LABELS = {
@@ -70,7 +96,7 @@ app.listen(PORT, '0.0.0.0', () => {
           RECEBIDO: 'Recebido/Finalizado',
           FINALIZADO: 'Finalizado'
         };
-        const range = getYesterdayRangeBRT();
+        const range = rangeOverride || getYesterdayRangeBRT();
         const pecasEnviadas = db.query(
           "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status='DESPACHADA' AND m.created_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
@@ -173,7 +199,7 @@ app.listen(PORT, '0.0.0.0', () => {
         const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         if (!destinatarios.length || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
           console.log('Relatorio diario: configuracao incompleta (GMAIL_USER, GMAIL_APP_PASSWORD ou RELATORIO_DESTINATARIOS ausente)');
-          return;
+          return { ok: false, motivo: 'Configuracao incompleta: verifique as variaveis GMAIL_USER, GMAIL_APP_PASSWORD e RELATORIO_DESTINATARIOS no Railway.' };
         }
 
         const transporter = nodemailer.createTransport({
@@ -188,8 +214,10 @@ app.listen(PORT, '0.0.0.0', () => {
           html: html
         });
         console.log('Relatorio diario enviado com sucesso para', destinatarios.join(', '));
+        return { ok: true, destinatarios: destinatarios, label: range.label };
       } catch (err) {
         console.error('Erro ao gerar/enviar relatorio diario:', err.message);
+        return { ok: false, motivo: err.message };
       }
     }
 
