@@ -61,6 +61,15 @@ app.listen(PORT, '0.0.0.0', () => {
           FATURADO: 'Faturado',
           CANCELADO: 'Cancelado'
         };
+        const SC_STATUS_LABELS = {
+          SOLICITADO: 'Solicitado',
+          AGUARDANDO_APROVACAO: 'Aguard. Aprov.',
+          APROVADO: 'Aprovado',
+          APROVADO_PARCIAL: 'Aprovado Parcial',
+          RECUSADO: 'Recusado',
+          RECEBIDO: 'Recebido/Finalizado',
+          FINALIZADO: 'Finalizado'
+        };
         const range = getYesterdayRangeBRT();
         const pecasEnviadas = db.query(
           "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status='DESPACHADA' AND m.created_at BETWEEN ? AND ?",
@@ -68,6 +77,10 @@ app.listen(PORT, '0.0.0.0', () => {
         );
         const orcamentos = db.query(
           "SELECT * FROM orcamentos WHERE updated_at BETWEEN ? AND ?",
+          [range.startMs, range.endMs]
+        );
+        const solicitacoesCompra = db.query(
+          "SELECT * FROM solicitacoes_compra WHERE updated_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
         );
 
@@ -105,6 +118,32 @@ app.listen(PORT, '0.0.0.0', () => {
           html += '</table>';
         } else {
           html += '<p>Nenhum orcamento criado no dia.</p>';
+        }
+
+        html += '<h3>Solicitacoes de Compra Criadas/Atualizadas (' + solicitacoesCompra.length + ')</h3>';
+        if (solicitacoesCompra.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr Solicitacao eLoca</th><th>Demanda</th><th>S/N Equip.</th><th>Cliente</th><th>Item</th><th>Qtd</th><th>Valor</th><th>Status</th><th>Dias no Status</th></tr>';
+          solicitacoesCompra.forEach(function(sc) {
+            const itensSc = (function() {
+              try { return JSON.parse(sc.itens || '[]'); } catch (e) { return Array.isArray(sc.itens) ? sc.itens : []; }
+            })();
+            var baseDataSc = sc.status_changed_at || sc.created_at || Date.now();
+            var diasStatusSc = Math.floor((Date.now() - baseDataSc) / 86400000);
+            const demandaLabelSc = (sc.demanda || '') + (sc.demanda_nome ? ' - ' + sc.demanda_nome : '');
+            const statusLabelSc = SC_STATUS_LABELS[sc.status] || sc.status || '';
+            if (itensSc.length) {
+              itensSc.forEach(function(it) {
+                const qtd = parseFloat(it.qtd || 0);
+                const valor = parseFloat(it.valor || 0);
+                html += '<tr><td>' + (sc.numero || '') + '</td><td>' + demandaLabelSc + '</td><td>' + (sc.equip_serie || '') + '</td><td>' + (sc.equip_cliente || '') + '</td><td>' + (it.desc || '') + '</td><td>' + qtd + '</td><td>R$ ' + valor.toFixed(2) + '</td><td>' + statusLabelSc + '</td><td>' + diasStatusSc + '</td></tr>';
+              });
+            } else {
+              html += '<tr><td>' + (sc.numero || '') + '</td><td>' + demandaLabelSc + '</td><td>' + (sc.equip_serie || '') + '</td><td>' + (sc.equip_cliente || '') + '</td><td colspan="2">(sem itens)</td><td>-</td><td>' + statusLabelSc + '</td><td>' + diasStatusSc + '</td></tr>';
+            }
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhuma solicitacao de compra criada/atualizada no dia.</p>';
         }
 
         const estoqueAtualizado = db.query("SELECT e.peca_id, e.quantidade, e.updated_at, p.codigo, p.nome, p.fonte FROM estoque e LEFT JOIN pecas p ON p.id = e.peca_id WHERE e.updated_at BETWEEN ? AND ?", [range.startMs, range.endMs]);
