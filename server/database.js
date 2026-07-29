@@ -121,6 +121,12 @@ async function init() {
   // Migracao: adiciona coluna preco_usd se ainda nao existir
   try { _db.run("ALTER TABLE pecas ADD COLUMN preco_usd REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN valor_frete REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_compra (
+    id TEXT PRIMARY KEY, numero TEXT, status TEXT DEFAULT 'SOLICITADO',
+    demanda TEXT, demanda_nome TEXT, equip_serie TEXT, itens TEXT DEFAULT '[]',
+    obs TEXT, status_changed_at INTEGER DEFAULT 0,
+    created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0, created_by TEXT
+  )`); } catch(e) { console.log('erro criando solicitacoes_compra', e.message); }
   try { _db.run("UPDATE orcamentos SET status='APROVADO_TECNICO' WHERE status='APROVADO'"); } catch(e) {}
   try { _db.run("UPDATE orcamentos SET status='A_FATURAR' WHERE status='FATURANDO'"); } catch(e) {}
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN origem TEXT DEFAULT 'desktop'"); } catch(e) { /* coluna ja existe */ }
