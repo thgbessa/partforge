@@ -2883,7 +2883,7 @@ function renderSolicitacoesCompra(q = '') {
   el.innerHTML = `<table class="data-table">
     <thead><tr>
       <th>Nº</th><th>Status</th><th>Dias no Status</th><th>Demanda</th>
-      <th>S/N Equip.</th><th>Itens</th><th>Data</th><th></th>
+      <th>S/N Equip.</th><th>Itens</th><th>Total</th><th>Data</th><th></th>
     </tr></thead>
     <tbody>
     ${list.map(sc => {
@@ -2894,6 +2894,7 @@ function renderSolicitacoesCompra(q = '') {
       const demandaBadge = sc.demanda
         ? `<span class="badge badge-gray" style="font-size:9px">${sc.demanda}</span> ${sc.demanda_nome || ''}`
         : (sc.demanda_nome || '—');
+      const totalSc = (sc.itens || []).reduce((s, it) => s + (it.qtd || 0) * (parseFloat(it.valor) || 0), 0);
       return `<tr>
         <td><strong style="font-family:var(--mono)">${sc.numero}</strong></td>
         <td><span class="badge ${st.badge}">${st.label}</span></td>
@@ -2901,6 +2902,7 @@ function renderSolicitacoesCompra(q = '') {
         <td style="font-size:12px">${demandaBadge}</td>
         <td class="mono" style="font-size:11px">${sc.equip_serie || '—'}${sc.equip_cliente ? `<div style="font-family:var(--body);font-size:10px;color:var(--text3)">${sc.equip_cliente}</div>` : ''}</td>
         <td class="mono">${(sc.itens || []).length}</td>
+        <td class="mono" style="color:var(--accent);font-weight:700">R$ ${totalSc.toFixed(2)}</td>
         <td class="mono" style="font-size:11px">${sc.created_at ? new Date(sc.created_at).toLocaleDateString('pt-BR') : '—'}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-ghost btn-sm" onclick="abrirModalSolicitacaoCompra('${sc.id}')">Editar</button>
@@ -2945,7 +2947,7 @@ function abrirModalSolicitacaoCompra(id) {
   }
   document.getElementById('sc-obs').value = sc?.obs || '';
 
-  ['sc-item-cod', 'sc-item-desc', 'sc-item-obs'].forEach(id2 => {
+  ['sc-item-cod', 'sc-item-desc', 'sc-item-valor', 'sc-item-obs'].forEach(id2 => {
     const el = document.getElementById(id2); if (el) el.value = '';
   });
   const qtdEl = document.getElementById('sc-item-qtd'); if (qtdEl) qtdEl.value = '1';
@@ -3091,19 +3093,20 @@ function adicionarItemSC() {
   const cod  = document.getElementById('sc-item-cod').value.trim();
   const desc = document.getElementById('sc-item-desc').value.trim();
   const qtd  = parseInt(document.getElementById('sc-item-qtd').value) || 1;
+  const valor = parseFloat(document.getElementById('sc-item-valor').value) || 0;
   const obs  = document.getElementById('sc-item-obs').value.trim();
   if (!desc) { toast('Informe a descrição do item', 'error'); return; }
 
   if (editandoItemScIdx !== null) {
-    scItens[editandoItemScIdx] = { cod, desc, qtd, obs };
+    scItens[editandoItemScIdx] = { cod, desc, qtd, valor, obs };
     editandoItemScIdx = null;
     const btn = document.getElementById('sc-add-item-btn');
     if (btn) btn.textContent = '⊕ Add';
   } else {
-    scItens.push({ cod, desc, qtd, obs });
+    scItens.push({ cod, desc, qtd, valor, obs });
   }
 
-  ['sc-item-cod', 'sc-item-desc', 'sc-item-obs'].forEach(id => {
+  ['sc-item-cod', 'sc-item-desc', 'sc-item-valor', 'sc-item-obs'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   const qtdEl = document.getElementById('sc-item-qtd'); if (qtdEl) qtdEl.value = '1';
@@ -3116,6 +3119,7 @@ function editarItemSC(idx) {
   document.getElementById('sc-item-cod').value  = it.cod  || '';
   document.getElementById('sc-item-desc').value = it.desc || '';
   document.getElementById('sc-item-qtd').value  = it.qtd  || 1;
+  document.getElementById('sc-item-valor').value = it.valor || '';
   document.getElementById('sc-item-obs').value  = it.obs  || '';
   const btn = document.getElementById('sc-add-item-btn');
   if (btn) btn.textContent = 'Salvar edição';
@@ -3132,20 +3136,25 @@ function renderItensSC() {
   if (!el) return;
   if (!scItens.length) {
     el.innerHTML = `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item adicionado</div>`;
-    return;
+  } else {
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>P/N</th><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Obs.</th><th></th></tr></thead>
+      <tbody>${scItens.map((it, i) => `<tr>
+        <td class="mono" style="font-size:11px;color:var(--accent)">${it.cod || '—'}</td>
+        <td style="font-size:12px">${it.desc}</td>
+        <td class="mono">${it.qtd}</td>
+        <td class="mono">R$ ${parseFloat(it.valor || 0).toFixed(2)}</td>
+        <td class="mono" style="color:var(--accent);font-weight:700">R$ ${(it.qtd * (parseFloat(it.valor) || 0)).toFixed(2)}</td>
+        <td style="font-size:11px;color:var(--text3)">${it.obs || '—'}</td>
+        <td>
+          <button class="btn btn-ghost btn-sm" onclick="editarItemSC(${i})">✎</button>
+          <button class="btn btn-danger btn-sm" onclick="removerItemSC(${i})">✕</button>
+        </td>
+      </tr>`).join('')}</tbody></table>`;
   }
-  el.innerHTML = `<table class="data-table">
-    <thead><tr><th>P/N</th><th>Descrição</th><th>Qtd</th><th>Obs.</th><th></th></tr></thead>
-    <tbody>${scItens.map((it, i) => `<tr>
-      <td class="mono" style="font-size:11px;color:var(--accent)">${it.cod || '—'}</td>
-      <td style="font-size:12px">${it.desc}</td>
-      <td class="mono">${it.qtd}</td>
-      <td style="font-size:11px;color:var(--text3)">${it.obs || '—'}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick="editarItemSC(${i})">✎</button>
-        <button class="btn btn-danger btn-sm" onclick="removerItemSC(${i})">✕</button>
-      </td>
-    </tr>`).join('')}</tbody></table>`;
+  const total = scItens.reduce((s, it) => s + it.qtd * (parseFloat(it.valor) || 0), 0);
+  const totalEl = document.getElementById('sc-total-display');
+  if (totalEl) totalEl.textContent = `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 }
 
 // ── SALVAR / STATUS / EXCLUIR ────────────────────────────────

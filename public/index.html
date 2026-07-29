@@ -510,7 +510,7 @@
 
             <div class="section-title" style="margin:18px 0 12px;font-size:12px">ITENS DA SOLICITAÇÃO</div>
             <div id="sc-itens-lista" style="margin-bottom:12px"></div>
-            <div style="display:grid;grid-template-columns:1fr 2fr 90px 1fr 90px;gap:8px;align-items:end">
+            <div style="display:grid;grid-template-columns:1fr 2fr 80px 110px 1fr 90px;gap:8px;align-items:end">
               <div>
                 <label class="form-label" style="font-size:9px">CÓDIGO (opcional)</label>
                 <input class="form-input" id="sc-item-cod" placeholder="P/N" style="font-family:var(--mono);font-size:12px">
@@ -524,12 +524,20 @@
                 <input class="form-input" type="number" min="1" id="sc-item-qtd" value="1">
               </div>
               <div>
+                <label class="form-label" style="font-size:9px">VALOR UNIT. (R$)</label>
+                <input class="form-input" type="number" step="0.01" id="sc-item-valor" placeholder="0,00">
+              </div>
+              <div>
                 <label class="form-label" style="font-size:9px">OBS. DO ITEM</label>
                 <input class="form-input" id="sc-item-obs" placeholder="Opcional">
               </div>
               <div>
                 <button id="sc-add-item-btn" class="btn btn-primary btn-sm" onclick="adicionarItemSC()" style="width:100%">⊕ Add</button>
               </div>
+            </div>
+            <div style="text-align:right;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">TOTAL: </span>
+              <span style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--accent)" id="sc-total-display">R$ 0,00</span>
             </div>
           </div>
           <div class="modal-footer">
@@ -1569,4 +1577,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000025"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js"></script><script src="/js/app.js?v=100000026"></script></html>
