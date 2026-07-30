@@ -296,12 +296,13 @@ router.post('/orcamentos', autenticar, (req, res) => {
   const o=req.body; if (!o.numero) return res.status(400).json({erro:'Número obrigatório'});
   const id=uid();
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
-  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by,status_changed_at,equipamentos,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id,o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',
-     o.data||'',o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',
+  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,solicitacao_id,created_at,created_by,status_changed_at,equipamentos,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,o.numero,o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||'',o.equip_nome||'',o.os||'',
+     o.data||'',o.obs||'',o.validade||'7 dias',o.pagamento||'30 dias',o.entrega||'A combinar',
      o.frete||'FOB',o.obs_condicoes||'',o.condicoes||'',o.assinatura||req.user.nome,
      total,J(o.itens||[]),o.solicitacao_id||'',now(),req.user.id,now(),J(o.equipamentos||[]),now()]);
+  if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
   res.status(201).json({id});
 });
 
@@ -310,12 +311,13 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
   const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== (o.status||'ABERTO');
-  db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
+  db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,cnpj=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
     validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=?,equipamentos=?,updated_at=? WHERE id=?`,
-    [o.numero,o.status||'ABERTO',o.cliente||'',o.equip_serie||'',o.equip_nome||'',o.os||'',o.data||'',
-     o.obs||'',o.validade||'30 dias',o.pagamento||'30 dias',o.entrega||'A combinar',o.frete||'FOB',
+    [o.numero,o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||'',o.equip_nome||'',o.os||'',o.data||'',
+     o.obs||'',o.validade||'7 dias',o.pagamento||'30 dias',o.entrega||'A combinar',o.frete||'FOB',
      o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),J(o.equipamentos||[]),now(),req.params.id]);
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
+  if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
   res.json({ok:true});
 });
 
@@ -326,6 +328,33 @@ router.put('/orcamentos/:id/status', autenticar, isAdmin, (req, res) => {
 router.delete('/orcamentos/:id', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM orcamentos WHERE id=?',[req.params.id]); res.json({ok:true});
 });
+
+// ── CLIENTES (memória de CNPJ por nome, para autopreenchimento) ──
+function normalizarNomeCliente(nome) {
+  return String(nome||'').trim().toUpperCase().replace(/\s+/g,' ');
+}
+function salvarCnpjCliente(nome, cnpj) {
+  const nomeNorm = normalizarNomeCliente(nome);
+  if (!nomeNorm || !cnpj) return;
+  db.run('INSERT OR REPLACE INTO clientes(nome_norm,nome,cnpj,updated_at) VALUES(?,?,?,?)',
+    [nomeNorm, nome.trim(), String(cnpj).trim(), now()]);
+}
+
+router.get('/clientes/cnpj', autenticar, (req, res) => {
+  const nome = req.query.nome || '';
+  const nomeNorm = normalizarNomeCliente(nome);
+  if (!nomeNorm) return res.json({ cnpj: '' });
+  const c = db.get('SELECT cnpj FROM clientes WHERE nome_norm=?', [nomeNorm]);
+  res.json({ cnpj: c?.cnpj || '' });
+});
+
+router.post('/clientes/cnpj', autenticar, (req, res) => {
+  const { nome, cnpj } = req.body;
+  if (!nome || !cnpj) return res.status(400).json({ erro: 'Nome e CNPJ obrigatórios' });
+  salvarCnpjCliente(nome, cnpj);
+  res.json({ ok: true });
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
@@ -482,6 +511,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     movimentacoes: db.query('SELECT * FROM movimentacoes').map(m=>({...m,eventos:P(m.eventos)})),
     orcamentos:    db.query('SELECT * FROM orcamentos').map(o=>({...o,itens:P(o.itens)})),
     solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
+    clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
     pedidos:       db.query('SELECT * FROM pedidos').map(p=>({...p,itens:P(p.itens)})),
@@ -599,6 +629,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.solicitacoes_compra?.length) for (const sc of s.solicitacoes_compra)
       db.runBatch(`INSERT OR REPLACE INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,equip_nome,equip_cliente,itens,obs,created_at,updated_at,status_changed_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [sc.id||uid(),sc.numero||'',sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',sc.equip_nome||'',sc.equip_cliente||'',J(sc.itens||[]),sc.obs||'',sc.created_at||now(),sc.updated_at||now(),sc.status_changed_at||now(),sc.created_by||'restore']);
+
+    if (s.clientes?.length) for (const c of s.clientes)
+      db.runBatch(`INSERT OR REPLACE INTO clientes(nome_norm,nome,cnpj,updated_at) VALUES(?,?,?,?)`,
+        [c.nome_norm||normalizarNomeCliente(c.nome||''),c.nome||'',c.cnpj||'',c.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

@@ -2243,6 +2243,40 @@ function renderOrcamentos(q='') {
     </tbody></table>`;
 }
 
+// ── CNPJ do cliente (autopreenchimento com memória por nome) ──
+let _cnpjEditadoManualmente = false;
+
+function onClienteOrcMudou() {
+  // Nome do cliente mudou: o CNPJ que estava lá pode não valer mais,
+  // libera a busca automática de novo.
+  _cnpjEditadoManualmente = false;
+  const statusEl = document.getElementById('orc-cnpj-status');
+  if (statusEl) statusEl.textContent = '';
+}
+
+function onCnpjOrcEditadoManualmente() {
+  _cnpjEditadoManualmente = true;
+  const statusEl = document.getElementById('orc-cnpj-status');
+  if (statusEl) statusEl.textContent = '';
+}
+
+function buscarCnpjCliente() {
+  const nome = document.getElementById('orc-cliente')?.value.trim();
+  const cnpjEl = document.getElementById('orc-cnpj');
+  const statusEl = document.getElementById('orc-cnpj-status');
+  if (!nome || !cnpjEl) return;
+  if (_cnpjEditadoManualmente && cnpjEl.value.trim()) return; // não sobrescreve o que o usuário já digitou
+  API.get('/clientes/cnpj?nome=' + encodeURIComponent(nome)).then(res => {
+    if (res && res.cnpj) {
+      cnpjEl.value = res.cnpj;
+      if (statusEl) { statusEl.textContent = '✓ encontrado'; statusEl.style.color = 'var(--green)'; }
+    } else if (statusEl) {
+      statusEl.textContent = cnpjEl.value.trim() ? '' : 'cliente novo — digite o CNPJ';
+      statusEl.style.color = 'var(--text3)';
+    }
+  }).catch(() => {});
+}
+
 function abrirModalOrcamento(id) {
   editOrcId = id || null;
   const o   = id ? db.orcamentos.find(x=>x.id===id) : null;
@@ -2253,6 +2287,11 @@ function abrirModalOrcamento(id) {
   if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
   document.getElementById('orc-status').value      = o?.status     || 'RASCUNHO';
   document.getElementById('orc-cliente').value     = o?.cliente    || '';
+  document.getElementById('orc-cnpj').value        = o?.cnpj       || '';
+  _cnpjEditadoManualmente = !!(o?.cnpj);
+  const cnpjStatusEl0 = document.getElementById('orc-cnpj-status');
+  if (cnpjStatusEl0) cnpjStatusEl0.textContent = '';
+  if (!o?.cnpj && o?.cliente) buscarCnpjCliente();
   orcEquipamentos = o ? (Array.isArray(o.equipamentos) && o.equipamentos.length ? JSON.parse(JSON.stringify(o.equipamentos)) : (o.equip_serie || o.equip_nome ? [{ serie: o.equip_serie||'', nome: o.equip_nome||'' }] : [])) : [];
   editandoEquipOrcIdx = null;
   document.getElementById('orc-serie').value       = '';
@@ -2399,6 +2438,8 @@ function selecionarEquipOrc(equipId) {
   const clienteEl = document.getElementById('orc-cliente');
   if (clienteEl && e.nome_fantasia && !clienteEl.value) {
     clienteEl.value = e.nome_fantasia.replace(/\[\d+\]$/,'').trim();
+    onClienteOrcMudou();
+    buscarCnpjCliente();
   }
 }
 
@@ -2513,6 +2554,7 @@ function salvarOrcamento() {
     numero, total,
     status:     document.getElementById('orc-status').value,
     cliente:    document.getElementById('orc-cliente').value.trim(),
+    cnpj:       document.getElementById('orc-cnpj')?.value.trim() || '',
     equip_serie: (orcEquipamentos[0]?.serie) || '',
     equip_nome:  (orcEquipamentos[0]?.nome) || '',
     equipamentos: [...orcEquipamentos],
