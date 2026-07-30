@@ -13,6 +13,17 @@ function now() { return Date.now(); }
 
 let _db = null;
 
+// Sinaliza se houve escrita no banco desde o último backup automático
+// consultado (usado para disparar backups só quando algo de fato mudou,
+// sem precisar fazer um export completo a cada clique do usuário).
+let _mudouDesdeUltimoBackup = false;
+
+function consumirFlagMudanca() {
+  const mudou = _mudouDesdeUltimoBackup;
+  _mudouDesdeUltimoBackup = false;
+  return mudou;
+}
+
 // Persiste o banco em disco. Escrita ATÔMICA: grava num arquivo temporário e
 // só então renomeia por cima do arquivo real — se o processo for interrompido
 // no meio da escrita (crash, restart, OOM), o arquivo original NUNCA fica
@@ -23,6 +34,7 @@ function persist() {
   const tmpFile = DB_FILE + '.tmp';
   fs.writeFileSync(tmpFile, Buffer.from(data));
   fs.renameSync(tmpFile, DB_FILE);
+  _mudouDesdeUltimoBackup = true;
 }
 
 async function init() {
@@ -196,4 +208,4 @@ function get(sql, params = []) {
   return rows[0] || null;
 }
 
-module.exports = { init, query, run, runBatch, get, persist, uid, now };
+module.exports = { init, query, run, runBatch, get, persist, consumirFlagMudanca, uid, now };

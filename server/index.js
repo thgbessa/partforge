@@ -274,7 +274,8 @@ app.listen(PORT, '0.0.0.0', () => {
     //  - Também envia por e-mail como anexo (cópia fora do Railway,
     //    sobrevive mesmo que o volume inteiro seja perdido)
     // ============================================================
-    async function gerarBackupAutomatico() {
+    async function gerarBackupAutomatico(opts) {
+      const enviarEmail = !opts || opts.enviarEmail !== false;
       try {
         const backup = {
           _version: '2.0', _exportedAt: new Date().toISOString(), _origem: 'backup_automatico',
@@ -317,7 +318,7 @@ app.listen(PORT, '0.0.0.0', () => {
         // Envia também por e-mail, como camada extra fora do Railway
         const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(s => s.trim()).filter(Boolean);
         let emailEnviado = false;
-        if (destinatarios.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+        if (enviarEmail && destinatarios.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
           if (tamanhoMB < 20) {
             const nodemailer = require('nodemailer');
             const transporter = nodemailer.createTransport({
@@ -344,20 +345,35 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     }
 
+    // Backup GARANTIDO 1x por dia às 03:00 BRT (06:00 UTC), mesmo que nada
+    // tenha mudado — baseline de segurança independente de atividade.
     let ultimoDiaBackup = null;
     setInterval(function() {
       const now = new Date();
       const hojeStr = now.toISOString().slice(0, 10);
-      // 06:00 UTC = 03:00 BRT — horário de baixo uso, fora do relatorio das 9h
       if (now.getUTCHours() === 6 && now.getUTCMinutes() === 0 && ultimoDiaBackup !== hojeStr) {
         ultimoDiaBackup = hojeStr;
-        gerarBackupAutomatico();
+        gerarBackupAutomatico({ enviarEmail: true });
       }
     }, 60 * 1000);
 
+    // Backup REATIVO: a cada 3 minutos, se algo mudou desde a última
+    // checagem, salva em disco na hora (proteção quase em tempo real,
+    // sem sobrecarregar o servidor fazendo isso a cada clique individual).
+    // O e-mail dessa versão é limitado a no máximo 1x por hora, para não
+    // virar spam durante uma sessão de trabalho com muitas alterações.
+    let ultimoEmailReativoTs = 0;
+    setInterval(async function() {
+      if (!db.consumirFlagMudanca()) return; // nada mudou, não faz nada
+      const agora = Date.now();
+      const podeEnviarEmail = (agora - ultimoEmailReativoTs) >= 60 * 60 * 1000; // 1h
+      const resultado = await gerarBackupAutomatico({ enviarEmail: podeEnviarEmail });
+      if (resultado.ok && resultado.emailEnviado) ultimoEmailReativoTs = agora;
+    }, 3 * 60 * 1000);
+
     // Gera um backup logo na subida do servidor, para já existir uma
-    // cópia de segurança sem precisar esperar até 03:00.
-    setTimeout(() => { gerarBackupAutomatico(); }, 15 * 1000);
+    // cópia de segurança sem precisar esperar a primeira mudança.
+    setTimeout(() => { gerarBackupAutomatico({ enviarEmail: false }); }, 15 * 1000);
 
     // Gatilho manual de teste (acesse pelo navegador)
     app.get('/api/admin/backup-teste', async (req, res) => {
@@ -365,7 +381,7 @@ app.listen(PORT, '0.0.0.0', () => {
       if (req.query.secret !== secret) {
         return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
       }
-      const resultado = await gerarBackupAutomatico();
+      const resultado = await gerarBackupAutomatico({ enviarEmail: true });
       res.json(resultado);
     });
     // ── fim backup automatico ──
