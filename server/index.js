@@ -316,7 +316,10 @@ app.listen(PORT, '0.0.0.0', () => {
         console.log('Backup automatico salvo:', arquivo, '(' + tamanhoMB.toFixed(1) + ' MB)');
 
         // Envia também por e-mail, como camada extra fora do Railway
-        const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(s => s.trim()).filter(Boolean);
+        // Backup usa uma lista de destinatários própria (separada do relatório
+        // diário) — por padrão, só thiago.bessa@quallyx.com.br.
+        const destinatarios = (process.env.BACKUP_DESTINATARIOS || 'thiago.bessa@quallyx.com.br')
+          .split(',').map(s => s.trim()).filter(Boolean);
         let emailEnviado = false;
         if (enviarEmail && destinatarios.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
           if (tamanhoMB < 20) {
