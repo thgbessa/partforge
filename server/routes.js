@@ -481,6 +481,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     depositos:     db.query('SELECT * FROM depositos'),
     movimentacoes: db.query('SELECT * FROM movimentacoes').map(m=>({...m,eventos:P(m.eventos)})),
     orcamentos:    db.query('SELECT * FROM orcamentos').map(o=>({...o,itens:P(o.itens)})),
+    solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
     pedidos:       db.query('SELECT * FROM pedidos').map(p=>({...p,itens:P(p.itens)})),
@@ -594,6 +595,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.doadoras?.length) for (const d of s.doadoras)
       db.runBatch(`INSERT OR REPLACE INTO doadoras(id,modelo,serie,marca,linha,classificacao,fator,obs,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
         [d.id||uid(),d.modelo||'',d.serie||'',d.marca||'',d.linha||'',d.classificacao||'USO',d.fator||1,d.obs||'',d.created_at||now()]);
+
+    if (s.solicitacoes_compra?.length) for (const sc of s.solicitacoes_compra)
+      db.runBatch(`INSERT OR REPLACE INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,equip_nome,equip_cliente,itens,obs,created_at,updated_at,status_changed_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [sc.id||uid(),sc.numero||'',sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',sc.equip_nome||'',sc.equip_cliente||'',J(sc.itens||[]),sc.obs||'',sc.created_at||now(),sc.updated_at||now(),sc.status_changed_at||now(),sc.created_by||'restore']);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

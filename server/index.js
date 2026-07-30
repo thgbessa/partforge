@@ -267,6 +267,109 @@ app.listen(PORT, '0.0.0.0', () => {
     }, 60 * 1000);
     // ── fim relatorio diario ──
 
+    // ============================================================
+    //  BACKUP AUTOMÁTICO DIÁRIO
+    //  - Salva em disco (data/backups/), com escrita atômica e
+    //    rotação (mantém os últimos 14 dias)
+    //  - Também envia por e-mail como anexo (cópia fora do Railway,
+    //    sobrevive mesmo que o volume inteiro seja perdido)
+    // ============================================================
+    async function gerarBackupAutomatico() {
+      try {
+        const backup = {
+          _version: '2.0', _exportedAt: new Date().toISOString(), _origem: 'backup_automatico',
+          pecas:               db.query('SELECT * FROM pecas'),
+          equipamentos:        db.query('SELECT * FROM equipamentos'),
+          estoque:             db.query('SELECT * FROM estoque'),
+          depositos:           db.query('SELECT * FROM depositos'),
+          movimentacoes:       db.query('SELECT * FROM movimentacoes'),
+          orcamentos:          db.query('SELECT * FROM orcamentos'),
+          solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra'),
+          doadoras:            db.query('SELECT * FROM doadoras'),
+          retiradas:           db.query('SELECT * FROM retiradas'),
+          pedidos:             db.query('SELECT * FROM pedidos'),
+          usuarios:            db.query('SELECT id,nome,cargo,tel,email,ativo,created_at FROM usuarios'),
+        };
+
+        const dbDir = process.env.DB_DIR || path.join(__dirname, '../data');
+        const dirBackups = path.join(dbDir, 'backups');
+        if (!fs.existsSync(dirBackups)) fs.mkdirSync(dirBackups, { recursive: true });
+
+        const hojeStr  = new Date().toISOString().slice(0, 10);
+        const arquivo  = path.join(dirBackups, `auto_backup_${hojeStr}.json`);
+        const tmp      = arquivo + '.tmp';
+        const conteudo = JSON.stringify(backup);
+
+        // Escrita atômica (mesmo padrão usado no banco): nunca deixa
+        // um arquivo de backup pela metade se o processo for interrompido.
+        fs.writeFileSync(tmp, conteudo);
+        fs.renameSync(tmp, arquivo);
+
+        // Rotação: mantém só os últimos 14 backups automáticos
+        const arquivos = fs.readdirSync(dirBackups).filter(f => f.startsWith('auto_backup_')).sort();
+        while (arquivos.length > 14) {
+          fs.unlinkSync(path.join(dirBackups, arquivos.shift()));
+        }
+
+        const tamanhoMB = fs.statSync(arquivo).size / 1024 / 1024;
+        console.log('Backup automatico salvo:', arquivo, '(' + tamanhoMB.toFixed(1) + ' MB)');
+
+        // Envia também por e-mail, como camada extra fora do Railway
+        const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(s => s.trim()).filter(Boolean);
+        let emailEnviado = false;
+        if (destinatarios.length && process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+          if (tamanhoMB < 20) {
+            const nodemailer = require('nodemailer');
+            const transporter = nodemailer.createTransport({
+              service: 'gmail',
+              auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+            });
+            await transporter.sendMail({
+              from: process.env.GMAIL_USER,
+              to: destinatarios.join(','),
+              subject: 'PartForge - Backup Automático ' + hojeStr,
+              text: 'Backup automático do PartForge em anexo.\n\nGuarde este arquivo com segurança: em caso de perda de dados, ele pode ser restaurado pela tela "Restaurar" do sistema.',
+              attachments: [{ filename: `partforge_backup_${hojeStr}.json`, path: arquivo }]
+            });
+            emailEnviado = true;
+            console.log('Backup automatico enviado por email para', destinatarios.join(', '));
+          } else {
+            console.log('Backup automatico grande demais para e-mail (' + tamanhoMB.toFixed(1) + 'MB) - mantido apenas em disco em', arquivo);
+          }
+        }
+        return { ok: true, arquivo, tamanhoMB: tamanhoMB.toFixed(2), emailEnviado };
+      } catch (err) {
+        console.error('Erro no backup automatico:', err.message);
+        return { ok: false, motivo: err.message };
+      }
+    }
+
+    let ultimoDiaBackup = null;
+    setInterval(function() {
+      const now = new Date();
+      const hojeStr = now.toISOString().slice(0, 10);
+      // 06:00 UTC = 03:00 BRT — horário de baixo uso, fora do relatorio das 9h
+      if (now.getUTCHours() === 6 && now.getUTCMinutes() === 0 && ultimoDiaBackup !== hojeStr) {
+        ultimoDiaBackup = hojeStr;
+        gerarBackupAutomatico();
+      }
+    }, 60 * 1000);
+
+    // Gera um backup logo na subida do servidor, para já existir uma
+    // cópia de segurança sem precisar esperar até 03:00.
+    setTimeout(() => { gerarBackupAutomatico(); }, 15 * 1000);
+
+    // Gatilho manual de teste (acesse pelo navegador)
+    app.get('/api/admin/backup-teste', async (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      const resultado = await gerarBackupAutomatico();
+      res.json(resultado);
+    });
+    // ── fim backup automatico ──
+
 
     // Auto-import após tudo pronto
     const countP = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
