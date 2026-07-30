@@ -5237,6 +5237,12 @@ function importarPecas(rows, sheetName) {
 
   let added = 0, updated = 0, skipped = 0;
 
+  // Índice código->peça construído UMA VEZ antes do loop (O(n)), em vez de
+  // procurar linearmente em db.pecas a cada linha do arquivo (O(n) por linha,
+  // O(n×m) no total — isso é o que travava o navegador em importações grandes).
+  const indicePecas = new Map();
+  db.pecas.forEach(p => indicePecas.set(String(p.codigo||'').trim().toUpperCase(), p));
+
   rows.slice(1).forEach(row => {
     const codigoRaw = row[colIndex['codigo']];
     const nomeRaw   = row[colIndex['nome']];
@@ -5285,7 +5291,7 @@ function importarPecas(rows, sheetName) {
     })();
 
     const codigoNorm = codigo.trim().toUpperCase();
-    const existing = db.pecas.find(p => String(p.codigo||'').trim().toUpperCase() === codigoNorm);
+    const existing = indicePecas.get(codigoNorm);
     if (existing) {
       Object.assign(existing, data);
       updated++;
@@ -5293,6 +5299,7 @@ function importarPecas(rows, sheetName) {
       data.id = uid();
       data.createdAt = Date.now();
       db.pecas.push(data);
+      indicePecas.set(codigoNorm, data);
       if (db.estoque[data.id] === undefined) db.estoque[data.id] = 0;
       added++;
     }
@@ -5376,6 +5383,8 @@ function importarEquipamentos(rows, sheetName) {
   }
 
   let added = 0, updated = 0, skipped = 0;
+  const indiceEquip = new Map();
+  db.equipamentos.forEach(e => indiceEquip.set(String(e.codigo), e));
 
   rows.slice(1).forEach(row => {
     const codigoRaw = row[colIndex['codigo']];
@@ -5404,7 +5413,7 @@ function importarEquipamentos(rows, sheetName) {
       }
     }
 
-    const existing = db.equipamentos.find(e => String(e.codigo) === codigo);
+    const existing = indiceEquip.get(codigo);
     if (existing) {
       Object.assign(existing, data);
       updated++;
@@ -5412,6 +5421,7 @@ function importarEquipamentos(rows, sheetName) {
       data.id = uid();
       data.createdAt = Date.now();
       db.equipamentos.push(data);
+      indiceEquip.set(codigo, data);
       added++;
     }
   });
