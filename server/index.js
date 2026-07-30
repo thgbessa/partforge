@@ -317,15 +317,10 @@ app.listen(PORT, '0.0.0.0', () => {
     // Backup REATIVO: a cada 3 minutos, se algo mudou desde a última
     // checagem, salva em disco na hora (proteção quase em tempo real,
     // sem sobrecarregar o servidor fazendo isso a cada clique individual).
-    // O e-mail dessa versão é limitado a no máximo 1x por hora, para não
-    // virar spam durante uma sessão de trabalho com muitas alterações.
-    let ultimoEmailReativoTs = 0;
+    // NÃO envia e-mail — o e-mail só é enviado pelo backup garantido das 03h.
     setInterval(async function() {
       if (!db.consumirFlagMudanca()) return; // nada mudou, não faz nada
-      const agora = Date.now();
-      const podeEnviarEmail = (agora - ultimoEmailReativoTs) >= 60 * 60 * 1000; // 1h
-      const resultado = await gerarBackupAutomatico({ enviarEmail: podeEnviarEmail });
-      if (resultado.ok && resultado.emailEnviado) ultimoEmailReativoTs = agora;
+      await gerarBackupAutomatico({ enviarEmail: false });
     }, 3 * 60 * 1000);
 
     // Gera um backup logo na subida do servidor, para já existir uma
