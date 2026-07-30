@@ -26,7 +26,7 @@ let db = {
     taxa: 0,
     dolar: 0,
     markup: 0,
-    validade: '30 dias',
+    validade: '7 dias',
     prazoEntrega: 'A combinar',
     formaPagamento: '30 dias',
     condicoesGerais: ''
@@ -2269,7 +2269,7 @@ function abrirModalOrcamento(id) {
     const target = val || fallback || el.options[0]?.value;
     for (let opt of el.options) { if (opt.value === target) { opt.selected = true; return; } }
   };
-  setOrcSelect('orc-validade',  o?.validade,  cfg.validade       || '30 dias');
+  setOrcSelect('orc-validade',  o?.validade,  cfg.validade       || '7 dias');
   setOrcSelect('orc-pagamento', o?.pagamento, cfg.formaPagamento || '30 dias');
   setOrcSelect('orc-entrega',   o?.entrega,   cfg.prazoEntrega   || 'À combinar');
   setOrcSelect('orc-frete',     o?.frete,     'FOB');
@@ -2293,7 +2293,7 @@ function fecharModalOrcamento() {
 }
 
 function resetarCondicoesOrc() {
-  const validade  = document.getElementById('orc-validade')?.value  || '30 dias';
+  const validade  = document.getElementById('orc-validade')?.value  || '7 dias';
   const pagamento = document.getElementById('orc-pagamento')?.value || '30 dias';
   const entrega   = document.getElementById('orc-entrega')?.value   || 'À combinar';
   const frete     = document.getElementById('orc-frete')?.value     || 'FOB';
@@ -2519,7 +2519,7 @@ function salvarOrcamento() {
     os:         document.getElementById('orc-os').value.trim(),
     data:       document.getElementById('orc-data').value,
     obs:        document.getElementById('orc-obs').value.trim(),
-    validade:   document.getElementById('orc-validade')?.value   || '30 dias',
+    validade:   document.getElementById('orc-validade')?.value   || '7 dias',
     pagamento:  document.getElementById('orc-pagamento')?.value  || '30 dias',
     entrega:    document.getElementById('orc-entrega')?.value    || 'A combinar',
     frete:      document.getElementById('orc-frete')?.value      || 'FOB',
@@ -2583,7 +2583,7 @@ function atualizarValorPorOrc(orcId, solId) {
 }
 
 function gerarCondicoesAuto(force) {
-  const validade   = document.getElementById('cfg-orc-validade')?.value   || '30 dias';
+  const validade   = document.getElementById('cfg-orc-validade')?.value   || '7 dias';
   const pagamento  = document.getElementById('cfg-orc-pagamento')?.value  || '30 dias';
   const entrega    = document.getElementById('cfg-orc-prazo')?.value      || 'À combinar';
   const condEl     = document.getElementById('cfg-orc-condicoes');
@@ -2610,7 +2610,7 @@ function buildCondicoesText(validade, pagamento, entrega, frete, obsExtra) {
 }
 
 function atualizarCondicoesOrc() {
-  const validade  = document.getElementById('orc-validade')?.value  || '30 dias';
+  const validade  = document.getElementById('orc-validade')?.value  || '7 dias';
   const pagamento = document.getElementById('orc-pagamento')?.value || '30 dias';
   const entrega   = document.getElementById('orc-entrega')?.value   || 'À combinar';
   const frete     = document.getElementById('orc-frete')?.value     || 'FOB';
@@ -2630,7 +2630,7 @@ function abrirConfigOrcamento() {
     if (!el || !val) return;
     for (let opt of el.options) { if (opt.value === val) { opt.selected = true; return; } }
   };
-  setSelect('cfg-orc-validade',  cfg.validade       || '30 dias');
+  setSelect('cfg-orc-validade',  cfg.validade       || '7 dias');
   setSelect('cfg-orc-pagamento', cfg.formaPagamento || '30 dias');
   setSelect('cfg-orc-prazo',     cfg.prazoEntrega   || 'À combinar');
   // Condições gerais — auto-gera se vazio
@@ -2648,7 +2648,7 @@ function salvarConfigOrcamento() {
   cfg.taxa             = parseFloat(document.getElementById('cfg-orc-taxa')?.value)    || 0;
   cfg.dolar            = parseFloat(document.getElementById('cfg-orc-dolar')?.value)   || 0;
   cfg.markup           = parseFloat(document.getElementById('cfg-orc-markup')?.value)  || 0;
-  cfg.validade         = document.getElementById('cfg-orc-validade')?.value   || '30 dias';
+  cfg.validade         = document.getElementById('cfg-orc-validade')?.value   || '7 dias';
   cfg.prazoEntrega     = document.getElementById('cfg-orc-entrega')?.value    || 'A combinar';
   cfg.formaPagamento   = document.getElementById('cfg-orc-pagamento')?.value  || '30 dias';
   cfg.condicoesGerais  = document.getElementById('cfg-orc-condicoes')?.value  || '';
@@ -5190,7 +5190,7 @@ function importarOrcamentos(rows, sheetName) {
       equip_nome: idx.equip_nome !== undefined ? row[idx.equip_nome] : '',
       os: idx.os !== undefined ? row[idx.os] : '',
       data: idx.data !== undefined ? row[idx.data] : '',
-      validade: idx.validade !== undefined ? row[idx.validade] : '30 dias',
+      validade: idx.validade !== undefined ? row[idx.validade] : '7 dias',
       pagamento: idx.pagamento !== undefined ? row[idx.pagamento] : '30 dias',
       entrega: idx.entrega !== undefined ? row[idx.entrega] : 'A combinar',
       frete: idx.frete !== undefined ? row[idx.frete] : 'FOB',
