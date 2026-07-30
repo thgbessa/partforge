@@ -22,7 +22,10 @@ const API = (() => {
     const res = await fetch(BASE + path, opts);
     const data = await res.json().catch(() => ({}));
 
-    if (res.status === 401) {
+    // 401 só significa "sessão expirada" quando havia um token sendo usado.
+    // Na tela de login (sem token), 401 é a própria resposta de erro (senha
+    // incorreta, e-mail não encontrado etc.) e deve ser tratado como erro normal.
+    if (res.status === 401 && token) {
       clearToken();
       location.reload();
       return;

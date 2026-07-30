@@ -168,9 +168,16 @@ function run(sql, params = []) {
   persist();
 }
 
+// Variante para loops de importação em massa: NÃO persiste a cada linha
+// (persist() serializa o banco inteiro — chamá-lo milhares de vezes seguidas
+// trava o servidor). Quem usar isso deve chamar persist() manualmente ao final.
+function runBatch(sql, params = []) {
+  _db.run(sql, params);
+}
+
 function get(sql, params = []) {
   const rows = query(sql, params);
   return rows[0] || null;
 }
 
-module.exports = { init, query, run, get, persist, uid, now };
+module.exports = { init, query, run, runBatch, get, persist, uid, now };

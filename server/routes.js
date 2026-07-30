@@ -108,11 +108,12 @@ router.post('/pecas/importar', autenticar, isAdmin, (req, res) => {
   const { pecas } = req.body;
   if (!Array.isArray(pecas)) return res.status(400).json({erro:'Array obrigatório'});
   for (const p of pecas) {
-    db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,taxa,dolar,markup,custo,valor_venda,preco_usd,created_at)
+    db.runBatch(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,taxa,dolar,markup,custo,valor_venda,preco_usd,created_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [p.id||uid(),p.codigo||'',p.nome||'',p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',
        p.minimo||0,p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.preco_usd||0,now()]);
   }
+  db.persist();
   res.json({importadas:pecas.length});
 });
 
@@ -158,8 +159,9 @@ router.delete('/equipamentos/:id', autenticar, isAdmin, (req, res) => {
 router.post('/equipamentos/importar', autenticar, isAdmin, (req, res) => {
   const {equipamentos}=req.body; if (!Array.isArray(equipamentos)) return res.status(400).json({erro:'Array obrigatório'});
   for (const e of equipamentos)
-    db.run(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    db.runBatch(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
       [e.id||uid(),e.modelo||'',e.marca||'',e.serie||'',e.linha||'',e.cliente||'',e.local||'',e.contrato||'',e.obs||'',J(e.campos||{}),now()]);
+  db.persist();
   res.json({importados:equipamentos.length});
 });
 
@@ -494,7 +496,7 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
   try {
     if (s.pecas?.length) {
       for (const p of s.pecas)
-        db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        db.runBatch(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [p.id||uid(),p.codigo||'',p.nome||'',p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,p.imagem||'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.created_at||now()]);
     } else if (s.pecasPrecos || s.depositos || s.movimentacoes) {
       const pecasMap = {};
@@ -530,7 +532,7 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
       }
       for (const p of Object.values(pecasMap)) {
         if (!p.nome) continue;
-        db.run(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        db.runBatch(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [p.id,p.codigo||'',p.nome,p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,now()]);
       }
       if (s.depositos) {
@@ -538,14 +540,14 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
           const total = typeof dep.Total === 'number' ? dep.Total : 0;
           if (total > 0 || pecasMap[pid]) {
             const ex = db.get('SELECT quantidade FROM estoque WHERE peca_id=?',[pid]);
-            if (!ex) db.run('INSERT OR IGNORE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,total,now()]);
+            if (!ex) db.runBatch('INSERT OR IGNORE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,total,now()]);
           }
         }
       }
       if (s.estoque && !Array.isArray(s.estoque)) {
         for (const [pid, qtd] of Object.entries(s.estoque)) {
           if (pecasMap[pid] && qtd > 0) {
-            db.run('INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,qtd,now()]);
+            db.runBatch('INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,qtd,now()]);
           }
         }
       }
@@ -565,7 +567,7 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         valor_compra: e.valor_compra||0, valor_mercado: e.valor_mercado||0,
         os_aberta: e.os_aberta||'', ult_os: e.ult_os||'',
       };
-      db.run(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      db.runBatch(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         [e.id||uid(), modelo, e.marca||'', e.serie||'', linha, cliente, local,
          e.contrato||'', e.obs||'', J(campos), e.createdAt||e.created_at||now()]);
     }
@@ -573,29 +575,30 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.estoque) {
       const estoqueList = Array.isArray(s.estoque) ? s.estoque : Object.entries(s.estoque).map(([k,v])=>({peca_id:k,quantidade:v}));
       for (const e of estoqueList)
-        db.run(`INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)`,
+        db.runBatch(`INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)`,
           [e.peca_id||e.pecaId,e.quantidade||0,now()]);
     }
 
     if (s.movimentacoes?.length) for (const m of s.movimentacoes)
-      db.run(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',J(m.eventos||[]),m.created_at||m.createdAt||now(),'restore']);
 
     if (s.orcamentos?.length) for (const o of s.orcamentos)
-      db.run(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [o.id||uid(),o.numero||'',o.status||'ABERTO',o.cliente||'',o.equip_serie||o.equipSerie||'',o.equip_nome||o.equipNome||'',o.os||'',o.data||'',o.obs||'',o.validade||'30 dias',o.pagamento||o.formaPagamento||'30 dias',o.entrega||o.prazoEntrega||'A combinar',o.frete||'FOB',o.condicoes||'',o.assinatura||'',o.total||0,J(o.itens||[]),o.created_at||now()]);
 
     if (s.pedidos?.length) for (const p of s.pedidos)
-      db.run(`INSERT OR REPLACE INTO pedidos(id,numero,status,obs,itens,created_at) VALUES(?,?,?,?,?,?)`,
+      db.runBatch(`INSERT OR REPLACE INTO pedidos(id,numero,status,obs,itens,created_at) VALUES(?,?,?,?,?,?)`,
         [p.id||uid(),p.numero||'',p.status||'ABERTO',p.obs||'',J(p.itens||[]),p.created_at||now()]);
 
     if (s.doadoras?.length) for (const d of s.doadoras)
-      db.run(`INSERT OR REPLACE INTO doadoras(id,modelo,serie,marca,linha,classificacao,fator,obs,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+      db.runBatch(`INSERT OR REPLACE INTO doadoras(id,modelo,serie,marca,linha,classificacao,fator,obs,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
         [d.id||uid(),d.modelo||'',d.serie||'',d.marca||'',d.linha||'',d.classificacao||'USO',d.fator||1,d.obs||'',d.created_at||now()]);
 
-    if (s.config_orcamento) db.run("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
-    if (s.config_compras)   db.run("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
+    if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
+    if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
 
+    db.persist();
     res.json({ok:true});
   } catch(e) {
     console.error('Restore error:', e);
