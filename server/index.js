@@ -29,52 +29,6 @@ app.listen(PORT, '0.0.0.0', () => {
     const routes = require('./routes');
     app.use('/api', routes);
 
-    // ── Gatilho manual de teste do relatorio diario (acesse pelo navegador) ──
-    app.get('/api/admin/relatorio-teste', async (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      const range = req.query.dia === 'hoje' ? getTodayRangeBRT() : getYesterdayRangeBRT();
-      const resultado = await gerarEEnviarRelatorioDiario(range);
-      res.json(resultado);
-    });
-
-    // ── Recuperação de acesso emergencial (cria/reseta um usuário admin) ──
-    // Também reporta quantos registros existem, para diagnosticar perda de dados.
-    app.get('/api/admin/emergencia-recuperar-acesso', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      const bcrypt = require('bcryptjs');
-      const email = 'emergencia@partforge.local';
-      const senha = 'TrocarAgora123!';
-      try {
-        const existente = db.get('SELECT id FROM usuarios WHERE email=?', [email]);
-        if (existente) {
-          db.run('UPDATE usuarios SET senha_hash=?, ativo=1 WHERE id=?', [bcrypt.hashSync(senha, 10), existente.id]);
-        } else {
-          const { uid, now } = require('./database');
-          db.run('INSERT INTO usuarios(id,nome,cargo,tel,email,senha_hash,ativo,created_at) VALUES(?,?,?,?,?,?,?,?)',
-            [uid(), 'Acesso Emergencial', 'Gerente', '', email, bcrypt.hashSync(senha, 10), 1, now()]);
-        }
-        const totalPecas       = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
-        const totalEquip       = db.get('SELECT COUNT(*) as n FROM equipamentos')?.n || 0;
-        const totalUsuarios    = db.get('SELECT COUNT(*) as n FROM usuarios')?.n || 0;
-        const totalMov         = db.get('SELECT COUNT(*) as n FROM movimentacoes')?.n || 0;
-        const totalOrcamentos  = db.get('SELECT COUNT(*) as n FROM orcamentos')?.n || 0;
-        res.json({
-          ok: true,
-          login: { email, senha },
-          contagem_atual: { pecas: totalPecas, equipamentos: totalEquip, usuarios: totalUsuarios, movimentacoes: totalMov, orcamentos: totalOrcamentos },
-          aviso: 'Troque a senha ou exclua este usuário assim que possível (tela Usuários).'
-        });
-      } catch (e) {
-        res.status(500).json({ ok: false, erro: e.message });
-      }
-    });
-
     app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
     console.log('Banco iniciado, rotas ativas');
 
@@ -377,16 +331,6 @@ app.listen(PORT, '0.0.0.0', () => {
     // Gera um backup logo na subida do servidor, para já existir uma
     // cópia de segurança sem precisar esperar a primeira mudança.
     setTimeout(() => { gerarBackupAutomatico({ enviarEmail: false }); }, 15 * 1000);
-
-    // Gatilho manual de teste (acesse pelo navegador)
-    app.get('/api/admin/backup-teste', async (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      const resultado = await gerarBackupAutomatico({ enviarEmail: true });
-      res.json(resultado);
-    });
     // ── fim backup automatico ──
 
 
