@@ -13,10 +13,16 @@ function now() { return Date.now(); }
 
 let _db = null;
 
-// Persiste o banco em disco a cada operação de escrita
+// Persiste o banco em disco. Escrita ATÔMICA: grava num arquivo temporário e
+// só então renomeia por cima do arquivo real — se o processo for interrompido
+// no meio da escrita (crash, restart, OOM), o arquivo original NUNCA fica
+// corrompido/truncado, porque o rename só acontece depois que a escrita
+// terminou por completo.
 function persist() {
   const data = _db.export();
-  fs.writeFileSync(DB_FILE, Buffer.from(data));
+  const tmpFile = DB_FILE + '.tmp';
+  fs.writeFileSync(tmpFile, Buffer.from(data));
+  fs.renameSync(tmpFile, DB_FILE);
 }
 
 async function init() {
@@ -24,7 +30,17 @@ async function init() {
 
   if (fs.existsSync(DB_FILE)) {
     const fileBuffer = fs.readFileSync(DB_FILE);
-    _db = new SQL.Database(fileBuffer);
+    try {
+      _db = new SQL.Database(fileBuffer);
+    } catch (e) {
+      // Arquivo existe mas está corrompido/ilegível: NUNCA seguir em frente
+      // criando um banco vazio silenciosamente (isso apagaria os dados na
+      // próxima escrita). Falha alto e claro para investigação manual.
+      console.error('ERRO CRÍTICO: arquivo do banco existe mas não pôde ser aberto:', e.message);
+      console.error('Arquivo:', DB_FILE, '| Tamanho:', fileBuffer.length, 'bytes');
+      console.error('O servidor NÃO vai iniciar para evitar sobrescrever dados. Restaure um backup e tente novamente.');
+      throw e;
+    }
   } else {
     _db = new SQL.Database();
   }
