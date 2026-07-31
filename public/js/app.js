@@ -391,9 +391,13 @@ function salvarPeca() {
     loadAndRenderPecas();
   }).catch(err => toast(err.message, 'error'));
 }
-function renderPecas(q='') {
+let pecasPagina = 1;
+const PECAS_POR_PAGINA = 150;
+
+function renderPecas(q='', manterPagina=false) {
   const el = document.getElementById('pecas-table');
   if (!el) return;
+  if (!manterPagina) pecasPagina = 1;
   const ql = (q||'').toLowerCase().trim();
   const fonteFilter = document.getElementById('pecas-filter-fonte')?.value || '';
   const list = db.pecas.filter(p => {
@@ -421,6 +425,12 @@ function renderPecas(q='') {
     return;
   }
 
+  const totalPaginas = Math.max(1, Math.ceil(list.length / PECAS_POR_PAGINA));
+  if (pecasPagina > totalPaginas) pecasPagina = totalPaginas;
+  if (pecasPagina < 1) pecasPagina = 1;
+  const inicio = (pecasPagina - 1) * PECAS_POR_PAGINA;
+  const pageList = list.slice(inicio, inicio + PECAS_POR_PAGINA);
+
   const FONTE_BADGE = {
     DYMIND:             'background:rgba(52,152,219,0.2);color:#3498db;border:1px solid rgba(52,152,219,0.4)',
     RAYTO:              'background:rgba(46,204,113,0.2);color:#27ae60;border:1px solid rgba(46,204,113,0.4)',
@@ -435,6 +445,17 @@ function renderPecas(q='') {
     OUTRO:              'background:rgba(155,89,182,0.2);color:#9b59b6;border:1px solid rgba(155,89,182,0.4)',
   };
 
+  const paginacaoHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 6px;
+      font-family:var(--mono);font-size:11px;color:var(--text3);flex-wrap:wrap;gap:10px">
+      <span>Mostrando ${inicio+1}–${Math.min(inicio+PECAS_POR_PAGINA, list.length)} de ${list.length}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="mudarPaginaPecas(-1)" ${pecasPagina<=1?'disabled':''}>‹ Anterior</button>
+        <span>Página ${pecasPagina} de ${totalPaginas}</span>
+        <button class="btn btn-ghost btn-sm" onclick="mudarPaginaPecas(1)" ${pecasPagina>=totalPaginas?'disabled':''}>Próxima ›</button>
+      </div>
+    </div>`;
+
   el.innerHTML = `<table class="data-table">
     <thead><tr>
       <th style="width:56px">Foto</th>
@@ -445,7 +466,7 @@ function renderPecas(q='') {
       <th>Estoque</th><th></th>
     </tr></thead>
     <tbody>
-    ${list.map(p => {
+    ${pageList.map(p => {
       const qty = db.estoque[p.id] || 0;
       const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#e8cc2a' : 'var(--green)');
       const imgHtml = p.imagem
@@ -482,9 +503,19 @@ function renderPecas(q='') {
         </td>
       </tr>`;
     }).join('')}
-    </tbody></table>`;
+    </tbody></table>
+    ${paginacaoHtml}`;
   document.getElementById('badge-pecas').textContent = list.length;
 }
+
+function mudarPaginaPecas(delta) {
+  pecasPagina += delta;
+  const q = document.querySelector('#page-pecas .search-input')?.value || '';
+  renderPecas(q, true);
+  document.getElementById('pecas-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
 
 // Visualizador de imagem em tela cheia
 function abrirVisualizadorImg(pecaId) {
