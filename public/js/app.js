@@ -540,13 +540,46 @@ function deletePeca(id) {
 }
 const EQUIP_TEXT_FIELDS = [
   'codigo','nome','cod-produto','serie','marca','modelo','grupo','grupo2',
-  'local','setor','ip','nome-fantasia','contrato','local-contrato','ult-os',
+  'local','setor','ip','nome-fantasia','cnpj','contrato','local-contrato','ult-os',
   'os-aberta','os-instalacao','fornecedor','nf-compra','data-compra',
   'termino-garantia','envio','ult-retorno','endereco','numero','complemento',
   'bairro','municipio','uf','cep'
 ];
 const EQUIP_SEL_FIELDS = ['status','proprietario','usado'];
 const EQUIP_NUM_FIELDS = ['ano-fab','valor-compra','valor-mercado'];
+
+// ── CNPJ do cliente no Equipamento (mesma memória usada em Orçamentos) ──
+let _cnpjEquipEditadoManualmente = false;
+
+function onClienteEquipMudou() {
+  _cnpjEquipEditadoManualmente = false;
+  const statusEl = document.getElementById('equip-cnpj-status');
+  if (statusEl) statusEl.textContent = '';
+}
+
+function onCnpjEquipEditadoManualmente() {
+  _cnpjEquipEditadoManualmente = true;
+  const statusEl = document.getElementById('equip-cnpj-status');
+  if (statusEl) statusEl.textContent = '';
+}
+
+function buscarCnpjEquip() {
+  const nome = document.getElementById('equip-nome-fantasia')?.value.trim();
+  const cnpjEl = document.getElementById('equip-cnpj');
+  const statusEl = document.getElementById('equip-cnpj-status');
+  if (!nome || !cnpjEl) return;
+  if (_cnpjEquipEditadoManualmente && cnpjEl.value.trim()) return;
+  API.get('/clientes/cnpj?nome=' + encodeURIComponent(nome)).then(res => {
+    if (res && res.cnpj) {
+      cnpjEl.value = res.cnpj;
+      if (statusEl) { statusEl.textContent = '✓ encontrado'; statusEl.style.color = 'var(--green)'; }
+    } else if (statusEl) {
+      statusEl.textContent = cnpjEl.value.trim() ? '' : 'cliente novo — digite o CNPJ';
+      statusEl.style.color = 'var(--text3)';
+    }
+  }).catch(() => {});
+}
+
 function openModalEquip(id) {
   editId = id || null;
   const e = id ? db.equipamentos.find(x => x.id === id) : null;
@@ -563,27 +596,35 @@ function openModalEquip(id) {
     const el = document.getElementById('equip-' + f);
     if (el) el.value = e ? (e[f.replace(/-/g,'_')]||'') : '';
   });
+  _cnpjEquipEditadoManualmente = !!(e?.cnpj);
+  const equipCnpjStatusEl = document.getElementById('equip-cnpj-status');
+  if (equipCnpjStatusEl) equipCnpjStatusEl.textContent = '';
+  if (!e?.cnpj && e?.nome_fantasia) buscarCnpjEquip();
   openModal('modal-equip');
 }
 
 function salvarEquipamento() {
   const data = {};
-  const fields = ['modelo','marca','serie','linha','cliente','local','contrato','obs'];
+  const fields = ['modelo','marca','serie','linha','local','contrato','obs'];
   for (const f of fields) {
     const el = document.getElementById('equip-' + f);
     if (el) data[f] = el.value.trim();
   }
+  // Não existe campo "equip-cliente" no formulário — quem representa o cliente
+  // é "Nome Fantasia", que precisa ir pra coluna real "cliente".
+  data.cliente = document.getElementById('equip-nome-fantasia')?.value.trim() || '';
   if (!data.modelo) { toast('Modelo obrigatório', 'error'); return; }
   if (editId) data.id = editId;
 
-  // Capture extra fields from EQUIP_TEXT_FIELDS if available
-  const campos = {};
-  if (typeof EQUIP_TEXT_FIELDS !== 'undefined') {
-    EQUIP_TEXT_FIELDS.forEach(f => {
-      const el = document.getElementById('equip-campo-' + f.key);
-      if (el) campos[f.key] = el.value.trim();
-    });
-  }
+  // Campos extras (Cód. Produto, Grupo 2, Setor, IP, Nome Fantasia, CNPJ, Fornecedor,
+  // NF Compra, datas, endereço, status, proprietário, valores etc.) — guardados em
+  // "campos" (JSON). Começa com os que já existiam (importação, etc.) e sobrescreve
+  // com o que estiver preenchido no formulário, para não perder dados de outras origens.
+  const campos = { ...(editId ? (db.equipamentos.find(x => x.id === editId)?.campos || {}) : {}) };
+  [...EQUIP_TEXT_FIELDS, ...EQUIP_SEL_FIELDS, ...EQUIP_NUM_FIELDS].forEach(f => {
+    const el = document.getElementById('equip-' + f);
+    if (el) campos[f.replace(/-/g, '_')] = el.value.trim();
+  });
   data.campos = campos;
 
   const fn = editId ? API.put('/equipamentos/' + editId, data) : API.post('/equipamentos', data);

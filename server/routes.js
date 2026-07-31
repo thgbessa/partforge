@@ -121,15 +121,18 @@ router.post('/pecas/importar', autenticar, isAdmin, (req, res) => {
 router.get('/equipamentos', autenticar, (req, res) => {
   const {q}=req.query; let sql='SELECT * FROM equipamentos WHERE 1=1'; const p=[];
   if (q) { sql+=' AND (modelo LIKE ? OR serie LIKE ? OR cliente LIKE ? OR campos LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`,`%${q}%`); }
+  const CAMPOS_EXTRA = ['cod_produto','grupo2','setor','ip','cnpj','local_contrato','ult_os',
+    'os_aberta','os_instalacao','fornecedor','nf_compra','data_compra','termino_garantia',
+    'envio','ult_retorno','endereco','numero','complemento','bairro','municipio','uf','cep',
+    'status','proprietario','usado','ano_fab','valor_compra','valor_mercado'];
   res.json(db.query(sql+' ORDER BY modelo,cliente',p).map(e=>{
     const campos = P(e.campos)||{};
+    const extra = {};
+    CAMPOS_EXTRA.forEach(k => { extra[k] = campos[k] || ''; });
     return {
-      ...e, campos,
+      ...e, campos, ...extra,
       nome: e.modelo, nome_fantasia: e.cliente,
-      cod_produto: campos.cod_produto||'', grupo: campos.grupo||e.linha||'',
-      grupo2: campos.grupo2||'', status: campos.status||'',
-      proprietario: campos.proprietario||'', municipio: campos.municipio||'',
-      uf: campos.uf||'', os_aberta: campos.os_aberta||'',
+      grupo: campos.grupo || e.linha || '',
       // Expõe codigo do campos diretamente
       codigo: campos.codigo || e.serie || e.id || '',
     };
@@ -142,6 +145,7 @@ router.post('/equipamentos', autenticar, isAdmin, (req, res) => {
   db.run(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at)
     VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
     [id,e.modelo,e.marca||'',e.serie||'',e.linha||'',e.cliente||'',e.local||'',e.contrato||'',e.obs||'',J(e.campos||{}),now()]);
+  if (e.cliente && e.campos?.cnpj) salvarCnpjCliente(e.cliente, e.campos.cnpj);
   res.status(201).json({id});
 });
 
@@ -149,6 +153,7 @@ router.put('/equipamentos/:id', autenticar, isAdmin, (req, res) => {
   const e=req.body;
   db.run(`UPDATE equipamentos SET modelo=?,marca=?,serie=?,linha=?,cliente=?,local=?,contrato=?,obs=?,campos=? WHERE id=?`,
     [e.modelo,e.marca||'',e.serie||'',e.linha||'',e.cliente||'',e.local||'',e.contrato||'',e.obs||'',J(e.campos||{}),req.params.id]);
+  if (e.cliente && e.campos?.cnpj) salvarCnpjCliente(e.cliente, e.campos.cnpj);
   res.json({ok:true});
 });
 
