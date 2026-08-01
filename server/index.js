@@ -366,6 +366,81 @@ app.listen(PORT, '0.0.0.0', () => {
     setTimeout(cancelarOrcamentosVencidos, 20 * 1000);
     // ── fim cancelamento automatico de orcamentos ──
 
+    // ============================================================
+    //  IMPORTAÇÃO DE CNPJ POR Nº DE CONTRATO (uso único, sob demanda)
+    //  Cruza server/dados-cnpj-contrato.json (Cliente/CNPJ/Contrato) com os
+    //  equipamentos já cadastrados pelo campo "contrato" e preenche o CNPJ
+    //  dos que baterem. Também alimenta a tabela "clientes" (mesma memória
+    //  usada no autopreenchimento de Orçamentos).
+    // ============================================================
+    app.get('/api/admin/importar-cnpj-por-contrato', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const dados = require('./dados-cnpj-contrato.json');
+        const normContrato = s => String(s || '').trim().toUpperCase();
+
+        const mapaContrato = new Map();
+        for (const d of dados) {
+          const key = normContrato(d.contrato);
+          if (key) mapaContrato.set(key, d);
+        }
+
+        const equipamentos = db.query('SELECT id, contrato, cliente, campos FROM equipamentos');
+
+        let atualizados = 0;
+        let semContrato = 0;
+        const contratosEncontrados = new Set();
+        const clientesParaSalvar = new Map(); // nome -> cnpj
+
+        for (const eq of equipamentos) {
+          const key = normContrato(eq.contrato);
+          if (!key) { semContrato++; continue; }
+          const match = mapaContrato.get(key);
+          if (!match) continue;
+
+          contratosEncontrados.add(key);
+          let campos = {};
+          try { campos = JSON.parse(eq.campos || '{}') || {}; } catch (e) { campos = {}; }
+          campos.cnpj = match.cnpj;
+          db.runBatch('UPDATE equipamentos SET campos=? WHERE id=?', [JSON.stringify(campos), eq.id]);
+          atualizados++;
+
+          const nomeCliente = (eq.cliente || match.cliente || '').trim();
+          if (nomeCliente && match.cnpj) clientesParaSalvar.set(nomeCliente, match.cnpj);
+        }
+        db.persist();
+
+        for (const [nome, cnpj] of clientesParaSalvar.entries()) {
+          const nomeNorm = String(nome).trim().toUpperCase().replace(/\s+/g, ' ');
+          db.runBatch('INSERT OR REPLACE INTO clientes(nome_norm,nome,cnpj,updated_at) VALUES(?,?,?,?)',
+            [nomeNorm, nome, cnpj, Date.now()]);
+        }
+        db.persist();
+
+        const contratosNaoEncontrados = dados
+          .map(d => normContrato(d.contrato))
+          .filter(c => !contratosEncontrados.has(c));
+
+        res.json({
+          ok: true,
+          totalContratosNaPlanilha: dados.length,
+          totalEquipamentos: equipamentos.length,
+          equipamentosSemContrato: semContrato,
+          equipamentosAtualizados: atualizados,
+          clientesMemorizados: clientesParaSalvar.size,
+          contratosDaPlanilhaSemEquipamento: contratosNaoEncontrados.length,
+          amostraContratosNaoEncontrados: contratosNaoEncontrados.slice(0, 20)
+        });
+      } catch (err) {
+        console.error('Erro na importacao de CNPJ por contrato:', err.message);
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim importacao de cnpj por contrato ──
+
 
     // Auto-import após tudo pronto
     const countP = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
