@@ -29,7 +29,6 @@ app.listen(PORT, '0.0.0.0', () => {
     const routes = require('./routes');
     app.use('/api', routes);
 
-    app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
     console.log('Banco iniciado, rotas ativas');
 
     // ── Relatorio diario automatico (pecas enviadas + orcamentos) ──
@@ -440,6 +439,12 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     });
     // ── fim importacao de cnpj por contrato ──
+
+    // Rota coringa: SEMPRE por último, depois de todas as rotas específicas
+    // (senão ela intercepta e nenhuma rota /api/admin/* registrada depois
+    // dela seria alcançada — foi exatamente esse bug que impediu a rota
+    // de importação de CNPJ de funcionar).
+    app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
 
     // Auto-import após tudo pronto
