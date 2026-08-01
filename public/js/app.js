@@ -6303,10 +6303,10 @@ async function verificarNotificacoes() {
     const data = await API.get('/notificacoes?desde=' + (notifUltimoTs - 5000));
     notifUltimoTs = data.timestamp || Date.now();
 
-    // Novas solicitacoes mobile
-    const novasMov = (data.movimentacoes||[]).filter(m =>
-      m.origem === 'mobile' || m.tecnico
-    );
+    // Novas solicitacoes mobile (com som) — antes o filtro também deixava
+    // passar solicitações do desktop por engano (`|| m.tecnico` era sempre
+    // verdadeiro, já que toda solicitação tem técnico preenchido).
+    const novasMov = (data.movimentacoes||[]).filter(m => m.origem === 'mobile');
     const novosOrcs = (data.orcamentos||[]);
 
     novasMov.forEach(m => {
