@@ -198,6 +198,7 @@ const toMov=m=>({
   tipoAlocacao:m.tipo_alocacao,
   osNum:       m.os_num,
   numSeqOrigem:m.obs&&String(m.obs).startsWith('REF:')?parseInt(String(m.obs).split('|')[0].replace('REF:','')):null,
+  grupoId:     m.grupo_id || '',
   eventos:     typeof m.eventos==='string' ? JSON.parse(m.eventos||'[]') : m.eventos||[]
 });
 
@@ -220,12 +221,12 @@ router.post('/movimentacoes', autenticar, (req, res) => {
   const id=uid();
   const eventos=J([{status:'SOLICITADA',data:now(),obs:'',user:req.user.nome}]);
   db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,
-    qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem,grupo_id)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,seq,'SOLICITADA',m.peca_id||'',m.peca_codigo||'',m.peca_nome||'',m.peca_unidade||'UN',
      m.peca_fonte||'',m.peca_custo||0,m.qtd||1,m.equip_id||'',m.equip_serie||'',m.equip_cliente||'',
      m.equip_modelo||'',m.tecnico||req.user.nome,m.tem_estoque?1:0,m.tipo_alocacao||'',
-     m.valor_por_orc?1:0,m.obs||'',eventos,now(),req.user.id,m.origem||'desktop']);
+     m.valor_por_orc?1:0,m.obs||'',eventos,now(),req.user.id,m.origem||'desktop',m.grupo_id||'']);
   res.status(201).json({id,seq_num:seq});
 });
 

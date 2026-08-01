@@ -1073,6 +1073,10 @@ function criarSolicitacao() {
   const equip   = equipId ? db.equipamentos.find(x => x.id === equipId) : null;
   const tecnico = document.getElementById('mov-tecnico').value.trim() || currentUser?.nome || '';
   const obs     = document.getElementById('mov-obs').value.trim();
+  // Itens de uma mesma solicitação (mais de 1 peça) compartilham um grupo_id,
+  // para aparecerem agrupados visualmente no Histórico, mesmo cada um mantendo
+  // seu próprio status/rastreamento individual.
+  const grupoId = listaFinal.length > 1 ? uid() : '';
   var criadas = 0, erros = 0;
   function processarProximo(i) {
     if (i >= listaFinal.length) {
@@ -1092,7 +1096,7 @@ function criarSolicitacao() {
       qtd: item.qtd,
       equip_id: equipId || '', equip_serie: equip?.serie || equip?.codigo || '',
       equip_cliente: equip?.nome_fantasia || equip?.cliente || '', equip_modelo: equip?.modelo || '',
-      tecnico: tecnico, obs: obs, tem_estoque: temEstoque
+      tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId
     };
     API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
       .catch(function() { erros++; processarProximo(i + 1); });
@@ -2095,6 +2099,97 @@ function processarURLAction() {
 // ============================================================
 //  RENDER HISTÓRICO (pipeline cards)
 // ============================================================
+function montarCardMov(m) {
+  const ps    = PIPELINE_STATUS[m.status] || PIPELINE_STATUS.SOLICITADA;
+  const isFin = m.status === 'FINALIZADO';
+
+  // Botões de ação conforme status atual
+  let acoes = '';
+  if (m.status === 'SOLICITADA') {
+    if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+      acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
+    } else {
+      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
+      if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
+    }
+  } else if (m.status === 'ENVIADA' || m.status === 'COMPRA_PENDENTE') {
+    acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Despachar</button>`;
+  } else if (m.status === 'DESPACHADA') {
+    if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','RECEBER')">✓ Receber Devolução</button>`;
+    } else {
+      acoes = `<span style="font-size:11px;color:var(--text3);font-style:italic">⏳ Aguardando confirmação do técnico</span>`;
+    }
+  } else if (m.status === 'RECEBIDA') {
+    if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
+      acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar Devolução</button>`;
+    } else {
+      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ALOCAR')">⇢ Alocar</button>`;
+    }
+  } else if (m.status === 'ALOCADA') {
+    acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','EMITIR_NF')">📄 Emitir NF</button>`;
+  } else if (m.status === 'NF_EMITIDA') {
+    acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar</button>`;
+  }
+
+  // Info despacho
+  const despachoInfo = m.transportadora
+    ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">
+        📦 ${m.transportadora}
+        ${m.rastreio ? `· <span style="font-family:var(--mono)">${m.rastreio}</span>` : ''}
+        ${m.previsaoEntrega ? `· Prev: ${m.previsaoEntrega}` : ''}
+       </div>` : '';
+
+  const recInfo = m.dataRecebimento
+    ? `<div style="font-size:11px;color:#1abc9c;margin-top:3px">✓ Recebido: ${m.dataRecebimento} ${m.horaRecebimento}</div>` : '';
+
+  const nfInfo = m.nfNumero
+    ? `<div style="font-size:11px;color:#f1c40f;margin-top:3px">📄 NF ${m.nfNumero} · ${m.nfData}</div>` : '';
+
+  return `
+  <div class="sol-card ${isFin?'finalizado':''}">
+
+    <!-- Status badge + pipeline mini -->
+    <div style="flex-shrink:0;text-align:center;min-width:100px">
+      <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px">
+        ${m.tipoAlocacao==='RETORNO'&&m.numSeqOrigem ? '#'+m.numSeqOrigem+'R' : '#'+(m.numSeq||'—')}
+        ${m.tipoAlocacao==='RETORNO' ? `<span class="badge badge-red" style="font-size:9px;margin-left:4px">RETORNO</span>` : ''}
+      </div>
+      <span class="badge ${ps.badge}" style="margin-bottom:6px;display:inline-block">${ps.label}</span>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${formatDate(m.eventos?.[0]?.data||0)}</div>
+    </div>
+
+    <!-- Main info -->
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)">${m.pecaCodigo}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${m.pecaNome}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${m.qtd} ${m.pecaUnidade}</span>
+        ${!m.temEstoque ? `<span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>` : ''}
+      </div>
+      ${m.equipSerie ? `<div style="font-size:12px;color:var(--text2)">
+        S/N: <span style="font-family:var(--mono);color:var(--text)">${m.equipSerie}</span>
+        ${m.equipCliente ? `· <span style="color:var(--text3)">${m.equipCliente}</span>` : ''}
+        ${m.equipNome ? `· <span style="color:var(--text3);font-size:11px">${m.equipNome}</span>` : ''}
+      </div>` : ''}
+      ${m.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${m.tecnico}${m.emailTecnico?` · <span style="font-family:var(--mono)">${m.emailTecnico}</span>`:''}</div>` : ''}
+      ${despachoInfo}${recInfo}${nfInfo}
+      ${m.tipoAlocacao && m.tipoAlocacao !== 'RETORNO' ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ ${m.tipoAlocacao}${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
+      ${m.tipoAlocacao === 'RETORNO' ? `<div style="font-size:11px;color:var(--red);margin-top:3px">↩ Retorno de peça defeituosa${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
+      ${m.numSeqRetorno ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Retorno gerado: <strong style="font-family:var(--mono)">${m.numSeqRetorno}</strong></div>` : ''}
+      ${m.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic">"${m.obs}"</div>` : ''}
+    </div>
+
+    <!-- Ações -->
+    <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+      ${acoes}
+      <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
+    </div>
+
+  </div>`;
+}
+
 function renderHistorico(q='', statusFilter='') {
   const el = document.getElementById('hist-table');
   const sf = statusFilter || (document.getElementById('hist-filter-status')?.value||'');
@@ -2120,99 +2215,30 @@ function renderHistorico(q='', statusFilter='') {
     return;
   }
 
+  // Agrupa visualmente itens que vieram da mesma solicitação em lote (mesmo
+  // grupo_id), mantendo o card/ações/status de cada peça 100% individual.
+  const gruposVistos = new Set();
   el.innerHTML = list.map(m => {
-    const ps    = PIPELINE_STATUS[m.status] || PIPELINE_STATUS.SOLICITADA;
-    const isFin = m.status === 'FINALIZADO';
-    const peca  = db.pecas.find(x => x.id === m.pecaId);
-
-    // Botões de ação conforme status atual
-    let acoes = '';
-    if (m.status === 'SOLICITADA') {
-      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
-        acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
-      } else {
-        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
-        if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
+    if (m.grupoId) {
+      if (gruposVistos.has(m.grupoId)) return ''; // já renderizado junto com o primeiro item do grupo
+      const itensDoGrupo = list.filter(x => x.grupoId === m.grupoId);
+      if (itensDoGrupo.length > 1) {
+        gruposVistos.add(m.grupoId);
+        const qtdTotal = itensDoGrupo.reduce((s,x)=>s+(parseFloat(x.qtd)||0), 0);
+        return `
+        <div class="sol-card-grupo" style="border:1px solid var(--border2);border-radius:var(--radius);
+          padding:10px 10px 4px;margin-bottom:12px;background:rgba(212,140,50,0.03)">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;
+            margin-bottom:8px;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>📦 SOLICITAÇÃO EM LOTE · ${itensDoGrupo.length} ITENS · ${qtdTotal} UNID. NO TOTAL</span>
+            ${m.tecnico ? `<span style="color:var(--text3)">· Solicitante: ${m.tecnico}</span>` : ''}
+            ${m.equipSerie ? `<span style="color:var(--text3)">· S/N: ${m.equipSerie}</span>` : ''}
+          </div>
+          ${itensDoGrupo.map(montarCardMov).join('')}
+        </div>`;
       }
-    } else if (m.status === 'ENVIADA' || m.status === 'COMPRA_PENDENTE') {
-      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Despachar</button>`;
-    } else if (m.status === 'DESPACHADA') {
-      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
-        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','RECEBER')">✓ Receber Devolução</button>`;
-      } else {
-        acoes = `<span style="font-size:11px;color:var(--text3);font-style:italic">⏳ Aguardando confirmação do técnico</span>`;
-      }
-    } else if (m.status === 'RECEBIDA') {
-      if(m.tipoAlocacao==='RETORNO'||m.tipo_alocacao==='RETORNO'){
-        acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar Devolução</button>`;
-      } else {
-        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ALOCAR')">⇢ Alocar</button>`;
-      }
-    } else if (m.status === 'ALOCADA') {
-      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','EMITIR_NF')">📄 Emitir NF</button>`;
-    } else if (m.status === 'NF_EMITIDA') {
-      acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal('${m.id}','FINALIZAR')">✓ Finalizar</button>`;
     }
-
-    // Timeline de eventos resumida
-    const ultimoEvt = m.eventos?.[m.eventos.length-1];
-
-    // Info despacho
-    const despachoInfo = m.transportadora
-      ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">
-          📦 ${m.transportadora}
-          ${m.rastreio ? `· <span style="font-family:var(--mono)">${m.rastreio}</span>` : ''}
-          ${m.previsaoEntrega ? `· Prev: ${m.previsaoEntrega}` : ''}
-         </div>` : '';
-
-    const recInfo = m.dataRecebimento
-      ? `<div style="font-size:11px;color:#1abc9c;margin-top:3px">✓ Recebido: ${m.dataRecebimento} ${m.horaRecebimento}</div>` : '';
-
-    const nfInfo = m.nfNumero
-      ? `<div style="font-size:11px;color:#f1c40f;margin-top:3px">📄 NF ${m.nfNumero} · ${m.nfData}</div>` : '';
-
-    return `
-    <div class="sol-card ${isFin?'finalizado':''}">
-
-      <!-- Status badge + pipeline mini -->
-      <div style="flex-shrink:0;text-align:center;min-width:100px">
-        <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);margin-bottom:4px">
-          ${m.tipoAlocacao==='RETORNO'&&m.numSeqOrigem ? '#'+m.numSeqOrigem+'R' : '#'+(m.numSeq||'—')}
-          ${m.tipoAlocacao==='RETORNO' ? `<span class="badge badge-red" style="font-size:9px;margin-left:4px">RETORNO</span>` : ''}
-        </div>
-        <span class="badge ${ps.badge}" style="margin-bottom:6px;display:inline-block">${ps.label}</span>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--text3)">${formatDate(m.eventos?.[0]?.data||0)}</div>
-      </div>
-
-      <!-- Main info -->
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)">${m.pecaCodigo}</span>
-          <span style="font-size:13px;font-weight:600;color:var(--text)">${m.pecaNome}</span>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${m.qtd} ${m.pecaUnidade}</span>
-          ${!m.temEstoque ? `<span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>` : ''}
-        </div>
-        ${m.equipSerie ? `<div style="font-size:12px;color:var(--text2)">
-          S/N: <span style="font-family:var(--mono);color:var(--text)">${m.equipSerie}</span>
-          ${m.equipCliente ? `· <span style="color:var(--text3)">${m.equipCliente}</span>` : ''}
-          ${m.equipNome ? `· <span style="color:var(--text3);font-size:11px">${m.equipNome}</span>` : ''}
-        </div>` : ''}
-        ${m.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${m.tecnico}${m.emailTecnico?` · <span style="font-family:var(--mono)">${m.emailTecnico}</span>`:''}</div>` : ''}
-        ${despachoInfo}${recInfo}${nfInfo}
-        ${m.tipoAlocacao && m.tipoAlocacao !== 'RETORNO' ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ ${m.tipoAlocacao}${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
-        ${m.tipoAlocacao === 'RETORNO' ? `<div style="font-size:11px;color:var(--red);margin-top:3px">↩ Retorno de peça defeituosa${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
-        ${m.numSeqRetorno ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Retorno gerado: <strong style="font-family:var(--mono)">${m.numSeqRetorno}</strong></div>` : ''}
-        ${m.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic">"${m.obs}"</div>` : ''}
-      </div>
-
-      <!-- Ações -->
-      <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-        ${acoes}
-        <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
-      </div>
-
-    </div>`;
+    return montarCardMov(m);
   }).join('');
 }
 
