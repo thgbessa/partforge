@@ -407,7 +407,10 @@ app.listen(PORT, '0.0.0.0', () => {
           db.runBatch('UPDATE equipamentos SET campos=? WHERE id=?', [JSON.stringify(campos), eq.id]);
           atualizados++;
 
-          const nomeCliente = (eq.cliente || match.cliente || '').trim();
+          // Remove o sufixo tipo "[81]" (mesma limpeza feita ao preencher
+          // o campo Cliente do orçamento a partir do equipamento) — sem
+          // isso, o nome nunca bate com o que fica salvo no orçamento.
+          const nomeCliente = (eq.cliente || match.cliente || '').replace(/\[\d+\]$/, '').trim();
           if (nomeCliente && match.cnpj) clientesParaSalvar.set(nomeCliente, match.cnpj);
         }
         db.persist();
