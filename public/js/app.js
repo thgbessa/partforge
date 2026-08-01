@@ -2017,6 +2017,32 @@ function renderLogistica(tab) {
   }).join('');
 }
 
+function cancelarMovimentacao(id) {
+  if (!confirm('Cancelar esta solicitação? Se o estoque já tinha sido baixado (peça já enviada), ele será devolvido automaticamente.')) return;
+  API.put('/movimentacoes/' + id + '/acao', { acao: 'CANCELAR', obs: '' })
+    .then(() => {
+      toast('Solicitação cancelada — estoque ajustado se necessário', 'info');
+      loadAndRenderHistorico();
+      loadAndRenderLogistica();
+      loadAndRenderDashboard();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
+function cancelarMovimentacaoGrupo(grupoId) {
+  const itens = db.movimentacoes.filter(x => x.grupoId === grupoId);
+  if (!itens.length) return;
+  if (!confirm(`Cancelar esta solicitação em lote (${itens.length} itens)? O estoque já baixado (itens já enviados) será devolvido automaticamente.`)) return;
+  Promise.all(itens.map(it => API.put('/movimentacoes/' + it.id + '/acao', { acao: 'CANCELAR', obs: '' })))
+    .then(() => {
+      toast('Solicitação em lote cancelada — estoque ajustado se necessário', 'info');
+      loadAndRenderHistorico();
+      loadAndRenderLogistica();
+      loadAndRenderDashboard();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 function deleteMovimentacao(id) {
   if (!confirm('Excluir esta solicitação? Essa ação não pode ser desfeita.')) return;
   API.delete('/movimentacoes/' + id)
@@ -2210,6 +2236,7 @@ function montarCardMov(m) {
     <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
       ${acoes}
       <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+      ${!['FINALIZADO','CANCELADA'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:10px" onclick="cancelarMovimentacao('${m.id}')">✕ Cancelar</button>` : ''}
       <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
     </div>
 
@@ -2284,6 +2311,7 @@ function montarCardGrupo(itensDoGrupo) {
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${acoes}
+        ${!isFin && statusRep !== 'CANCELADA' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:10px" onclick="cancelarMovimentacaoGrupo('${primeiro.grupoId}')">✕ Cancelar Lote</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="deleteMovimentacaoGrupo('${primeiro.grupoId}')" style="font-size:10px">X Excluir Lote</button>
       </div>
     </div>

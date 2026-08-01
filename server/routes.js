@@ -272,7 +272,14 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
       db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
         [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
     }
-  } else if (acao==='CANCELAR') { upd.status='CANCELADA'; addEv('CANCELADA');
+  } else if (acao==='CANCELAR') {
+    upd.status='CANCELADA'; addEv('CANCELADA');
+    // Se o estoque já tinha sido baixado (a solicitação passou por "Enviada"
+    // ou além, com tem_estoque=true), devolve a quantidade ao cancelar —
+    // senão a peça fica "perdida" do estoque numa transação que não existe mais.
+    if (sol.status && !['SOLICITADA','COMPRA_PENDENTE'].includes(sol.status)) {
+      db.run('UPDATE estoque SET quantidade=quantidade+?,updated_at=? WHERE peca_id=?', [sol.qtd, now(), sol.peca_id]);
+    }
   } else if (acao==='COMPRA')   { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
 
   try{
@@ -287,6 +294,13 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
 });
 
 router.delete('/movimentacoes/:id', autenticar, isAdmin, (req, res) => {
+  // Se a solicitação já tinha baixado estoque (passou por "Enviada" ou além)
+  // e for excluída (não só cancelada), devolve a quantidade também — mesma
+  // lógica do cancelamento, para não deixar peça "perdida" do estoque.
+  const sol = db.get('SELECT * FROM movimentacoes WHERE id=?', [req.params.id]);
+  if (sol && sol.status && !['SOLICITADA','COMPRA_PENDENTE','CANCELADA'].includes(sol.status)) {
+    db.run('UPDATE estoque SET quantidade=quantidade+?,updated_at=? WHERE peca_id=?', [sol.qtd, now(), sol.peca_id]);
+  }
   db.run('DELETE FROM movimentacoes WHERE id=?',[req.params.id]); res.json({ok:true});
 });
 
