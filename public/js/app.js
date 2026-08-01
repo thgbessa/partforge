@@ -824,8 +824,18 @@ const DEPOSITOS = ['QUALLYX','QUALLYX SC','QUALLYX SP','CONSUMO - SP','CONSUMO -
 // Depósitos que têm movimento relevante (para exibição condensada)
 const DEPOSITOS_ATIVOS = ['QUALLYX','QUALLYX SC','QUALLYX SP','CONSUMO - SP','CONSUMO - BC','REPAIR'];
 
-function renderEstoque(q='') {
+let estoquePagina = 1;
+const ESTOQUE_POR_PAGINA = 150;
+
+function renderEstoque(q='', manterPagina=false) {
   const el = document.getElementById('estoque-table');
+  if (!manterPagina) estoquePagina = 1;
+
+  // Índice código->peça construído UMA VEZ (O(n)), em vez de db.pecas.find()
+  // dentro do loop abaixo (O(n) por código, O(n²) no total — era isso que
+  // travava a tela com o catálogo grande).
+  const indicePecas = new Map();
+  db.pecas.forEach(p => indicePecas.set(String(p.codigo), p));
 
   // Filtra: peças com dados de estoque importado OU que constam no db.pecas
   const allCodigos = new Set([
@@ -835,7 +845,7 @@ function renderEstoque(q='') {
 
   let list = [];
   allCodigos.forEach(cod => {
-    const peca = db.pecas.find(p => String(p.codigo) === cod);
+    const peca = indicePecas.get(cod);
     const deps = db.depositos[cod] || {};
     const total = db.estoque[peca?.id] ?? deps['Total'] ?? 0;
     list.push({ peca, cod, deps, total });
@@ -859,11 +869,30 @@ function renderEstoque(q='') {
     return;
   }
 
+  const totalPaginas = Math.max(1, Math.ceil(list.length / ESTOQUE_POR_PAGINA));
+  if (estoquePagina > totalPaginas) estoquePagina = totalPaginas;
+  if (estoquePagina < 1) estoquePagina = 1;
+  const inicio = (estoquePagina - 1) * ESTOQUE_POR_PAGINA;
+  const pageList = list.slice(inicio, inicio + ESTOQUE_POR_PAGINA);
+
   // Verifica quais depósitos têm algum valor > 0 (para mostrar só os relevantes)
+  // — calculado sobre a lista inteira filtrada, não só a página, para não
+  // esconder/mostrar colunas de depósito conforme a página mudar.
   const depoComValor = DEPOSITOS.filter(d =>
     list.some(r => (r.deps[d]||0) > 0)
   );
   const depoShow = depoComValor.length > 0 ? depoComValor : DEPOSITOS_ATIVOS;
+
+  const paginacaoHtml = `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 6px;
+      font-family:var(--mono);font-size:11px;color:var(--text3);flex-wrap:wrap;gap:10px">
+      <span>Mostrando ${inicio+1}–${Math.min(inicio+ESTOQUE_POR_PAGINA, list.length)} de ${list.length}</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm" onclick="mudarPaginaEstoque(-1)" ${estoquePagina<=1?'disabled':''}>‹ Anterior</button>
+        <span>Página ${estoquePagina} de ${totalPaginas}</span>
+        <button class="btn btn-ghost btn-sm" onclick="mudarPaginaEstoque(1)" ${estoquePagina>=totalPaginas?'disabled':''}>Próxima ›</button>
+      </div>
+    </div>`;
 
   el.innerHTML = `
   <table class="data-table" style="min-width:900px">
@@ -879,7 +908,7 @@ function renderEstoque(q='') {
       <th>Nível</th>
     </tr></thead>
     <tbody>
-    ${list.map(r => {
+    ${pageList.map(r => {
       const { peca, cod, deps, total } = r;
       const nome    = peca?.nome   || deps._nome  || '—';
       const grupo   = peca?.grupo  || deps._grupo || '';
@@ -915,8 +944,17 @@ function renderEstoque(q='') {
       </tr>`;
     }).join('')}
     </tbody>
-  </table>`;
+  </table>
+  ${paginacaoHtml}`;
 }
+
+function mudarPaginaEstoque(delta) {
+  estoquePagina += delta;
+  const q = document.querySelector('#page-estoque .search-input')?.value || '';
+  renderEstoque(q, true);
+  document.getElementById('estoque-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 
 function importarEstoque(rows, sheetName) {
   // Colunas fixas do eLoca: Produto, Descrição, Unidade, Grupo + depósitos + Total
