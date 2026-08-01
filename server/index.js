@@ -443,35 +443,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Diagnóstico: por que algum cliente aparece só com frete no gráfico ──
-    app.get('/api/admin/diagnostico-custo-envios', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      const movs = db.query(`
-        SELECT equip_cliente, peca_id, peca_codigo, peca_nome, peca_custo, qtd, status, valor_frete
-        FROM movimentacoes
-        WHERE equip_cliente LIKE '%FURLAN%' OR equip_cliente LIKE '%HOSPITAL E MATERNIDADE%' OR equip_cliente LIKE '%UNIMED%'
-        ORDER BY equip_cliente`);
-      const comCatalogo = movs.map(m => {
-        const peca = db.get('SELECT codigo, nome, custo, valor_venda FROM pecas WHERE id=?', [m.peca_id]);
-        return { ...m, catalogo_custo: peca?.custo ?? null, catalogo_valor_venda: peca?.valor_venda ?? null, peca_encontrada_no_catalogo: !!peca };
-      });
-      res.json({ ok: true, total: comCatalogo.length, movimentacoes: comCatalogo });
-    });
-
-    app.get('/api/admin/diagnostico-pecas-sem-custo', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      const total = db.get(`SELECT COUNT(*) as n FROM pecas WHERE (custo IS NULL OR custo=0) AND valor_venda > 0`)?.n || 0;
-      const amostra = db.query(`SELECT codigo, nome, fonte, custo, valor_venda FROM pecas WHERE (custo IS NULL OR custo=0) AND valor_venda > 0 LIMIT 30`);
-      res.json({ ok: true, totalComGap: total, amostra });
-    });
-    // ── fim diagnostico ──
-
     // Rota coringa: SEMPRE por último, depois de todas as rotas específicas
     // (senão ela intercepta e nenhuma rota /api/admin/* registrada depois
     // dela seria alcançada — foi exatamente esse bug que impediu a rota
