@@ -332,6 +332,8 @@ function openModalPeca(id) {
   document.getElementById('peca-valor-venda').value = p?.valor_venda || '';
   document.getElementById('peca-peso-g').value      = p?.peso_g      || '';
   document.getElementById('peca-minimo').value      = (p?.minimo !== undefined && p?.minimo !== null) ? p.minimo : 5;
+  document.getElementById('peca-localizacao').value     = p?.localizacao     || '';
+  document.getElementById('peca-localizacao-bin').value = p?.localizacao_bin || '';
   // Limpar flags de edição manual
   ['peca-custo','peca-valor-venda'].forEach(id => {
     const el = document.getElementById(id);
@@ -380,6 +382,8 @@ function salvarPeca() {
     valor_venda: parseFloat(document.getElementById('peca-valor-venda').value) || 0,
     preco_usd:   parseFloat(document.getElementById('peca-preco-usd').value)   || 0,
     minimo:      parseFloat(document.getElementById('peca-minimo').value)      || 5,
+    localizacao:     document.getElementById('peca-localizacao').value     || '',
+    localizacao_bin: document.getElementById('peca-localizacao-bin').value.trim() || '',
     imagem:      window._pecaImgData || (editId ? (db.pecas.find(x=>x.id===editId)?.imagem||'') : ''),
   };
 
@@ -857,7 +861,9 @@ function renderEstoque(q='', manterPagina=false) {
     list = list.filter(r =>
       String(r.cod).toLowerCase().includes(ql) ||
       String(r.peca?.nome || r.deps._nome || '').toLowerCase().includes(ql) ||
-      String(r.peca?.grupo || r.deps._grupo || '').toLowerCase().includes(ql)
+      String(r.peca?.grupo || r.deps._grupo || '').toLowerCase().includes(ql) ||
+      String(r.peca?.localizacao || '').toLowerCase().includes(ql) ||
+      String(r.peca?.localizacao_bin || '').toLowerCase().includes(ql)
     );
   }
 
@@ -900,6 +906,7 @@ function renderEstoque(q='', manterPagina=false) {
       <th>Produto</th>
       <th>Descrição</th>
       <th>Grupo</th>
+      <th>Localização</th>
       <th>UND</th>
       ${depoShow.map(d => `<th style="text-align:center;font-size:9px;white-space:nowrap">${d}</th>`).join('')}
       <th style="text-align:center">Total</th>
@@ -924,6 +931,9 @@ function renderEstoque(q='', manterPagina=false) {
         <td class="mono" style="font-weight:700;color:var(--accent);white-space:nowrap">${cod}</td>
         <td style="max-width:200px"><strong style="font-size:12px">${nome}</strong></td>
         <td>${grupoDisplay ? `<span class="badge badge-gray" style="font-size:8px;white-space:nowrap">${grupoDisplay}</span>` : '—'}</td>
+        <td style="font-size:11px;color:var(--text2);white-space:nowrap">
+          ${peca?.localizacao ? peca.localizacao + (peca.localizacao_bin ? ' · ' + peca.localizacao_bin : '') : '<span style="color:var(--text3)">—</span>'}
+        </td>
         <td class="mono">${unidade}</td>
         ${depoShow.map(d => {
           const v = deps[d] || 0;

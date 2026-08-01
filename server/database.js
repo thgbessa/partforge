@@ -148,6 +148,8 @@ async function init() {
 
   // Migracao: adiciona coluna preco_usd se ainda nao existir
   try { _db.run("ALTER TABLE pecas ADD COLUMN preco_usd REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE pecas ADD COLUMN localizacao TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE pecas ADD COLUMN localizacao_bin TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN valor_frete REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
   try { _db.run(`CREATE TABLE IF NOT EXISTS solicitacoes_compra (
     id TEXT PRIMARY KEY, numero TEXT, status TEXT DEFAULT 'SOLICITADO',
