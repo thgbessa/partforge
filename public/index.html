@@ -161,10 +161,15 @@
             <div class="kpi-value" id="kpi-estoque">0</div>
             <div class="kpi-sub">unidades disponíveis</div>
           </div>
-          <div class="kpi-card red">
-            <div class="kpi-label">Estoque Crítico</div>
-            <div class="kpi-value" id="kpi-critico">0</div>
-            <div class="kpi-sub">abaixo do mínimo</div>
+          <div class="kpi-card" style="border-left:3px solid var(--green)">
+            <div class="kpi-label">Valor Faturado</div>
+            <div class="kpi-value" id="kpi-faturado" style="color:var(--green)">R$ 0</div>
+            <div class="kpi-sub">total de orçamentos faturados</div>
+          </div>
+          <div class="kpi-card" style="border-left:3px solid var(--accent)">
+            <div class="kpi-label">Peças Enviadas</div>
+            <div class="kpi-value" id="kpi-enviadas">0</div>
+            <div class="kpi-sub">total de peças despachadas</div>
           </div>
           <div class="kpi-card purple">
             <div class="kpi-label">Solicitações Abertas</div>
@@ -174,14 +179,17 @@
         </div>
 
         <div class="section-header">
-          <div class="section-title">Estoque Crítico / Alertas</div>
+          <div class="section-title">Faturamento Mensal de Orçamentos</div>
         </div>
-        <div class="table-wrap mb-3" id="dash-critico">
-          <div class="empty-state">
-            <div class="empty-icon">✓</div>
-            <div class="empty-title">Sem Alertas</div>
-            <div class="empty-sub">Todos os itens com estoque adequado</div>
-          </div>
+        <div class="table-wrap mb-3" style="padding:20px 16px" id="dash-chart-faturamento-wrap">
+          <canvas id="chart-faturamento-mensal" height="90"></canvas>
+        </div>
+
+        <div class="section-header">
+          <div class="section-title">Envios de Peças por Cliente</div>
+        </div>
+        <div class="table-wrap mb-3" style="padding:20px 16px" id="dash-chart-envios-wrap">
+          <canvas id="chart-envios-cliente" height="120"></canvas>
         </div>
 
         <div class="section-header">
@@ -1597,4 +1605,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000033"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000034"></script></html>

@@ -502,7 +502,33 @@ router.get('/dashboard', autenticar, (req, res) => {
   const pedAbertos   = db.get("SELECT COUNT(*) as n FROM pedidos WHERE status='ABERTO'")?.n || 0;
   const estoqueMin   = db.get(`SELECT COUNT(*) as n FROM estoque e JOIN pecas p ON p.id=e.peca_id WHERE p.minimo>0 AND e.quantidade<p.minimo`)?.n || 0;
   const ultMovs      = db.query("SELECT * FROM movimentacoes ORDER BY created_at DESC LIMIT 10").map(toMov);
-  res.json({totalPecas,totalEquip,movAbertos,compPendente,orcAbertos,pedAbertos,estoqueMin,ultMovs});
+
+  // Valor total de orçamentos faturados
+  const valorFaturado = db.get("SELECT COALESCE(SUM(total),0) as v FROM orcamentos WHERE status='FATURADO'")?.v || 0;
+
+  // Total de peças enviadas (soma de qtd das solicitações que já saíram: exclui só as
+  // que ainda estão em Solicitada, Compra Pendente ou foram Canceladas)
+  const pecasEnviadas = db.get("SELECT COALESCE(SUM(qtd),0) as v FROM movimentacoes WHERE status NOT IN ('SOLICITADA','COMPRA_PENDENTE','CANCELADA')")?.v || 0;
+
+  // Faturamento mensal (orçamentos com status Faturado, agrupado por mês da data do orçamento)
+  const faturamentoPorMes = db.query(`
+    SELECT substr(data,1,7) as mes, SUM(total) as total
+    FROM orcamentos
+    WHERE status='FATURADO' AND data IS NOT NULL AND data != ''
+    GROUP BY mes ORDER BY mes`);
+
+  // Envios de peças por cliente: quantidade, custo das peças e custo de frete
+  const enviosPorCliente = db.query(`
+    SELECT equip_cliente as cliente, SUM(qtd) as qtdPecas,
+           SUM(peca_custo*qtd) as custoPecas, SUM(COALESCE(valor_frete,0)) as custoFrete
+    FROM movimentacoes
+    WHERE equip_cliente IS NOT NULL AND equip_cliente != '' AND status NOT IN ('SOLICITADA','CANCELADA')
+    GROUP BY equip_cliente
+    ORDER BY qtdPecas DESC
+    LIMIT 15`);
+
+  res.json({totalPecas,totalEquip,movAbertos,compPendente,orcAbertos,pedAbertos,estoqueMin,ultMovs,
+    valorFaturado, pecasEnviadas, faturamentoPorMes, enviosPorCliente});
 });
 
 // ── BACKUP / RESTORE ──────────────────────────────────────────

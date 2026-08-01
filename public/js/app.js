@@ -3651,6 +3651,103 @@ function fecharDropdownEquip() {
 // ============================================================
 //  DASHBOARD
 // ============================================================
+// ── GRÁFICOS DO DASHBOARD ──────────────────────────────────────
+let _chartFaturamento = null;
+function renderChartFaturamentoMensal(dados) {
+  const canvas = document.getElementById('chart-faturamento-mensal');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_chartFaturamento) { _chartFaturamento.destroy(); _chartFaturamento = null; }
+
+  let msg = document.getElementById('chart-faturamento-empty');
+  if (!dados.length) {
+    canvas.style.display = 'none';
+    if (!msg) {
+      msg = document.createElement('div');
+      msg.id = 'chart-faturamento-empty';
+      msg.className = 'empty-state';
+      msg.innerHTML = `<div class="empty-icon">📊</div><div class="empty-title">Sem Faturamento</div><div class="empty-sub">Nenhum orçamento faturado ainda</div>`;
+      canvas.parentElement.appendChild(msg);
+    }
+    msg.style.display = '';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (msg) msg.style.display = 'none';
+
+  const nomesMes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const labels = dados.map(d => {
+    const [ano, mes] = String(d.mes||'').split('-');
+    return mes ? `${nomesMes[parseInt(mes)-1]}/${String(ano).slice(2)}` : d.mes;
+  });
+  const valores = dados.map(d => Number(d.total)||0);
+
+  _chartFaturamento = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [{
+      label: 'Faturamento (R$)', data: valores,
+      backgroundColor: 'rgba(46,204,113,0.65)', borderColor: '#2ecc71', borderWidth: 1, borderRadius: 4,
+    }]},
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => 'R$ ' + ctx.parsed.y.toLocaleString('pt-BR',{minimumFractionDigits:2}) } }
+      },
+      scales: {
+        x: { ticks: { color: '#8a94a6' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#8a94a6', callback: v => 'R$ ' + Number(v).toLocaleString('pt-BR') }, grid: { color: 'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+let _chartEnvios = null;
+function renderChartEnviosCliente(dados) {
+  const canvas = document.getElementById('chart-envios-cliente');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_chartEnvios) { _chartEnvios.destroy(); _chartEnvios = null; }
+
+  let msg = document.getElementById('chart-envios-empty');
+  if (!dados.length) {
+    canvas.style.display = 'none';
+    if (!msg) {
+      msg = document.createElement('div');
+      msg.id = 'chart-envios-empty';
+      msg.className = 'empty-state';
+      msg.innerHTML = `<div class="empty-icon">📦</div><div class="empty-title">Sem Envios</div><div class="empty-sub">Nenhuma peça enviada a clientes ainda</div>`;
+      canvas.parentElement.appendChild(msg);
+    }
+    msg.style.display = '';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (msg) msg.style.display = 'none';
+
+  const labels = dados.map(d => String(d.cliente||'—').replace(/\[\d+\]$/,'').trim().slice(0,30));
+  const custoPecas = dados.map(d => Number(d.custoPecas)||0);
+  const custoFrete = dados.map(d => Number(d.custoFrete)||0);
+
+  _chartEnvios = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Custo das Peças (R$)', data: custoPecas, backgroundColor: 'rgba(212,140,50,0.75)', borderRadius: 3 },
+      { label: 'Custo de Frete (R$)',  data: custoFrete, backgroundColor: 'rgba(52,152,219,0.75)', borderRadius: 3 },
+    ]},
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: '#8a94a6' } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: R$ ${ctx.parsed.x.toLocaleString('pt-BR',{minimumFractionDigits:2})}` } }
+      },
+      scales: {
+        x: { stacked: true, ticks: { color: '#8a94a6', callback: v => 'R$ ' + Number(v).toLocaleString('pt-BR') }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { stacked: true, ticks: { color: '#8a94a6' }, grid: { display: false } }
+      }
+    }
+  });
+}
+
 function renderDashboard() {
   // Total de estoque: soma db.estoque (peças cadastradas) + depósitos sem peça vinculada
   const estoqueKnown = new Set(db.pecas.map(p => String(p.codigo)));
@@ -3658,9 +3755,6 @@ function renderDashboard() {
     + Object.entries(db.depositos)
         .filter(([cod]) => !estoqueKnown.has(cod))
         .reduce((s,[,d]) => s + (d['Total']||0), 0);
-
-  // Críticos: peças com estoque mínimo definido e qty abaixo
-  const criticos = db.pecas.filter(p => p.minimo > 0 && (db.estoque[p.id]||0) < p.minimo);
 
   // Total de itens no catálogo (peças + depósitos sem peça)
   const totalItens = new Set([...db.pecas.map(p=>String(p.codigo)), ...Object.keys(db.depositos)]).size;
@@ -3673,29 +3767,18 @@ function renderDashboard() {
   document.getElementById('kpi-pecas').textContent = totalItens;
   document.getElementById('kpi-equip').textContent = db.equipamentos.length;
   document.getElementById('kpi-estoque').textContent = totalEstoque;
-  document.getElementById('kpi-critico').textContent = criticos.length;
   document.getElementById('kpi-movs').textContent = abertas;
 
-  // Criticos
-  const criticoEl = document.getElementById('dash-critico');
-  if (!criticos.length) {
-    criticoEl.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Sem Alertas</div><div class="empty-sub">Estoque adequado em todos os itens</div></div>`;
-  } else {
-    criticoEl.innerHTML = `<table class="data-table">
-      <thead><tr><th>Peça</th><th>Disponível</th><th>Mínimo</th><th>Situação</th></tr></thead>
-      <tbody>
-      ${criticos.map(p => {
-        const qty = db.estoque[p.id]||0;
-        return `<tr>
-          <td><strong>${p.nome}</strong> <span class="text-mono">${p.codigo}</span></td>
-          <td><span style="font-family:var(--mono);color:var(--red);font-weight:700">${qty} ${p.unidade}</span></td>
-          <td class="mono">${p.minimo} ${p.unidade}</td>
-          <td><span class="badge badge-red">${qty<=0?'ZERADO':'CRÍTICO'}</span></td>
-        </tr>`;
-      }).join('')}
-      </tbody>
-    </table>`;
-  }
+  // Valor Faturado / Peças Enviadas (vêm do servidor, já agregados)
+  const dash = db._dashData || {};
+  const fmtRS = v => 'R$ ' + Number(v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const kpiFat = document.getElementById('kpi-faturado');
+  if (kpiFat) kpiFat.textContent = fmtRS(dash.valorFaturado);
+  const kpiEnv = document.getElementById('kpi-enviadas');
+  if (kpiEnv) kpiEnv.textContent = Number(dash.pecasEnviadas||0).toLocaleString('pt-BR');
+
+  renderChartFaturamentoMensal(dash.faturamentoPorMes || []);
+  renderChartEnviosCliente(dash.enviosPorCliente || []);
 
   // Últimas solicitações
   const movsEl = document.getElementById('dash-movs');
