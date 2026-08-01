@@ -443,6 +443,25 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Diagnóstico: por que algum cliente aparece só com frete no gráfico ──
+    app.get('/api/admin/diagnostico-custo-envios', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      const movs = db.query(`
+        SELECT equip_cliente, peca_id, peca_codigo, peca_nome, peca_custo, qtd, status, valor_frete
+        FROM movimentacoes
+        WHERE equip_cliente IN ('LABORATORIO FURLAN','HOSPITAL E MATERNIDADE UNIMED')
+        ORDER BY equip_cliente`);
+      const comCatalogo = movs.map(m => {
+        const peca = db.get('SELECT codigo, nome, custo, valor_venda FROM pecas WHERE id=?', [m.peca_id]);
+        return { ...m, catalogo_custo: peca?.custo ?? null, catalogo_valor_venda: peca?.valor_venda ?? null, peca_encontrada_no_catalogo: !!peca };
+      });
+      res.json({ ok: true, total: comCatalogo.length, movimentacoes: comCatalogo });
+    });
+    // ── fim diagnostico ──
+
     // Rota coringa: SEMPRE por último, depois de todas as rotas específicas
     // (senão ela intercepta e nenhuma rota /api/admin/* registrada depois
     // dela seria alcançada — foi exatamente esse bug que impediu a rota
