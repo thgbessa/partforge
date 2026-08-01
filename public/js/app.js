@@ -1187,9 +1187,11 @@ function abrirActionModal(id, acao) {
   var _modal=document.getElementById('action-modal');
   if(_modal&&_modal.parentNode!==document.body) document.body.appendChild(_modal);
 
-  const sol = db.movimentacoes.find(x => x.id === id);
+  const ids  = Array.isArray(id) ? id : [id];
+  const itensLote = ids.map(i => db.movimentacoes.find(x => x.id === i)).filter(Boolean);
+  const sol = itensLote[0];
   if (!sol) return;
-  actionModalTarget = id;
+  actionModalTarget = itensLote.length > 1 ? ids : id;
 
   const el     = document.getElementById('action-modal');
   const title  = document.getElementById('action-modal-title');
@@ -1206,8 +1208,21 @@ function abrirActionModal(id, acao) {
     COMPRA:     'Gerar Pedido de Compra',
   };
   title.textContent = acoes[acao] || acao;
+  if (itensLote.length > 1) title.textContent += ` (${itensLote.length} itens)`;
 
-  const pInfoBox = `
+  const pInfoBox = itensLote.length > 1 ? `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+      padding:10px 14px;margin-bottom:18px;font-size:12px;line-height:1.7">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;margin-bottom:8px">
+        📦 AÇÃO APLICADA AOS ${itensLote.length} ITENS DO LOTE
+      </div>
+      ${itensLote.map(it => `<div style="display:flex;gap:8px;align-items:center;padding:3px 0">
+        <strong style="color:var(--accent);font-family:var(--mono)">${it.pecaCodigo}</strong>
+        <span>${it.pecaNome}</span>
+        <span style="color:var(--text3)">· ${it.qtd} ${it.pecaUnidade}</span>
+      </div>`).join('')}
+      ${sol.equipSerie ? `<div style="margin-top:6px;color:var(--text3)">S/N: <span style="font-family:var(--mono);color:var(--text2)">${sol.equipSerie}</span>${sol.equipCliente ? ' · '+sol.equipCliente : ''}</div>` : ''}
+    </div>` : `
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
       padding:10px 14px;margin-bottom:18px;font-size:12px;line-height:1.8">
       <div style="display:flex;align-items:center;gap:12px">
@@ -1495,7 +1510,7 @@ function onTipoAlocChange(val) {
 }
 
 function recalcTotais() {
-  const solId = actionModalTarget;
+  const solId = Array.isArray(actionModalTarget) ? actionModalTarget[0] : actionModalTarget;
   const sol   = db.movimentacoes.find(x=>x.id===solId);
   if (!sol) return;
   const qtd   = sol.qtd || 1;
@@ -1529,7 +1544,9 @@ function fecharActionModal() {
 }
 
 function executarAcao(acao) {
-  const solId = actionModalTarget;
+  const alvo = actionModalTarget;
+  const ids  = Array.isArray(alvo) ? alvo : [alvo];
+  const solId = ids[0]; // usado só para checagens de contexto (ex.: FINALIZAR/RETORNO)
   const obs   = (document.getElementById('am-obs')?.value||'').trim();
 
   const body = { acao, obs };
@@ -1560,10 +1577,10 @@ function executarAcao(acao) {
     body.motivo_devolucao = document.getElementById('am-motivo-dev')?.value || '';
   }
 
-  API.put('/movimentacoes/' + solId + '/acao', body)
+  Promise.all(ids.map(id => API.put('/movimentacoes/' + id + '/acao', body)))
     .then(() => {
       closeModal('action-modal');
-      toast('Status atualizado');
+      toast(ids.length > 1 ? `Status atualizado (${ids.length} itens)` : 'Status atualizado');
       loadAndRenderHistorico();
       loadAndRenderLogistica();
       loadAndRenderDashboard();
@@ -2007,6 +2024,15 @@ function deleteMovimentacao(id) {
     .catch(err => toast(err.message, 'error'));
 }
 
+function deleteMovimentacaoGrupo(grupoId) {
+  const itens = db.movimentacoes.filter(x => x.grupoId === grupoId);
+  if (!itens.length) return;
+  if (!confirm(`Excluir esta solicitação em lote (${itens.length} itens)? Essa ação não pode ser desfeita.`)) return;
+  Promise.all(itens.map(it => API.delete('/movimentacoes/' + it.id)))
+    .then(() => { toast('Solicitação em lote excluída', 'info'); loadAndRenderHistorico(); })
+    .catch(err => toast(err.message, 'error'));
+}
+
 // ============================================================
 //  URL ACTION HANDLER — links nos emails abrem ação automática
 // ============================================================
@@ -2190,6 +2216,95 @@ function montarCardMov(m) {
   </div>`;
 }
 
+function montarCardGrupo(itensDoGrupo) {
+  const ids = itensDoGrupo.map(x => x.id);
+  const idsJs = "['" + ids.join("','") + "']"; // array literal JS seguro para embutir em onclick="..."
+  const primeiro = itensDoGrupo[0];
+
+  // Normalmente todos os itens do lote têm o mesmo status (progridem juntos).
+  // Se algum já foi alterado individualmente e ficou diferente, avisa e pede
+  // que a ação seja feita item a item nesse caso raro.
+  const statusUnico = itensDoGrupo.every(x => x.status === primeiro.status);
+  const statusRep = statusUnico ? primeiro.status : null;
+  const ps = statusRep ? (PIPELINE_STATUS[statusRep] || PIPELINE_STATUS.SOLICITADA) : null;
+
+  const seqs = itensDoGrupo.map(x => x.numSeq).filter(Boolean).sort((a,b)=>a-b);
+  let numeroLabel = '#—';
+  if (seqs.length) {
+    const consecutivo = seqs.every((v,i) => i===0 || v === seqs[i-1]+1);
+    numeroLabel = (consecutivo && seqs.length>1) ? `#${seqs[0]}-${seqs[seqs.length-1]}` : seqs.map(s=>'#'+s).join(', ');
+  }
+  const qtdTotal = itensDoGrupo.reduce((s,x)=>s+(parseFloat(x.qtd)||0), 0);
+
+  let acoes = '';
+  if (statusUnico) {
+    if (statusRep === 'SOLICITADA') {
+      if (primeiro.tipoAlocacao === 'RETORNO') {
+        acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
+      } else {
+        acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'ENVIAR')">✉ Enviar</button>`;
+        if (itensDoGrupo.some(x => !x.temEstoque)) {
+          acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal(${idsJs},'COMPRA')">🛒 Compra</button>`;
+        }
+      }
+    } else if (statusRep === 'ENVIADA' || statusRep === 'COMPRA_PENDENTE') {
+      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'DESPACHAR')">📦 Despachar</button>`;
+    } else if (statusRep === 'DESPACHADA') {
+      acoes = primeiro.tipoAlocacao === 'RETORNO'
+        ? `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'RECEBER')">✓ Receber Devolução</button>`
+        : `<span style="font-size:11px;color:var(--text3);font-style:italic">⏳ Aguardando confirmação do técnico</span>`;
+    } else if (statusRep === 'RECEBIDA') {
+      acoes = primeiro.tipoAlocacao === 'RETORNO'
+        ? `<button class="btn btn-success btn-sm" onclick="abrirActionModal(${idsJs},'FINALIZAR')">✓ Finalizar Devolução</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'ALOCAR')">⇢ Alocar</button>`;
+    } else if (statusRep === 'ALOCADA') {
+      acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'EMITIR_NF')">📄 Emitir NF</button>`;
+    } else if (statusRep === 'NF_EMITIDA') {
+      acoes = `<button class="btn btn-success btn-sm" onclick="abrirActionModal(${idsJs},'FINALIZAR')">✓ Finalizar</button>`;
+    }
+  } else {
+    acoes = `<span style="font-size:11px;color:var(--text3);font-style:italic">Itens em status diferentes — use a ação de cada linha</span>`;
+  }
+
+  const isFin = statusUnico && statusRep === 'FINALIZADO';
+
+  return `
+  <div class="sol-card ${isFin?'finalizado':''}" style="flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">${numeroLabel}</span>
+          ${ps ? `<span class="badge ${ps.badge}">${ps.label}</span>` : `<span class="badge badge-gray">STATUS MISTO</span>`}
+          <span class="badge badge-gray" style="font-size:9px">📦 LOTE · ${itensDoGrupo.length} ITENS · ${qtdTotal} UNID.</span>
+        </div>
+        ${primeiro.equipSerie ? `<div style="font-size:12px;color:var(--text2)">S/N: <span style="font-family:var(--mono);color:var(--text)">${primeiro.equipSerie}</span>${primeiro.equipCliente ? ' · <span style="color:var(--text3)">'+primeiro.equipCliente+'</span>' : ''}</div>` : ''}
+        ${primeiro.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${primeiro.tecnico}</div>` : ''}
+        ${primeiro.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic">"${primeiro.obs}"</div>` : ''}
+        <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${formatDate(primeiro.eventos?.[0]?.data||0)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+        ${acoes}
+        <button class="btn btn-danger btn-sm" onclick="deleteMovimentacaoGrupo('${primeiro.grupoId}')" style="font-size:10px">X Excluir Lote</button>
+      </div>
+    </div>
+    <table class="data-table" style="margin-top:2px">
+      <thead><tr><th>P/N</th><th>Peça</th><th>Qtd</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      ${itensDoGrupo.map(it => {
+        const psIt = PIPELINE_STATUS[it.status] || PIPELINE_STATUS.SOLICITADA;
+        return `<tr>
+          <td class="mono" style="font-size:11px;color:var(--accent)">${it.pecaCodigo}</td>
+          <td style="font-size:12px">${it.pecaNome}${!it.temEstoque ? ' <span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>' : ''}</td>
+          <td class="mono">${it.qtd} ${it.pecaUnidade}</td>
+          <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
+          <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button></td>
+        </tr>`;
+      }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function renderHistorico(q='', statusFilter='') {
   const el = document.getElementById('hist-table');
   const sf = statusFilter || (document.getElementById('hist-filter-status')?.value||'');
@@ -2216,7 +2331,7 @@ function renderHistorico(q='', statusFilter='') {
   }
 
   // Agrupa visualmente itens que vieram da mesma solicitação em lote (mesmo
-  // grupo_id), mantendo o card/ações/status de cada peça 100% individual.
+  // grupo_id) num único card, com um só conjunto de ações para todo o lote.
   const gruposVistos = new Set();
   el.innerHTML = list.map(m => {
     if (m.grupoId) {
@@ -2224,18 +2339,7 @@ function renderHistorico(q='', statusFilter='') {
       const itensDoGrupo = list.filter(x => x.grupoId === m.grupoId);
       if (itensDoGrupo.length > 1) {
         gruposVistos.add(m.grupoId);
-        const qtdTotal = itensDoGrupo.reduce((s,x)=>s+(parseFloat(x.qtd)||0), 0);
-        return `
-        <div class="sol-card-grupo" style="border:1px solid var(--border2);border-radius:var(--radius);
-          padding:10px 10px 4px;margin-bottom:12px;background:rgba(212,140,50,0.03)">
-          <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;
-            margin-bottom:8px;padding:0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span>📦 SOLICITAÇÃO EM LOTE · ${itensDoGrupo.length} ITENS · ${qtdTotal} UNID. NO TOTAL</span>
-            ${m.tecnico ? `<span style="color:var(--text3)">· Solicitante: ${m.tecnico}</span>` : ''}
-            ${m.equipSerie ? `<span style="color:var(--text3)">· S/N: ${m.equipSerie}</span>` : ''}
-          </div>
-          ${itensDoGrupo.map(montarCardMov).join('')}
-        </div>`;
+        return montarCardGrupo(itensDoGrupo);
       }
     }
     return montarCardMov(m);
