@@ -62,7 +62,7 @@ app.listen(PORT, '0.0.0.0', () => {
       };
     }
 
-    async function gerarEEnviarRelatorioDiario(rangeOverride) {
+    async function gerarEEnviarRelatorioDiario(rangeOverride, destinatariosOverride) {
       try {
         const CIFRAO = String.fromCharCode(36);
         const ORC_STATUS_LABELS = {
@@ -184,7 +184,7 @@ app.listen(PORT, '0.0.0.0', () => {
           html += '<p>Nenhum equipamento cadastrado no dia.</p>';
         }
 
-        const destinatarios = (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        const destinatarios = destinatariosOverride || (process.env.RELATORIO_DESTINATARIOS || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
         if (!destinatarios.length || !process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
           console.log('Relatorio diario: configuracao incompleta (GMAIL_USER, GMAIL_APP_PASSWORD ou RELATORIO_DESTINATARIOS ausente)');
           return { ok: false, motivo: 'Configuracao incompleta: verifique as variaveis GMAIL_USER, GMAIL_APP_PASSWORD e RELATORIO_DESTINATARIOS no Railway.' };
@@ -442,6 +442,18 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     });
     // ── fim importacao de cnpj por contrato ──
+
+    // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
+    app.get('/api/admin/relatorio-teste', async (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      const range = req.query.dia === 'hoje' ? getTodayRangeBRT() : getYesterdayRangeBRT();
+      const resultado = await gerarEEnviarRelatorioDiario(range, ['thiago.bessa@quallyx.com.br']);
+      res.json(resultado);
+    });
+    // ── fim teste relatorio diario ──
 
     // Rota coringa: SEMPRE por último, depois de todas as rotas específicas
     // (senão ela intercepta e nenhuma rota /api/admin/* registrada depois
