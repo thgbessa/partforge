@@ -3028,19 +3028,35 @@ function gerarPDFOrcamento(id) {
   // ── Info block ─────────────────────────────────────────────────────────────
   let y = 42;
   const labelW = 32;
-  const infoRows = [
-    ['Cliente',      o.cliente    || '—'],
-    ['Equipamento',  o.equip_nome  || '—'],
-    ['Nº de Série',  o.equip_serie || '—'],
-    ['OS',           o.os         || '—'],
-  ];
-  infoRows.forEach(([label, val]) => {
+
+  function desenharInfoRow(label, val) {
     doc.setFont('helvetica','bold');  doc.setFontSize(8); doc.setTextColor(...LIGHT);
     doc.text(label.toUpperCase() + ':', ML, y);
     doc.setFont('helvetica','normal'); doc.setTextColor(...DARK);
     doc.text(String(val), ML + labelW, y);
     y += 5.5;
-  });
+  }
+
+  desenharInfoRow('Cliente', o.cliente || '—');
+
+  // Lista de equipamentos: usa o array completo (o.equipamentos) quando
+  // existir; senão cai para os campos únicos (compatibilidade com
+  // orçamentos antigos, criados antes do suporte a múltiplos equipamentos).
+  const listaEquipPdf = (o.equipamentos && o.equipamentos.length)
+    ? o.equipamentos
+    : [{ nome: o.equip_nome || '', serie: o.equip_serie || '' }];
+
+  if (listaEquipPdf.length > 1) {
+    listaEquipPdf.forEach((eq, i) => {
+      desenharInfoRow(`Equipamento ${i + 1}`, eq.nome || '—');
+      desenharInfoRow(`Nº de Série ${i + 1}`, eq.serie || '—');
+    });
+  } else {
+    desenharInfoRow('Equipamento', listaEquipPdf[0]?.nome || '—');
+    desenharInfoRow('Nº de Série', listaEquipPdf[0]?.serie || '—');
+  }
+
+  desenharInfoRow('OS', o.os || '—');
 
   // ── Items table ─────────────────────────────────────────────────────────────
   y += 3;
