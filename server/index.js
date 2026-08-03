@@ -62,7 +62,25 @@ app.listen(PORT, '0.0.0.0', () => {
       };
     }
 
-    async function gerarEEnviarRelatorioDiario(rangeOverride, destinatariosOverride) {
+    function getSemanaRangeBRT() {
+      const now = new Date();
+      const brtOffsetMs = 3 * 60 * 60 * 1000;
+      const brtNow = new Date(now.getTime() - brtOffsetMs);
+      const hoje = new Date(Date.UTC(brtNow.getUTCFullYear(), brtNow.getUTCMonth(), brtNow.getUTCDate()));
+      // Assume que isso roda no sábado: segunda = hoje-5, sexta = hoje-1
+      const segunda = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() - 5));
+      const sexta   = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate() - 1));
+      const startBRT = new Date(Date.UTC(segunda.getUTCFullYear(), segunda.getUTCMonth(), segunda.getUTCDate(), 0, 0, 0));
+      const endBRT   = new Date(Date.UTC(sexta.getUTCFullYear(), sexta.getUTCMonth(), sexta.getUTCDate(), 23, 59, 59, 999));
+      const fmt = d => d.toISOString().slice(0, 10).split('-').reverse().join('/');
+      return {
+        startMs: startBRT.getTime() + brtOffsetMs,
+        endMs: endBRT.getTime() + brtOffsetMs,
+        label: fmt(segunda) + ' a ' + fmt(sexta)
+      };
+    }
+
+    async function gerarEEnviarRelatorioDiario(rangeOverride, destinatariosOverride, tituloOverride) {
       try {
         const CIFRAO = String.fromCharCode(36);
         const ORC_STATUS_LABELS = {
@@ -98,7 +116,7 @@ app.listen(PORT, '0.0.0.0', () => {
           [range.startMs, range.endMs]
         );
 
-        let html = '<h2>Relatorio Diario PartForge - ' + range.label + '</h2>';
+        let html = '<h2>' + (tituloOverride || 'Relatorio Diario') + ' PartForge - ' + range.label + '</h2>';
         html += '<h3>Pecas Enviadas (' + pecasEnviadas.length + ')</h3>';
         if (pecasEnviadas.length) {
           html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Peca</th><th>Qtd</th><th>Custo R$</th><th>Valor Frete</th><th>Tecnico</th><th>Cliente</th><th>Equipamento</th><th>No Serie</th><th>Forma de Envio</th></tr>';
@@ -198,7 +216,7 @@ app.listen(PORT, '0.0.0.0', () => {
         await transporter.sendMail({
           from: process.env.GMAIL_USER,
           to: destinatarios.join(','),
-          subject: 'PartForge - Relatorio Diario ' + range.label,
+          subject: 'PartForge - ' + (tituloOverride || 'Relatorio Diario') + ' ' + range.label,
           html: html
         });
         console.log('Relatorio diario enviado com sucesso para', destinatarios.join(', '));
@@ -219,6 +237,19 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     }, 60 * 1000);
     // ── fim relatorio diario ──
+
+    // ── Relatorio semanal automatico (sabado, 09h BRT) — segunda a sexta ──
+    let ultimoSabadoEnviado = null;
+    setInterval(function() {
+      const now = new Date();
+      const hojeStr = now.toISOString().slice(0, 10);
+      // getUTCDay(): 6 = sabado. 12:00 UTC = 09:00 BRT.
+      if (now.getUTCDay() === 6 && now.getUTCHours() === 12 && now.getUTCMinutes() === 0 && ultimoSabadoEnviado !== hojeStr) {
+        ultimoSabadoEnviado = hojeStr;
+        gerarEEnviarRelatorioDiario(getSemanaRangeBRT(), null, 'Relatorio Semanal');
+      }
+    }, 60 * 1000);
+    // ── fim relatorio semanal ──
 
     // ============================================================
     //  BACKUP AUTOMÁTICO DIÁRIO
@@ -449,8 +480,15 @@ app.listen(PORT, '0.0.0.0', () => {
       if (req.query.secret !== secret) {
         return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
       }
-      const range = req.query.dia === 'hoje' ? getTodayRangeBRT() : getYesterdayRangeBRT();
-      const resultado = await gerarEEnviarRelatorioDiario(range, ['thiago.bessa@quallyx.com.br']);
+      let range, titulo;
+      if (req.query.tipo === 'semanal') {
+        range = getSemanaRangeBRT();
+        titulo = 'Relatorio Semanal';
+      } else {
+        range = req.query.dia === 'hoje' ? getTodayRangeBRT() : getYesterdayRangeBRT();
+        titulo = 'Relatorio Diario';
+      }
+      const resultado = await gerarEEnviarRelatorioDiario(range, ['thiago.bessa@quallyx.com.br'], titulo);
       res.json(resultado);
     });
     // ── fim teste relatorio diario ──
