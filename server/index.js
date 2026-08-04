@@ -111,6 +111,12 @@ app.listen(PORT, '0.0.0.0', () => {
           "SELECT * FROM orcamentos WHERE updated_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
         );
+        // Relação completa de TODOS os orçamentos em aberto no sistema (não só
+        // os criados/atualizados no período), para acompanhar há quantos dias
+        // cada um está parado no status atual. Cancelados ficam de fora.
+        const orcamentosCompleto = db.query(
+          "SELECT * FROM orcamentos WHERE status != 'CANCELADO' ORDER BY status_changed_at ASC"
+        );
         const solicitacoesCompra = db.query(
           "SELECT * FROM solicitacoes_compra WHERE updated_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
@@ -150,6 +156,20 @@ app.listen(PORT, '0.0.0.0', () => {
           html += '</table>';
         } else {
           html += '<p>Nenhum orcamento criado no dia.</p>';
+        }
+
+        html += '<h3>Relacao Completa de Orcamentos em Aberto (' + orcamentosCompleto.length + ')</h3>';
+        html += '<p style="font-size:12px;color:#666">Todos os orcamentos do sistema que nao estao Cancelados, ordenados do mais parado para o mais recente.</p>';
+        if (orcamentosCompleto.length) {
+          html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Cliente</th><th>Total</th><th>Status</th><th>Dias no Status</th></tr>';
+          orcamentosCompleto.forEach(function(o) {
+            var baseDataC = o.status_changed_at || o.created_at || Date.now();
+            var diasStatusC = Math.floor((Date.now() - baseDataC) / 86400000);
+            html += '<tr><td>' + (o.numero || '') + '</td><td>' + (o.data || '') + '</td><td>' + (o.cliente || '') + '</td><td>R$ ' + parseFloat(o.total || 0).toFixed(2) + '</td><td>' + (ORC_STATUS_LABELS[o.status] || o.status || '') + '</td><td>' + diasStatusC + '</td></tr>';
+          });
+          html += '</table>';
+        } else {
+          html += '<p>Nenhum orcamento em aberto no sistema.</p>';
         }
 
         html += '<h3>Solicitacoes de Compra Criadas/Atualizadas (' + solicitacoesCompra.length + ')</h3>';
