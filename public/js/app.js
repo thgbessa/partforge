@@ -913,6 +913,7 @@ function renderEstoque(q='', manterPagina=false) {
       <th>Mín.</th>
       <th>Situação</th>
       <th>Nível</th>
+      <th></th>
     </tr></thead>
     <tbody>
     ${pageList.map(r => {
@@ -951,6 +952,9 @@ function renderEstoque(q='', manterPagina=false) {
           </div>
           <div class="text-mono" style="margin-top:2px;font-size:9px">${pct}%</div>
         </td>
+        <td style="text-align:right;white-space:nowrap">
+          ${peca ? `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjusteEstoque('${peca.id}')">Ajustar</button>` : ''}
+        </td>
       </tr>`;
     }).join('')}
     </tbody>
@@ -963,6 +967,69 @@ function mudarPaginaEstoque(delta) {
   const q = document.querySelector('#page-estoque .search-input')?.value || '';
   renderEstoque(q, true);
   document.getElementById('estoque-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── AJUSTE MANUAL DE ESTOQUE ─────────────────────────────────
+function abrirModalAjusteEstoque(pecaId) {
+  const peca = db.pecas.find(x => x.id === pecaId);
+  if (!peca) return;
+  const atual = db.estoque[pecaId] || 0;
+
+  let overlay = document.getElementById('modal-ajuste-estoque-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-ajuste-estoque-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+      max-width:420px;width:95%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;
+        border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Ajustar Estoque</span>
+        <button onclick="document.getElementById('modal-ajuste-estoque-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+          padding:10px 14px;margin-bottom:16px;font-size:12px">
+          <div><span style="color:var(--accent);font-family:var(--mono);font-weight:700">${peca.codigo}</span> · ${peca.nome}</div>
+          <div style="color:var(--text3);margin-top:4px">Estoque atual: <strong style="color:var(--text)">${atual} ${peca.unidade||'UN'}</strong></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nova Quantidade em Estoque</label>
+          <input class="form-input" type="number" min="0" id="ajuste-estoque-qtd" value="${atual}"
+            onkeydown="if(event.key==='Enter') salvarAjusteEstoque('${pecaId}')">
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">
+          Digite a quantidade correta — serve para lançar entrada, saída ou corrigir uma contagem física.
+          O sistema grava o valor final informado aqui.
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-ajuste-estoque-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarAjusteEstoque('${pecaId}')">✓ Salvar</button>
+      </div>
+    </div>`;
+
+  setTimeout(() => document.getElementById('ajuste-estoque-qtd')?.focus(), 50);
+}
+
+function salvarAjusteEstoque(pecaId) {
+  const input = document.getElementById('ajuste-estoque-qtd');
+  const novaQtd = parseFloat(input?.value);
+  if (isNaN(novaQtd) || novaQtd < 0) { toast('Informe uma quantidade válida', 'error'); return; }
+  API.put('/estoque/' + pecaId, { quantidade: novaQtd })
+    .then(() => {
+      toast('Estoque ajustado com sucesso');
+      document.getElementById('modal-ajuste-estoque-overlay')?.remove();
+      loadAndRenderEstoque();
+      loadAndRenderDashboard();
+    })
+    .catch(err => toast(err.message, 'error'));
 }
 
 
