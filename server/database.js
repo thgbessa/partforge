@@ -175,11 +175,12 @@ async function init() {
   )`); } catch(e) { console.log('erro criando clientes', e.message); }
 
   try { _db.run(`CREATE TABLE IF NOT EXISTS kits_preventivas (
-    id TEXT PRIMARY KEY, nome TEXT, fonte TEXT DEFAULT '', linha TEXT DEFAULT '',
+    id TEXT PRIMARY KEY, nome TEXT, codigo TEXT DEFAULT '', fonte TEXT DEFAULT '', linha TEXT DEFAULT '',
     taxa REAL DEFAULT 2, dolar REAL DEFAULT 5.27, markup REAL DEFAULT 2,
     itens TEXT DEFAULT '[]', obs TEXT DEFAULT '',
     created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0, created_by TEXT
   )`); } catch(e) { console.log('erro criando kits_preventivas', e.message); }
+  try { _db.run("ALTER TABLE kits_preventivas ADD COLUMN codigo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');

@@ -2677,13 +2677,14 @@ function renderKitsPreventivas(q = '') {
 
   el.innerHTML = `<table class="data-table">
     <thead><tr>
-      <th>Nome</th><th>Fonte</th><th>Linha</th><th>Itens</th><th>Custo Total</th><th>Valor Venda Total</th><th></th>
+      <th>Código</th><th>Nome</th><th>Fonte</th><th>Linha</th><th>Itens</th><th>Custo Total</th><th>Valor Venda Total</th><th></th>
     </tr></thead>
     <tbody>
     ${list.map(k => {
       const totais = calcularTotaisKit(k.itens || [], k.taxa, k.dolar, k.markup);
       const aberto = kitsExpandidos.has(k.id);
       const linhaPrincipal = `<tr>
+        <td class="mono" style="font-size:11px;color:var(--accent);font-weight:700">${k.codigo || '—'}</td>
         <td>
           <span onclick="toggleKitExpandido('${k.id}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none">
             <span style="color:var(--accent);font-size:10px;transition:transform 0.15s;display:inline-block;transform:rotate(${aberto ? '90deg' : '0deg'})">▶</span>
@@ -2702,7 +2703,7 @@ function renderKitsPreventivas(q = '') {
       </tr>`;
 
       const linhaExpandida = aberto ? `<tr>
-        <td colspan="7" style="padding:0;background:var(--surface2)">
+        <td colspan="8" style="padding:0;background:var(--surface2)">
           <div style="padding:12px 16px 16px 34px">
             ${k.obs ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:10px">"${k.obs}"</div>` : ''}
             ${(k.itens || []).length ? `<table class="data-table" style="margin:0">
@@ -2746,6 +2747,7 @@ function abrirModalKitPreventiva(id) {
   editandoItemKitIdx = null;
 
   document.getElementById('modal-kit-title').textContent = k ? 'Editar Kit Preventiva' : 'Novo Kit Preventiva';
+  document.getElementById('kit-codigo').value = k?.codigo || '';
   document.getElementById('kit-nome').value = k?.nome || '';
   document.getElementById('kit-fonte').value = k?.fonte || '';
   document.getElementById('kit-linha').value = k?.linha || '';
@@ -2851,11 +2853,14 @@ function renderItensKit() {
 }
 
 function salvarKitPreventiva() {
+  const codigo = document.getElementById('kit-codigo').value.trim();
   const nome = document.getElementById('kit-nome').value.trim();
+  if (!codigo) { toast('Informe o código do kit', 'error'); return; }
   if (!nome) { toast('Informe o nome do kit', 'error'); return; }
   if (!kitItens.length) { toast('Adicione ao menos um item', 'error'); return; }
 
   const data = {
+    codigo,
     nome,
     fonte:  document.getElementById('kit-fonte').value.trim(),
     linha:  document.getElementById('kit-linha').value.trim(),
@@ -2962,14 +2967,42 @@ function sugerirPecaOrc(q) {
   const dd = document.getElementById('orc-peca-dropdown');
   if (!dd) return;
   const ql = q.toLowerCase().trim();
+
+  const kits = (db.kitsPreventivas || []).filter(k =>
+    !ql ||
+    String(k.codigo||'').toLowerCase().includes(ql) ||
+    String(k.nome||'').toLowerCase().includes(ql)
+  ).slice(0, 10);
+
   const list = db.pecas.filter(p =>
     !ql ||
     String(p.codigo||'').toLowerCase().includes(ql) ||
     String(p.nome||'').toLowerCase().includes(ql) ||
     String(p.fonte||'').toLowerCase().includes(ql)
   ).slice(0, 50);
-  dd.style.display = list.length ? 'block' : 'none';
-  dd.innerHTML = list.map(p => {
+
+  dd.style.display = (list.length || kits.length) ? 'block' : 'none';
+
+  const kitsHtml = kits.map(k => {
+    const totais = calcularTotaisKit(k.itens||[], k.taxa, k.dolar, k.markup);
+    return `<div onmousedown="selecionarKitOrc(\'${k.id}\')"
+      style="display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--border);background:rgba(212,140,50,0.05)"
+      onmouseover="this.style.background=\'var(--surface2)\'" onmouseout="this.style.background=\'rgba(212,140,50,0.05)\'">
+      <div style="width:30px;height:30px;background:var(--surface);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px">🛠</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${k.codigo || '—'}
+          <span style="background:var(--accent);color:var(--bg);font-size:8px;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:0.5px">KIT · ${(k.itens||[]).length} ITENS</span>
+        </div>
+        <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${k.nome}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:9px;color:var(--text3)">V.Venda Total</div>
+        <div style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)">R$ ${totais.venda.toFixed(2)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const pecasHtml = list.map(p => {
     const venda = p.valor_venda || 0;
     const img = p.imagem
       ? `<img src="${p.imagem}" style="width:30px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0">`
@@ -2988,6 +3021,38 @@ function sugerirPecaOrc(q) {
       </div>
     </div>`;
   }).join('');
+
+  dd.innerHTML = kitsHtml + pecasHtml;
+}
+
+function selecionarKitOrc(kitId) {
+  const k = (db.kitsPreventivas || []).find(x => x.id === kitId);
+  if (!k) return;
+  document.getElementById('orc-peca-dropdown').style.display = 'none';
+
+  const taxa = parseFloat(k.taxa) || 2;
+  const dolar = parseFloat(k.dolar) || 5.27;
+  const markup = parseFloat(k.markup) || 2;
+
+  (k.itens || []).forEach(it => {
+    let custoUnit = parseFloat(it.custo_rs) || 0;
+    if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * taxa * dolar;
+    const valorVendaUnit = custoUnit * markup;
+    orcItens.push({
+      cod: it.codigo || '',
+      desc: it.desc,
+      qtd: it.qtd || 1,
+      valor: parseFloat(valorVendaUnit.toFixed(2)),
+      custoUnit: custoUnit,
+    });
+  });
+
+  renderItensOrc();
+  ['orc-item-cod','orc-item-desc','orc-item-valor'].forEach(fid => {
+    const el = document.getElementById(fid); if (el) el.value = '';
+  });
+  const qtdEl = document.getElementById('orc-item-qtd'); if (qtdEl) qtdEl.value = '1';
+  toast(`${(k.itens||[]).length} itens do kit "${k.nome}" adicionados`, 'success');
 }
 
 function selecionarPecaOrc(pecaId) {
@@ -6399,6 +6464,7 @@ function initApp() {
   API.movimentacoes().then(m => { db.movimentacoes = m; updateBadges(); });
   API.config('config_orcamento').then(c => { db.configOrcamento = c; });
   API.config('config_compras').then(c => { db.configCompras = c; });
+  API.get('/kits-preventivas').then(k => { db.kitsPreventivas = k; }).catch(() => {});
 }
 
 // Override navigate to use loadAndRender functions

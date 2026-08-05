@@ -386,15 +386,15 @@ router.get('/kits-preventivas', autenticar, (req, res) => {
 router.post('/kits-preventivas', autenticar, isAdmin, (req, res) => {
   const k=req.body; if (!k.nome) return res.status(400).json({erro:'Nome obrigatorio'});
   const id=uid();
-  db.run(`INSERT INTO kits_preventivas(id,nome,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id,k.nome,k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),now(),req.user.id]);
+  db.run(`INSERT INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,k.nome,k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),now(),req.user.id]);
   res.status(201).json({id});
 });
 router.put('/kits-preventivas/:id', autenticar, isAdmin, (req, res) => {
   const k=req.body;
-  db.run(`UPDATE kits_preventivas SET nome=?,fonte=?,linha=?,taxa=?,dolar=?,markup=?,itens=?,obs=?,updated_at=? WHERE id=?`,
-    [k.nome,k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),req.params.id]);
+  db.run(`UPDATE kits_preventivas SET nome=?,codigo=?,fonte=?,linha=?,taxa=?,dolar=?,markup=?,itens=?,obs=?,updated_at=? WHERE id=?`,
+    [k.nome,k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),req.params.id]);
   res.json({ok:true});
 });
 router.delete('/kits-preventivas/:id', autenticar, isAdmin, (req, res) => {
@@ -708,8 +708,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         [c.nome_norm||normalizarNomeCliente(c.nome||''),c.nome||'',c.cnpj||'',c.updated_at||now()]);
 
     if (s.kits_preventivas?.length) for (const k of s.kits_preventivas)
-      db.runBatch(`INSERT OR REPLACE INTO kits_preventivas(id,nome,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [k.id||uid(),k.nome||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
+      db.runBatch(`INSERT OR REPLACE INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [k.id||uid(),k.nome||'',k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
