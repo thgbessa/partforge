@@ -174,6 +174,13 @@ async function init() {
     nome_norm TEXT PRIMARY KEY, nome TEXT, cnpj TEXT, updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando clientes', e.message); }
 
+  try { _db.run(`CREATE TABLE IF NOT EXISTS kits_preventivas (
+    id TEXT PRIMARY KEY, nome TEXT, fonte TEXT DEFAULT '', linha TEXT DEFAULT '',
+    taxa REAL DEFAULT 2, dolar REAL DEFAULT 5.27, markup REAL DEFAULT 2,
+    itens TEXT DEFAULT '[]', obs TEXT DEFAULT '',
+    created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0, created_by TEXT
+  )`); } catch(e) { console.log('erro criando kits_preventivas', e.message); }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;

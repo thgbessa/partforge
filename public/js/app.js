@@ -12,6 +12,7 @@ let db = {
   usuarios: [],     // { id, nome, cargo, tel, email, senhaHash }
   orcamentos: [],   // { id, numero, cliente, equipSerie, itens[], status, total, ... }
   solicitacoesCompra: [],  // { id, numero, status, demanda, demanda_nome, equip_serie, itens[], obs, ... }
+  kitsPreventivas: [],     // { id, nome, fonte, linha, taxa, dolar, markup, itens[], obs, ... }
   doadoras: [],     // { id, modelo, serie, marca, linha, classificacao:'USO'|'SUCATA', fator, obs, createdAt }
   retiradas: [],    // { id, doadId, doadModelo, doadSerie, doadClass, pecaId, pecaCodigo, pecaNome, qtd, custoUnit, custoTotal, tecnico, obs, data }
   pedidos: [],      // { id, numero, data, itens[], status:'ABERTO'|'PARCIAL'|'CONCLUIDO'|'CANCELADO', obs }
@@ -1850,6 +1851,7 @@ function fazerLogout() {
   db.orcamentos = []; db.pedidos = []; db.usuarios = [];
   db.doadoras = []; db.estoque = {}; db.depositos = {};
   db.solicitacoesCompra = [];
+  db.kitsPreventivas = [];
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('login-email').value = '';
   document.getElementById('login-senha').value = '';
@@ -2620,6 +2622,227 @@ function buscarCnpjCliente() {
       statusEl.style.color = 'var(--text3)';
     }
   }).catch(() => {});
+}
+
+// ============================================================
+//  KITS PREVENTIVAS
+// ============================================================
+let editKitId = null;
+let kitItens = [];
+let editandoItemKitIdx = null;
+
+function calcularTotaisKit(itens, taxa, dolar, markup) {
+  taxa = parseFloat(taxa) || 2; dolar = parseFloat(dolar) || 5.27; markup = parseFloat(markup) || 2;
+  let custo = 0, venda = 0;
+  (itens || []).forEach(it => {
+    const qtd = parseFloat(it.qtd) || 0;
+    let custoUnit = parseFloat(it.custo_rs) || 0;
+    if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * taxa * dolar;
+    custo += custoUnit * qtd;
+    venda += custoUnit * qtd * markup;
+  });
+  return { custo, venda };
+}
+
+function renderKitsPreventivas(q = '') {
+  const el = document.getElementById('kits-preventivas-table');
+  if (!el) return;
+  const ql = (q || document.querySelector('#page-kits-preventivas .search-input')?.value || '').toLowerCase().trim();
+  let list = [...(db.kitsPreventivas || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  if (ql) {
+    list = list.filter(k =>
+      String(k.nome || '').toLowerCase().includes(ql) ||
+      String(k.fonte || '').toLowerCase().includes(ql) ||
+      String(k.linha || '').toLowerCase().includes(ql)
+    );
+  }
+
+  const badgeEl = document.getElementById('badge-kits-preventivas');
+  if (badgeEl) badgeEl.textContent = (db.kitsPreventivas || []).length || '';
+
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🛠</div>
+      <div class="empty-title">Nenhum Kit Preventiva</div>
+      <div class="empty-sub">Cadastre o primeiro kit</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr>
+      <th>Nome</th><th>Fonte</th><th>Linha</th><th>Itens</th><th>Custo Total</th><th>Valor Venda Total</th><th></th>
+    </tr></thead>
+    <tbody>
+    ${list.map(k => {
+      const totais = calcularTotaisKit(k.itens || [], k.taxa, k.dolar, k.markup);
+      return `<tr>
+        <td><strong style="font-size:13px">${k.nome}</strong></td>
+        <td style="font-size:12px">${k.fonte || '—'}</td>
+        <td class="mono" style="font-size:11px;color:var(--text3)">${k.linha || '—'}</td>
+        <td class="mono">${(k.itens || []).length}</td>
+        <td class="mono" style="color:var(--accent);font-weight:700">R$ ${totais.custo.toFixed(2)}</td>
+        <td class="mono" style="color:var(--green);font-weight:700">R$ ${totais.venda.toFixed(2)}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalKitPreventiva('${k.id}')">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteKitPreventiva('${k.id}')">✕</button>
+        </td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>`;
+}
+
+function abrirModalKitPreventiva(id) {
+  editKitId = id || null;
+  const k = id ? (db.kitsPreventivas || []).find(x => x.id === id) : null;
+  kitItens = k ? JSON.parse(JSON.stringify(k.itens || [])) : [];
+  editandoItemKitIdx = null;
+
+  document.getElementById('modal-kit-title').textContent = k ? 'Editar Kit Preventiva' : 'Novo Kit Preventiva';
+  document.getElementById('kit-nome').value = k?.nome || '';
+  document.getElementById('kit-fonte').value = k?.fonte || '';
+  document.getElementById('kit-linha').value = k?.linha || '';
+  document.getElementById('kit-taxa').value = k?.taxa || 2;
+  document.getElementById('kit-dolar').value = k?.dolar || 5.27;
+  document.getElementById('kit-markup').value = k?.markup || 2;
+  document.getElementById('kit-obs').value = k?.obs || '';
+
+  ['kit-item-codigo', 'kit-item-fornecedor', 'kit-item-desc', 'kit-item-custo-usd', 'kit-item-custo-rs'].forEach(id2 => {
+    const el = document.getElementById(id2); if (el) el.value = '';
+  });
+  const qtdEl = document.getElementById('kit-item-qtd'); if (qtdEl) qtdEl.value = '1';
+  const btnAdd = document.getElementById('kit-add-item-btn'); if (btnAdd) btnAdd.textContent = '⊕ Add';
+
+  renderItensKit();
+  document.getElementById('modal-kit-preventiva').style.display = 'flex';
+}
+
+function fecharModalKitPreventiva() {
+  document.getElementById('modal-kit-preventiva').style.display = 'none';
+  editKitId = null; kitItens = []; editandoItemKitIdx = null;
+}
+
+function adicionarItemKit() {
+  const codigo = document.getElementById('kit-item-codigo').value.trim();
+  const fornecedor = document.getElementById('kit-item-fornecedor').value.trim();
+  const desc = document.getElementById('kit-item-desc').value.trim();
+  const qtd = parseInt(document.getElementById('kit-item-qtd').value) || 1;
+  const custoUsd = parseFloat(document.getElementById('kit-item-custo-usd').value) || 0;
+  const custoRs = parseFloat(document.getElementById('kit-item-custo-rs').value) || 0;
+  if (!desc) { toast('Informe a descrição do item', 'error'); return; }
+
+  const item = { codigo, fornecedor, desc, qtd, custo_usd: custoUsd, custo_rs: custoRs };
+  if (editandoItemKitIdx !== null) {
+    kitItens[editandoItemKitIdx] = item;
+    editandoItemKitIdx = null;
+    const btn = document.getElementById('kit-add-item-btn'); if (btn) btn.textContent = '⊕ Add';
+  } else {
+    kitItens.push(item);
+  }
+
+  ['kit-item-codigo', 'kit-item-fornecedor', 'kit-item-desc', 'kit-item-custo-usd', 'kit-item-custo-rs'].forEach(id2 => {
+    const el = document.getElementById(id2); if (el) el.value = '';
+  });
+  document.getElementById('kit-item-qtd').value = '1';
+  renderItensKit();
+}
+
+function editarItemKit(idx) {
+  const it = kitItens[idx]; if (!it) return;
+  editandoItemKitIdx = idx;
+  document.getElementById('kit-item-codigo').value = it.codigo || '';
+  document.getElementById('kit-item-fornecedor').value = it.fornecedor || '';
+  document.getElementById('kit-item-desc').value = it.desc || '';
+  document.getElementById('kit-item-qtd').value = it.qtd || 1;
+  document.getElementById('kit-item-custo-usd').value = it.custo_usd || '';
+  document.getElementById('kit-item-custo-rs').value = it.custo_rs || '';
+  const btn = document.getElementById('kit-add-item-btn'); if (btn) btn.textContent = 'Salvar edição';
+}
+
+function removerItemKit(idx) {
+  kitItens.splice(idx, 1);
+  editandoItemKitIdx = null;
+  renderItensKit();
+}
+
+function renderItensKit() {
+  const el = document.getElementById('kit-itens-lista');
+  if (!el) return;
+  const taxa = parseFloat(document.getElementById('kit-taxa')?.value) || 2;
+  const dolar = parseFloat(document.getElementById('kit-dolar')?.value) || 5.27;
+  const markup = parseFloat(document.getElementById('kit-markup')?.value) || 2;
+
+  if (!kitItens.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item adicionado</div>`;
+  } else {
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Código</th><th>Fornecedor</th><th>Descrição</th><th>Qtd</th><th>Custo Unit. R$</th><th>Total R$</th><th></th></tr></thead>
+      <tbody>${kitItens.map((it, i) => {
+        let custoUnit = parseFloat(it.custo_rs) || 0;
+        if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * taxa * dolar;
+        const total = custoUnit * (it.qtd || 0) * markup;
+        return `<tr>
+          <td class="mono" style="font-size:11px;color:var(--accent)">${it.codigo || '—'}</td>
+          <td style="font-size:11px;color:var(--text3)">${it.fornecedor || '—'}</td>
+          <td style="font-size:12px">${it.desc}</td>
+          <td class="mono">${it.qtd}</td>
+          <td class="mono">R$ ${custoUnit.toFixed(2)}</td>
+          <td class="mono" style="color:var(--green);font-weight:700">R$ ${total.toFixed(2)}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="editarItemKit(${i})">✎</button>
+            <button class="btn btn-danger btn-sm" onclick="removerItemKit(${i})">✕</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  const totais = calcularTotaisKit(kitItens, taxa, dolar, markup);
+  const custoEl = document.getElementById('kit-custo-total-display');
+  const vendaEl = document.getElementById('kit-venda-total-display');
+  if (custoEl) custoEl.textContent = `R$ ${totais.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  if (vendaEl) vendaEl.textContent = `R$ ${totais.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+}
+
+function salvarKitPreventiva() {
+  const nome = document.getElementById('kit-nome').value.trim();
+  if (!nome) { toast('Informe o nome do kit', 'error'); return; }
+  if (!kitItens.length) { toast('Adicione ao menos um item', 'error'); return; }
+
+  const data = {
+    nome,
+    fonte:  document.getElementById('kit-fonte').value.trim(),
+    linha:  document.getElementById('kit-linha').value.trim(),
+    taxa:   parseFloat(document.getElementById('kit-taxa').value) || 2,
+    dolar:  parseFloat(document.getElementById('kit-dolar').value) || 5.27,
+    markup: parseFloat(document.getElementById('kit-markup').value) || 2,
+    obs:    document.getElementById('kit-obs').value.trim(),
+    itens:  [...kitItens],
+  };
+
+  const fn = editKitId ? API.put('/kits-preventivas/' + editKitId, data) : API.post('/kits-preventivas', data);
+  fn.then(() => {
+    toast('Kit preventiva salvo');
+    fecharModalKitPreventiva();
+    loadAndRenderKitsPreventivas();
+  }).catch(err => toast(err.message, 'error'));
+}
+
+function deleteKitPreventiva(id) {
+  if (!confirm('Excluir este kit preventiva?')) return;
+  API.delete('/kits-preventivas/' + id)
+    .then(() => { toast('Kit excluído', 'info'); loadAndRenderKitsPreventivas(); })
+    .catch(err => toast(err.message, 'error'));
+}
+
+async function loadAndRenderKitsPreventivas(q = '') {
+  setSyncing(true);
+  try {
+    const qs = q ? '?q=' + encodeURIComponent(q) : '';
+    db.kitsPreventivas = await API.get('/kits-preventivas' + qs);
+    renderKitsPreventivas(q);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setSyncing(false);
+  }
 }
 
 function abrirModalOrcamento(id) {
@@ -6143,6 +6366,7 @@ function navigate(page, el) {
     dashboard:    ['Dashboard',    '/ visão geral'],
     pecas:        ['Peças',        '/ cadastro'],
     equipamentos: ['Equipamentos', '/ cadastro'],
+    'kits-preventivas': ["Kit's Preventivas", '/ itens, valores e fornecedor'],
     estoque:      ['Estoque',      '/ posição atual'],
     movimentacao: ['Movimentação', '/ nova solicitação'],
     historico:    ['Histórico',    '/ solicitações'],
@@ -6215,6 +6439,9 @@ function navigate(page, el) {
   } else if (page === 'solicitacoescompra') {
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalSolicitacaoCompra()">⊕ Nova Solicitação</button>`;
     loadAndRenderSolicitacoesCompra();
+  } else if (page === 'kits-preventivas') {
+    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalKitPreventiva()">⊕ Novo Kit</button>`;
+    loadAndRenderKitsPreventivas();
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalUsuario()">⊕ Novo Usuário</button>`;

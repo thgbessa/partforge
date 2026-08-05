@@ -290,6 +290,7 @@ app.listen(PORT, '0.0.0.0', () => {
           movimentacoes:       db.query('SELECT * FROM movimentacoes'),
           orcamentos:          db.query('SELECT * FROM orcamentos'),
           solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra'),
+          kits_preventivas:    db.query('SELECT * FROM kits_preventivas'),
           clientes:            db.query('SELECT * FROM clientes'),
           doadoras:            db.query('SELECT * FROM doadoras'),
           retiradas:           db.query('SELECT * FROM retiradas'),

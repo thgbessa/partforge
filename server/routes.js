@@ -377,6 +377,30 @@ router.post('/clientes/cnpj', autenticar, (req, res) => {
   res.json({ ok: true });
 });
 
+// -- KITS PREVENTIVAS --
+router.get('/kits-preventivas', autenticar, (req, res) => {
+  const {q}=req.query; let sql='SELECT * FROM kits_preventivas WHERE 1=1'; const p=[];
+  if (q) { sql+=' AND (nome LIKE ? OR fonte LIKE ? OR linha LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`); }
+  res.json(db.query(sql+' ORDER BY nome',p).map(k=>({...k,itens:P(k.itens)})));
+});
+router.post('/kits-preventivas', autenticar, isAdmin, (req, res) => {
+  const k=req.body; if (!k.nome) return res.status(400).json({erro:'Nome obrigatorio'});
+  const id=uid();
+  db.run(`INSERT INTO kits_preventivas(id,nome,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id,k.nome,k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),now(),req.user.id]);
+  res.status(201).json({id});
+});
+router.put('/kits-preventivas/:id', autenticar, isAdmin, (req, res) => {
+  const k=req.body;
+  db.run(`UPDATE kits_preventivas SET nome=?,fonte=?,linha=?,taxa=?,dolar=?,markup=?,itens=?,obs=?,updated_at=? WHERE id=?`,
+    [k.nome,k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',now(),req.params.id]);
+  res.json({ok:true});
+});
+router.delete('/kits-preventivas/:id', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM kits_preventivas WHERE id=?',[req.params.id]); res.json({ok:true});
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
@@ -559,6 +583,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     movimentacoes: db.query('SELECT * FROM movimentacoes').map(m=>({...m,eventos:P(m.eventos)})),
     orcamentos:    db.query('SELECT * FROM orcamentos').map(o=>({...o,itens:P(o.itens)})),
     solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
+    kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens)})),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -681,6 +706,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.clientes?.length) for (const c of s.clientes)
       db.runBatch(`INSERT OR REPLACE INTO clientes(nome_norm,nome,cnpj,updated_at) VALUES(?,?,?,?)`,
         [c.nome_norm||normalizarNomeCliente(c.nome||''),c.nome||'',c.cnpj||'',c.updated_at||now()]);
+
+    if (s.kits_preventivas?.length) for (const k of s.kits_preventivas)
+      db.runBatch(`INSERT OR REPLACE INTO kits_preventivas(id,nome,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [k.id||uid(),k.nome||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
