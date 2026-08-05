@@ -2644,6 +2644,14 @@ function calcularTotaisKit(itens, taxa, dolar, markup) {
   return { custo, venda };
 }
 
+let kitsExpandidos = new Set();
+
+function toggleKitExpandido(id) {
+  if (kitsExpandidos.has(id)) kitsExpandidos.delete(id);
+  else kitsExpandidos.add(id);
+  renderKitsPreventivas();
+}
+
 function renderKitsPreventivas(q = '') {
   const el = document.getElementById('kits-preventivas-table');
   if (!el) return;
@@ -2674,8 +2682,14 @@ function renderKitsPreventivas(q = '') {
     <tbody>
     ${list.map(k => {
       const totais = calcularTotaisKit(k.itens || [], k.taxa, k.dolar, k.markup);
-      return `<tr>
-        <td><strong style="font-size:13px">${k.nome}</strong></td>
+      const aberto = kitsExpandidos.has(k.id);
+      const linhaPrincipal = `<tr>
+        <td>
+          <span onclick="toggleKitExpandido('${k.id}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none">
+            <span style="color:var(--accent);font-size:10px;transition:transform 0.15s;display:inline-block;transform:rotate(${aberto ? '90deg' : '0deg'})">▶</span>
+            <strong style="font-size:13px">${k.nome}</strong>
+          </span>
+        </td>
         <td style="font-size:12px">${k.fonte || '—'}</td>
         <td class="mono" style="font-size:11px;color:var(--text3)">${k.linha || '—'}</td>
         <td class="mono">${(k.itens || []).length}</td>
@@ -2686,6 +2700,34 @@ function renderKitsPreventivas(q = '') {
           <button class="btn btn-danger btn-sm" onclick="deleteKitPreventiva('${k.id}')">✕</button>
         </td>
       </tr>`;
+
+      const linhaExpandida = aberto ? `<tr>
+        <td colspan="7" style="padding:0;background:var(--surface2)">
+          <div style="padding:12px 16px 16px 34px">
+            ${k.obs ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:10px">"${k.obs}"</div>` : ''}
+            ${(k.itens || []).length ? `<table class="data-table" style="margin:0">
+              <thead><tr><th>Código</th><th>Fornecedor</th><th>Descrição</th><th>Qtd</th><th>Custo Unit. R$</th><th>Total R$</th></tr></thead>
+              <tbody>
+              ${(k.itens || []).map(it => {
+                let custoUnit = parseFloat(it.custo_rs) || 0;
+                if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * (parseFloat(k.taxa) || 2) * (parseFloat(k.dolar) || 5.27);
+                const totalItem = custoUnit * (parseFloat(it.qtd) || 0) * (parseFloat(k.markup) || 2);
+                return `<tr>
+                  <td class="mono" style="font-size:11px;color:var(--accent)">${it.codigo || '—'}</td>
+                  <td style="font-size:11px;color:var(--text3)">${it.fornecedor || '—'}</td>
+                  <td style="font-size:12px">${it.desc}</td>
+                  <td class="mono">${it.qtd}</td>
+                  <td class="mono">R$ ${custoUnit.toFixed(2)}</td>
+                  <td class="mono" style="color:var(--green);font-weight:700">R$ ${totalItem.toFixed(2)}</td>
+                </tr>`;
+              }).join('')}
+              </tbody>
+            </table>` : `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item cadastrado</div>`}
+          </div>
+        </td>
+      </tr>` : '';
+
+      return linhaPrincipal + linhaExpandida;
     }).join('')}
     </tbody></table>`;
 }
