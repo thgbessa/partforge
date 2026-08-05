@@ -2722,7 +2722,14 @@ function renderKitsPreventivas(q = '') {
                 </tr>`;
               }).join('')}
               </tbody>
-            </table>` : `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item cadastrado</div>`}
+            </table>
+            <div style="text-align:right;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">CUSTO TOTAL: </span>
+              <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">R$ ${totais.custo.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+              <span style="margin:0 10px;color:var(--border2)">|</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">VALOR VENDA TOTAL: </span>
+              <span style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">R$ ${totais.venda.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+            </div>` : `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item cadastrado</div>`}
           </div>
         </td>
       </tr>` : '';
