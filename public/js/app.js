@@ -2700,6 +2700,7 @@ function renderKitsPreventivas(q = '') {
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${totais.custo.toFixed(2)}</td>
         <td class="mono" style="color:var(--green);font-weight:700">R$ ${totais.venda.toFixed(2)}</td>
         <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-sm" style="background:rgba(212,140,50,0.15);color:var(--accent);border:1px solid rgba(212,140,50,0.3)" onclick="abrirModalGerarOrcamentoKit('${k.id}')">📄 Gerar Orçamento</button>
           <button class="btn btn-ghost btn-sm" onclick="abrirModalKitPreventiva('${k.id}')">Editar</button>
           <button class="btn btn-danger btn-sm" onclick="deleteKitPreventiva('${k.id}')">✕</button>
         </td>
@@ -3020,6 +3021,209 @@ async function loadAndRenderKitsPreventivas(q = '') {
   } finally {
     setSyncing(false);
   }
+}
+
+// ── Gerar Orçamento a partir de um Kit Preventiva (PDF exclusivo, itens
+// opcionais aparecem numa seção separada com total próprio) ──
+function abrirModalGerarOrcamentoKit(kitId) {
+  const k = (db.kitsPreventivas || []).find(x => x.id === kitId);
+  if (!k) return;
+
+  let overlay = document.getElementById('modal-gerar-orc-kit-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-gerar-orc-kit-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:95%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Gerar Orçamento — ${k.nome}</span>
+        <button onclick="document.getElementById('modal-gerar-orc-kit-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div class="form-group">
+          <label class="form-label">Nº do Orçamento</label>
+          <input class="form-input" id="orckit-numero" placeholder="Ex: 1050">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <input class="form-input" id="orckit-cliente" placeholder="Nome do cliente">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nº de Série do Equipamento</label>
+          <input class="form-input" id="orckit-serie" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label class="form-label">OS</label>
+          <input class="form-input" id="orckit-os" placeholder="Opcional">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input class="form-input" type="date" id="orckit-data" value="${hoje}">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-gerar-orc-kit-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="gerarPDFOrcamentoKit('${kitId}')">📄 Gerar PDF</button>
+      </div>
+    </div>`;
+}
+
+function gerarPDFOrcamentoKit(kitId) {
+  const k = (db.kitsPreventivas || []).find(x => x.id === kitId);
+  if (!k) return;
+
+  const numero  = document.getElementById('orckit-numero')?.value.trim() || '—';
+  const cliente = document.getElementById('orckit-cliente')?.value.trim() || '—';
+  const serie   = document.getElementById('orckit-serie')?.value.trim() || '—';
+  const os      = document.getElementById('orckit-os')?.value.trim() || '—';
+  const data    = document.getElementById('orckit-data')?.value || new Date().toISOString().slice(0, 10);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, ML = 14, MR = 14;
+
+  const HEADER_BG = [245, 247, 249];
+  const TEAL_LINE = [0, 180, 180];
+  const TEAL_HEAD = [0, 160, 160];
+  const TEAL_TOTAL = [0, 150, 150];
+  const YELLOW = [255, 204, 0];
+  const DARK = [30, 40, 50];
+  const MED = [70, 85, 100];
+  const LIGHT = [130, 145, 160];
+  const ROW_ALT = [248, 250, 252];
+
+  // Cabeçalho
+  doc.setFillColor(...HEADER_BG);
+  doc.rect(0, 0, W, 32, 'F');
+  doc.setTextColor(...TEAL_HEAD); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+  doc.text('QUALLYX', ML, 20);
+
+  doc.setTextColor(...DARK); doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+  doc.text('ORÇAMENTO PREVENTIVA', W - MR, 12, { align: 'right' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MED);
+  doc.text(numero, W - MR, 19, { align: 'right' });
+  doc.setFontSize(8);
+  doc.text(data, W - MR, 25, { align: 'right' });
+
+  doc.setFillColor(...YELLOW); doc.rect(0, 32, W, 1.2, 'F');
+  doc.setFillColor(...TEAL_LINE); doc.rect(0, 33.2, W, 0.6, 'F');
+
+  // Info
+  let y = 42;
+  const labelW = 32;
+  const infoRows = [
+    ['Cliente', cliente],
+    ['Kit Preventiva', k.nome + (k.codigo ? ' (' + k.codigo + ')' : '')],
+    ['Nº de Série', serie],
+    ['OS', os],
+  ];
+  infoRows.forEach(([label, val]) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...LIGHT);
+    doc.text(label.toUpperCase() + ':', ML, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...DARK);
+    doc.text(String(val), ML + labelW, y);
+    y += 5.5;
+  });
+
+  const taxa = parseFloat(k.taxa) || 2, dolar = parseFloat(k.dolar) || 5.27, markup = parseFloat(k.markup) || 2;
+  const custoUnitDe = it => {
+    let c = parseFloat(it.custo_rs) || 0;
+    if (!c && it.custo_usd) c = parseFloat(it.custo_usd) * taxa * dolar;
+    return c;
+  };
+
+  // Itens do kit (padrão)
+  y += 3;
+  doc.setFillColor(...TEAL_HEAD); doc.rect(ML, y, W - ML - MR, 7, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+  doc.text('ITENS DA PREVENTIVA', ML + 3, y + 5);
+  y += 9;
+
+  const itensPadrao = k.itens || [];
+  doc.autoTable({
+    startY: y,
+    head: [['#', 'Código', 'Descrição', 'Qtd', 'Valor Unit. (R$)', 'Total (R$)']],
+    body: itensPadrao.map((it, i) => {
+      const unit = custoUnitDe(it) * markup;
+      return [i + 1, it.codigo || '—', it.desc, it.qtd, unit.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), (unit * it.qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })];
+    }),
+    styles: { fontSize: 9, cellPadding: 3.5, textColor: DARK },
+    headStyles: { fillColor: TEAL_HEAD, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+    alternateRowStyles: { fillColor: ROW_ALT },
+    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28, font: 'courier' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
+    margin: { left: ML, right: MR },
+  });
+
+  const totaisPadrao = calcularTotaisKit(itensPadrao, taxa, dolar, markup);
+  let yFim = doc.lastAutoTable.finalY;
+  const boxW = 74, boxH = 10;
+  doc.setFillColor(...TEAL_TOTAL);
+  doc.roundedRect(W - MR - boxW, yFim + 4, boxW, boxH, 2, 2, 'F');
+  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text('TOTAL: R$ ' + totaisPadrao.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), W - MR - boxW / 2, yFim + 10.5, { align: 'center' });
+  yFim += boxH + 16;
+
+  // Itens opcionais (seção separada, com total próprio)
+  const itensOpc = k.itens_opcionais || [];
+  if (itensOpc.length) {
+    if (yFim > H - 70) { doc.addPage(); yFim = 20; }
+
+    doc.setFillColor(212, 140, 50);
+    doc.rect(ML, yFim, W - ML - MR, 7, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+    doc.text('ITENS OPCIONAIS', ML + 3, yFim + 5);
+    yFim += 9;
+
+    doc.setTextColor(...MED); doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
+    const obsLines = doc.splitTextToSize('Itens recomendados trocar numa preventiva, segundo o fabricante.', W - ML - MR);
+    doc.text(obsLines, ML, yFim + 4);
+    yFim += obsLines.length * 4 + 6;
+
+    doc.autoTable({
+      startY: yFim,
+      head: [['#', 'Código', 'Descrição', 'Qtd', 'Valor Unit. (R$)', 'Total (R$)']],
+      body: itensOpc.map((it, i) => {
+        const unit = custoUnitDe(it) * markup;
+        return [i + 1, it.codigo || '—', it.desc, it.qtd, unit.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), (unit * it.qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })];
+      }),
+      styles: { fontSize: 9, cellPadding: 3.5, textColor: DARK },
+      headStyles: { fillColor: [212, 140, 50], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+      alternateRowStyles: { fillColor: ROW_ALT },
+      columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28, font: 'courier' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
+      margin: { left: ML, right: MR },
+    });
+
+    const totaisOpc = calcularTotaisKit(itensOpc, taxa, dolar, markup);
+    const yFimOpc = doc.lastAutoTable.finalY;
+    doc.setFillColor(212, 140, 50);
+    doc.roundedRect(W - MR - boxW, yFimOpc + 4, boxW, boxH, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text('OPCIONAIS: R$ ' + totaisOpc.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), W - MR - boxW / 2, yFimOpc + 10.5, { align: 'center' });
+  }
+
+  // Rodapé em todas as páginas
+  const totalPages = doc.getNumberOfPages();
+  for (let pg = 1; pg <= totalPages; pg++) {
+    doc.setPage(pg);
+    doc.setFillColor(...TEAL_LINE); doc.setDrawColor(...TEAL_LINE);
+    doc.line(ML, H - 11, W - MR, H - 11);
+    doc.setLineWidth(0.4); doc.line(ML, H - 11, W - MR, H - 11);
+    doc.setTextColor(...LIGHT); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+    doc.text('Quallyx Saúde  ·  quallyx.com.br', ML, H - 6);
+    doc.text(`${numero}  ·  Pág. ${pg} / ${totalPages}`, W - MR, H - 6, { align: 'right' });
+  }
+
+  const fname = 'Orcamento_Preventiva_' + k.nome.replace(/[^a-zA-Z0-9]/g, '_') + '_' + numero.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
+  doc.save(fname);
+  document.getElementById('modal-gerar-orc-kit-overlay')?.remove();
+  toast('PDF gerado: ' + fname, 'success');
 }
 
 function abrirModalOrcamento(id) {
