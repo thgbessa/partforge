@@ -181,6 +181,7 @@ async function init() {
     created_at INTEGER DEFAULT 0, updated_at INTEGER DEFAULT 0, created_by TEXT
   )`); } catch(e) { console.log('erro criando kits_preventivas', e.message); }
   try { _db.run("ALTER TABLE kits_preventivas ADD COLUMN codigo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE kits_preventivas ADD COLUMN itens_opcionais TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');

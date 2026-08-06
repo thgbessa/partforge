@@ -474,15 +474,15 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Taxa Importação</label>
-                <input class="form-input" type="number" step="0.01" id="kit-taxa" value="2" oninput="renderItensKit()">
+                <input class="form-input" type="number" step="0.01" id="kit-taxa" value="2" oninput="renderItensKit();renderItensKitOpcionais()">
               </div>
               <div class="form-group">
                 <label class="form-label">Dólar (R$)</label>
-                <input class="form-input" type="number" step="0.01" id="kit-dolar" value="5.27" oninput="renderItensKit()">
+                <input class="form-input" type="number" step="0.01" id="kit-dolar" value="5.27" oninput="renderItensKit();renderItensKitOpcionais()">
               </div>
               <div class="form-group">
                 <label class="form-label">Mark-up</label>
-                <input class="form-input" type="number" step="0.01" id="kit-markup" value="2" oninput="renderItensKit()">
+                <input class="form-input" type="number" step="0.01" id="kit-markup" value="2" oninput="renderItensKit();renderItensKitOpcionais()">
               </div>
               <div class="form-group full">
                 <label class="form-label">Observação</label>
@@ -528,6 +528,45 @@
               <span style="margin:0 10px;color:var(--border2)">|</span>
               <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">VALOR VENDA TOTAL: </span>
               <span style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green)" id="kit-venda-total-display">R$ 0,00</span>
+            </div>
+
+            <div class="section-title" style="margin:22px 0 12px;font-size:12px;color:var(--accent)">ITENS OPCIONAIS <span style="color:var(--text3);font-weight:400;text-transform:none">(itens além do padrão, que também podem ser adquiridos)</span></div>
+            <div id="kit-itens-opcionais-lista" style="margin-bottom:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1.2fr 2fr 70px 100px 90px;gap:8px;align-items:end">
+              <div>
+                <label class="form-label" style="font-size:9px">CÓDIGO</label>
+                <input class="form-input" id="kit-opc-codigo" placeholder="P/N" style="font-family:var(--mono);font-size:12px">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">FORNECEDOR</label>
+                <input class="form-input" id="kit-opc-fornecedor" placeholder="Nome do fornecedor">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">DESCRIÇÃO *</label>
+                <input class="form-input" id="kit-opc-desc" placeholder="Descrição do item">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">QTD</label>
+                <input class="form-input" type="number" min="1" id="kit-opc-qtd" value="1">
+              </div>
+              <div>
+                <label class="form-label" style="font-size:9px">CUSTO USD</label>
+                <input class="form-input" type="number" step="0.01" id="kit-opc-custo-usd" placeholder="0,00">
+              </div>
+              <div>
+                <button id="kit-add-opc-btn" class="btn btn-primary btn-sm" onclick="adicionarItemKitOpcional()" style="width:100%">⊕ Add</button>
+              </div>
+            </div>
+            <div style="margin-top:8px">
+              <label class="form-label" style="font-size:9px">OU CUSTO R$ DIRETO (deixe em branco se usar USD acima)</label>
+              <input class="form-input" type="number" step="0.01" id="kit-opc-custo-rs" placeholder="0,00" style="max-width:220px">
+            </div>
+            <div style="text-align:right;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">CUSTO TOTAL OPCIONAIS: </span>
+              <span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)" id="kit-opc-custo-total-display">R$ 0,00</span>
+              <span style="margin:0 10px;color:var(--border2)">|</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">VALOR VENDA TOTAL OPCIONAIS: </span>
+              <span style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)" id="kit-opc-venda-total-display">R$ 0,00</span>
             </div>
           </div>
           <div class="modal-footer">
@@ -1752,4 +1791,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000047"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000048"></script></html>

@@ -2630,6 +2630,8 @@ function buscarCnpjCliente() {
 let editKitId = null;
 let kitItens = [];
 let editandoItemKitIdx = null;
+let kitItensOpcionais = [];
+let editandoItemKitOpcionalIdx = null;
 
 function calcularTotaisKit(itens, taxa, dolar, markup) {
   taxa = parseFloat(taxa) || 2; dolar = parseFloat(dolar) || 5.27; markup = parseFloat(markup) || 2;
@@ -2682,6 +2684,7 @@ function renderKitsPreventivas(q = '') {
     <tbody>
     ${list.map(k => {
       const totais = calcularTotaisKit(k.itens || [], k.taxa, k.dolar, k.markup);
+      const totaisOpc = calcularTotaisKit(k.itens_opcionais || [], k.taxa, k.dolar, k.markup);
       const aberto = kitsExpandidos.has(k.id);
       const linhaPrincipal = `<tr>
         <td class="mono" style="font-size:11px;color:var(--accent);font-weight:700">${k.codigo || '—'}</td>
@@ -2730,7 +2733,34 @@ function renderKitsPreventivas(q = '') {
               <span style="margin:0 10px;color:var(--border2)">|</span>
               <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">VALOR VENDA TOTAL: </span>
               <span style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">R$ ${totais.venda.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
-            </div>` : `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item cadastrado</div>`}
+            </div>
+            ${(k.itens_opcionais || []).length ? `
+            <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:1px;margin:18px 0 8px">ITENS OPCIONAIS</div>
+            <table class="data-table" style="margin:0">
+              <thead><tr><th>Código</th><th>Fornecedor</th><th>Descrição</th><th>Qtd</th><th>Custo Unit. R$</th><th>Total R$</th></tr></thead>
+              <tbody>
+              ${(k.itens_opcionais || []).map(it => {
+                let custoUnit = parseFloat(it.custo_rs) || 0;
+                if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * (parseFloat(k.taxa) || 2) * (parseFloat(k.dolar) || 5.27);
+                const totalItem = custoUnit * (parseFloat(it.qtd) || 0) * (parseFloat(k.markup) || 2);
+                return `<tr>
+                  <td class="mono" style="font-size:11px;color:var(--accent)">${it.codigo || '—'}</td>
+                  <td style="font-size:11px;color:var(--text3)">${it.fornecedor || '—'}</td>
+                  <td style="font-size:12px">${it.desc}</td>
+                  <td class="mono">${it.qtd}</td>
+                  <td class="mono">R$ ${custoUnit.toFixed(2)}</td>
+                  <td class="mono" style="color:var(--green);font-weight:700">R$ ${totalItem.toFixed(2)}</td>
+                </tr>`;
+              }).join('')}
+              </tbody>
+            </table>
+            <div style="text-align:right;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">CUSTO TOTAL OPCIONAIS: </span>
+              <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent)">R$ ${totaisOpc.custo.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+              <span style="margin:0 10px;color:var(--border2)">|</span>
+              <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">VALOR VENDA TOTAL OPCIONAIS: </span>
+              <span style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">R$ ${totaisOpc.venda.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span>
+            </div>` : ''}` : `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item cadastrado</div>`}
           </div>
         </td>
       </tr>` : '';
@@ -2745,6 +2775,8 @@ function abrirModalKitPreventiva(id) {
   const k = id ? (db.kitsPreventivas || []).find(x => x.id === id) : null;
   kitItens = k ? JSON.parse(JSON.stringify(k.itens || [])) : [];
   editandoItemKitIdx = null;
+  kitItensOpcionais = k ? JSON.parse(JSON.stringify(k.itens_opcionais || [])) : [];
+  editandoItemKitOpcionalIdx = null;
 
   document.getElementById('modal-kit-title').textContent = k ? 'Editar Kit Preventiva' : 'Novo Kit Preventiva';
   document.getElementById('kit-codigo').value = k?.codigo || '';
@@ -2762,13 +2794,21 @@ function abrirModalKitPreventiva(id) {
   const qtdEl = document.getElementById('kit-item-qtd'); if (qtdEl) qtdEl.value = '1';
   const btnAdd = document.getElementById('kit-add-item-btn'); if (btnAdd) btnAdd.textContent = '⊕ Add';
 
+  ['kit-opc-codigo', 'kit-opc-fornecedor', 'kit-opc-desc', 'kit-opc-custo-usd', 'kit-opc-custo-rs'].forEach(id2 => {
+    const el = document.getElementById(id2); if (el) el.value = '';
+  });
+  const qtdOpcEl = document.getElementById('kit-opc-qtd'); if (qtdOpcEl) qtdOpcEl.value = '1';
+  const btnAddOpc = document.getElementById('kit-add-opc-btn'); if (btnAddOpc) btnAddOpc.textContent = '⊕ Add';
+
   renderItensKit();
+  renderItensKitOpcionais();
   document.getElementById('modal-kit-preventiva').style.display = 'flex';
 }
 
 function fecharModalKitPreventiva() {
   document.getElementById('modal-kit-preventiva').style.display = 'none';
   editKitId = null; kitItens = []; editandoItemKitIdx = null;
+  kitItensOpcionais = []; editandoItemKitOpcionalIdx = null;
 }
 
 function adicionarItemKit() {
@@ -2852,6 +2892,88 @@ function renderItensKit() {
   if (vendaEl) vendaEl.textContent = `R$ ${totais.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
 }
 
+// ── Itens Opcionais (mesma mecânica dos itens padrão, lista/total à parte) ──
+function adicionarItemKitOpcional() {
+  const codigo = document.getElementById('kit-opc-codigo').value.trim();
+  const fornecedor = document.getElementById('kit-opc-fornecedor').value.trim();
+  const desc = document.getElementById('kit-opc-desc').value.trim();
+  const qtd = parseInt(document.getElementById('kit-opc-qtd').value) || 1;
+  const custoUsd = parseFloat(document.getElementById('kit-opc-custo-usd').value) || 0;
+  const custoRs = parseFloat(document.getElementById('kit-opc-custo-rs').value) || 0;
+  if (!desc) { toast('Informe a descrição do item opcional', 'error'); return; }
+
+  const item = { codigo, fornecedor, desc, qtd, custo_usd: custoUsd, custo_rs: custoRs };
+  if (editandoItemKitOpcionalIdx !== null) {
+    kitItensOpcionais[editandoItemKitOpcionalIdx] = item;
+    editandoItemKitOpcionalIdx = null;
+    const btn = document.getElementById('kit-add-opc-btn'); if (btn) btn.textContent = '⊕ Add';
+  } else {
+    kitItensOpcionais.push(item);
+  }
+
+  ['kit-opc-codigo', 'kit-opc-fornecedor', 'kit-opc-desc', 'kit-opc-custo-usd', 'kit-opc-custo-rs'].forEach(id2 => {
+    const el = document.getElementById(id2); if (el) el.value = '';
+  });
+  document.getElementById('kit-opc-qtd').value = '1';
+  renderItensKitOpcionais();
+}
+
+function editarItemKitOpcional(idx) {
+  const it = kitItensOpcionais[idx]; if (!it) return;
+  editandoItemKitOpcionalIdx = idx;
+  document.getElementById('kit-opc-codigo').value = it.codigo || '';
+  document.getElementById('kit-opc-fornecedor').value = it.fornecedor || '';
+  document.getElementById('kit-opc-desc').value = it.desc || '';
+  document.getElementById('kit-opc-qtd').value = it.qtd || 1;
+  document.getElementById('kit-opc-custo-usd').value = it.custo_usd || '';
+  document.getElementById('kit-opc-custo-rs').value = it.custo_rs || '';
+  const btn = document.getElementById('kit-add-opc-btn'); if (btn) btn.textContent = 'Salvar edição';
+}
+
+function removerItemKitOpcional(idx) {
+  kitItensOpcionais.splice(idx, 1);
+  editandoItemKitOpcionalIdx = null;
+  renderItensKitOpcionais();
+}
+
+function renderItensKitOpcionais() {
+  const el = document.getElementById('kit-itens-opcionais-lista');
+  if (!el) return;
+  const taxa = parseFloat(document.getElementById('kit-taxa')?.value) || 2;
+  const dolar = parseFloat(document.getElementById('kit-dolar')?.value) || 5.27;
+  const markup = parseFloat(document.getElementById('kit-markup')?.value) || 2;
+
+  if (!kitItensOpcionais.length) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item opcional adicionado</div>`;
+  } else {
+    el.innerHTML = `<table class="data-table">
+      <thead><tr><th>Código</th><th>Fornecedor</th><th>Descrição</th><th>Qtd</th><th>Custo Unit. R$</th><th>Total R$</th><th></th></tr></thead>
+      <tbody>${kitItensOpcionais.map((it, i) => {
+        let custoUnit = parseFloat(it.custo_rs) || 0;
+        if (!custoUnit && it.custo_usd) custoUnit = parseFloat(it.custo_usd) * taxa * dolar;
+        const total = custoUnit * (it.qtd || 0) * markup;
+        return `<tr>
+          <td class="mono" style="font-size:11px;color:var(--accent)">${it.codigo || '—'}</td>
+          <td style="font-size:11px;color:var(--text3)">${it.fornecedor || '—'}</td>
+          <td style="font-size:12px">${it.desc}</td>
+          <td class="mono">${it.qtd}</td>
+          <td class="mono">R$ ${custoUnit.toFixed(2)}</td>
+          <td class="mono" style="color:var(--green);font-weight:700">R$ ${total.toFixed(2)}</td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="editarItemKitOpcional(${i})">✎</button>
+            <button class="btn btn-danger btn-sm" onclick="removerItemKitOpcional(${i})">✕</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody></table>`;
+  }
+
+  const totaisOpc = calcularTotaisKit(kitItensOpcionais, taxa, dolar, markup);
+  const custoOpcEl = document.getElementById('kit-opc-custo-total-display');
+  const vendaOpcEl = document.getElementById('kit-opc-venda-total-display');
+  if (custoOpcEl) custoOpcEl.textContent = `R$ ${totaisOpc.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  if (vendaOpcEl) vendaOpcEl.textContent = `R$ ${totaisOpc.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+}
+
 function salvarKitPreventiva() {
   const codigo = document.getElementById('kit-codigo').value.trim();
   const nome = document.getElementById('kit-nome').value.trim();
@@ -2869,6 +2991,7 @@ function salvarKitPreventiva() {
     markup: parseFloat(document.getElementById('kit-markup').value) || 2,
     obs:    document.getElementById('kit-obs').value.trim(),
     itens:  [...kitItens],
+    itens_opcionais: [...kitItensOpcionais],
   };
 
   const fn = editKitId ? API.put('/kits-preventivas/' + editKitId, data) : API.post('/kits-preventivas', data);
