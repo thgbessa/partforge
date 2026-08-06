@@ -2530,6 +2530,7 @@ let orcItens  = [];
 let editandoItemOrcIdx = null;
 let orcEquipamentos = [];
 let editandoEquipOrcIdx = null;
+let orcItensOpcionais = []; // preservados de orçamentos gerados via Kit Preventiva
 
 const ORC_STATUS = {
   RASCUNHO:            { label:'Rascunho',                       badge:'badge-gray'   },
@@ -3070,67 +3071,20 @@ function abrirModalGerarOrcamentoKit(kitId) {
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
         <button class="btn btn-ghost" onclick="document.getElementById('modal-gerar-orc-kit-overlay').remove()">Cancelar</button>
-        <button class="btn btn-primary" onclick="gerarPDFOrcamentoKit('${kitId}')">📄 Gerar PDF</button>
+        <button class="btn btn-primary" onclick="criarOrcamentoDeKit('${kitId}')">✓ Gerar Orçamento</button>
       </div>
     </div>`;
 }
 
-function gerarPDFOrcamentoKit(kitId) {
+function criarOrcamentoDeKit(kitId) {
   const k = (db.kitsPreventivas || []).find(x => x.id === kitId);
   if (!k) return;
 
-  const numero  = document.getElementById('orckit-numero')?.value.trim() || '—';
-  const cliente = document.getElementById('orckit-cliente')?.value.trim() || '—';
-  const serie   = document.getElementById('orckit-serie')?.value.trim() || '—';
-  const os      = document.getElementById('orckit-os')?.value.trim() || '—';
+  const cliente = document.getElementById('orckit-cliente')?.value.trim() || '';
+  const serie   = document.getElementById('orckit-serie')?.value.trim() || '';
+  const os      = document.getElementById('orckit-os')?.value.trim() || '';
   const data    = document.getElementById('orckit-data')?.value || new Date().toISOString().slice(0, 10);
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210, H = 297, ML = 14, MR = 14;
-
-  const HEADER_BG = [245, 247, 249];
-  const TEAL_LINE = [0, 180, 180];
-  const TEAL_HEAD = [0, 160, 160];
-  const TEAL_TOTAL = [0, 150, 150];
-  const YELLOW = [255, 204, 0];
-  const DARK = [30, 40, 50];
-  const MED = [70, 85, 100];
-  const LIGHT = [130, 145, 160];
-  const ROW_ALT = [248, 250, 252];
-
-  // Cabeçalho
-  doc.setFillColor(...HEADER_BG);
-  doc.rect(0, 0, W, 32, 'F');
-  doc.setTextColor(...TEAL_HEAD); doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
-  doc.text('QUALLYX', ML, 20);
-
-  doc.setTextColor(...DARK); doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-  doc.text('ORÇAMENTO PREVENTIVA', W - MR, 12, { align: 'right' });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...MED);
-  doc.text(numero, W - MR, 19, { align: 'right' });
-  doc.setFontSize(8);
-  doc.text(data, W - MR, 25, { align: 'right' });
-
-  doc.setFillColor(...YELLOW); doc.rect(0, 32, W, 1.2, 'F');
-  doc.setFillColor(...TEAL_LINE); doc.rect(0, 33.2, W, 0.6, 'F');
-
-  // Info
-  let y = 42;
-  const labelW = 32;
-  const infoRows = [
-    ['Cliente', cliente],
-    ['Kit Preventiva', k.nome + (k.codigo ? ' (' + k.codigo + ')' : '')],
-    ['Nº de Série', serie],
-    ['OS', os],
-  ];
-  infoRows.forEach(([label, val]) => {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...LIGHT);
-    doc.text(label.toUpperCase() + ':', ML, y);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(...DARK);
-    doc.text(String(val), ML + labelW, y);
-    y += 5.5;
-  });
+  let numero    = document.getElementById('orckit-numero')?.value.trim() || '';
 
   const taxa = parseFloat(k.taxa) || 2, dolar = parseFloat(k.dolar) || 5.27, markup = parseFloat(k.markup) || 2;
   const custoUnitDe = it => {
@@ -3138,99 +3092,59 @@ function gerarPDFOrcamentoKit(kitId) {
     if (!c && it.custo_usd) c = parseFloat(it.custo_usd) * taxa * dolar;
     return c;
   };
-
-  // Itens do kit (padrão)
-  y += 3;
-  doc.setFillColor(...TEAL_HEAD); doc.rect(ML, y, W - ML - MR, 7, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-  doc.text('ITENS DA PREVENTIVA', ML + 3, y + 5);
-  y += 9;
-
-  const itensPadrao = k.itens || [];
-  doc.autoTable({
-    startY: y,
-    head: [['#', 'Código', 'Descrição', 'Qtd', 'Valor Unit. (R$)', 'Total (R$)']],
-    body: itensPadrao.map((it, i) => {
-      const unit = custoUnitDe(it) * markup;
-      return [i + 1, it.codigo || '—', it.desc, it.qtd, unit.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), (unit * it.qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })];
-    }),
-    styles: { fontSize: 9, cellPadding: 3.5, textColor: DARK },
-    headStyles: { fillColor: TEAL_HEAD, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-    alternateRowStyles: { fillColor: ROW_ALT },
-    columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28, font: 'courier' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
-    margin: { left: ML, right: MR },
+  const mapItem = it => ({
+    cod: it.codigo || '', desc: it.desc, qtd: it.qtd || 1,
+    valor: parseFloat((custoUnitDe(it) * markup).toFixed(2)),
   });
 
-  const totaisPadrao = calcularTotaisKit(itensPadrao, taxa, dolar, markup);
-  let yFim = doc.lastAutoTable.finalY;
-  const boxW = 74, boxH = 10;
-  doc.setFillColor(...TEAL_TOTAL);
-  doc.roundedRect(W - MR - boxW, yFim + 4, boxW, boxH, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-  doc.text('TOTAL: R$ ' + totaisPadrao.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), W - MR - boxW / 2, yFim + 10.5, { align: 'center' });
-  yFim += boxH + 16;
+  const itens = (k.itens || []).map(mapItem);
+  const itensOpcionais = (k.itens_opcionais || []).map(mapItem);
+  const total = itens.reduce((s, it) => s + it.qtd * it.valor, 0);
 
-  // Itens opcionais (seção separada, com total próprio)
-  const itensOpc = k.itens_opcionais || [];
-  if (itensOpc.length) {
-    if (yFim > H - 70) { doc.addPage(); yFim = 20; }
+  // Busca a lista atual de orçamentos pra pegar o próximo número certo
+  // (mesma sequência usada na tela de Orçamentos), mesmo que essa lista
+  // ainda não tenha sido carregada nesta sessão.
+  API.get('/orcamentos').then(lista => {
+    db.orcamentos = lista;
+    if (!numero) {
+      const nums = lista.map(x => parseInt(x.numero) || 0).filter(n => n > 900);
+      numero = String(nums.length ? Math.max(...nums) + 1 : 979);
+    }
 
-    doc.setFillColor(212, 140, 50);
-    doc.rect(ML, yFim, W - ML - MR, 7, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-    doc.text('ITENS OPCIONAIS', ML + 3, yFim + 5);
-    yFim += 9;
+    const cfg = db.configOrcamento || {};
+    const payload = {
+      numero, status: 'RASCUNHO', cliente,
+      equip_serie: serie, equip_nome: k.nome,
+      equipamentos: serie || k.nome ? [{ serie, nome: k.nome }] : [],
+      os, data, obs: `Gerado a partir do Kit Preventiva ${k.codigo || ''} — ${k.nome}`.trim(),
+      validade: cfg.validade || '7 dias',
+      pagamento: cfg.formaPagamento || '30 dias',
+      entrega: cfg.prazoEntrega || 'A combinar',
+      frete: cfg.frete || 'FOB',
+      condicoes: cfg.condicoesGerais || '',
+      total, itens, itens_opcionais: itensOpcionais,
+    };
 
-    doc.setTextColor(...MED); doc.setFont('helvetica', 'italic'); doc.setFontSize(8);
-    const obsLines = doc.splitTextToSize('Itens recomendados trocar numa preventiva, segundo o fabricante.', W - ML - MR);
-    doc.text(obsLines, ML, yFim + 4);
-    yFim += obsLines.length * 4 + 6;
-
-    doc.autoTable({
-      startY: yFim,
-      head: [['#', 'Código', 'Descrição', 'Qtd', 'Valor Unit. (R$)', 'Total (R$)']],
-      body: itensOpc.map((it, i) => {
-        const unit = custoUnitDe(it) * markup;
-        return [i + 1, it.codigo || '—', it.desc, it.qtd, unit.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), (unit * it.qtd).toLocaleString('pt-BR', { minimumFractionDigits: 2 })];
-      }),
-      styles: { fontSize: 9, cellPadding: 3.5, textColor: DARK },
-      headStyles: { fillColor: [212, 140, 50], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
-      alternateRowStyles: { fillColor: ROW_ALT },
-      columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 28, font: 'courier' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
-      margin: { left: ML, right: MR },
+    return API.post('/orcamentos', payload);
+  }).then(res => {
+    document.getElementById('modal-gerar-orc-kit-overlay')?.remove();
+    toast(`Orçamento Nº ${numero} criado a partir do kit`, 'success');
+    // Recarrega a lista e já abre o PDF do orçamento recém-criado
+    API.get('/orcamentos').then(lista => {
+      db.orcamentos = lista;
+      updateBadges();
+      gerarPDFOrcamento(res.id);
     });
-
-    const totaisOpc = calcularTotaisKit(itensOpc, taxa, dolar, markup);
-    const yFimOpc = doc.lastAutoTable.finalY;
-    doc.setFillColor(212, 140, 50);
-    doc.roundedRect(W - MR - boxW, yFimOpc + 4, boxW, boxH, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-    doc.text('OPCIONAIS: R$ ' + totaisOpc.venda.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), W - MR - boxW / 2, yFimOpc + 10.5, { align: 'center' });
-  }
-
-  // Rodapé em todas as páginas
-  const totalPages = doc.getNumberOfPages();
-  for (let pg = 1; pg <= totalPages; pg++) {
-    doc.setPage(pg);
-    doc.setFillColor(...TEAL_LINE); doc.setDrawColor(...TEAL_LINE);
-    doc.line(ML, H - 11, W - MR, H - 11);
-    doc.setLineWidth(0.4); doc.line(ML, H - 11, W - MR, H - 11);
-    doc.setTextColor(...LIGHT); doc.setFontSize(7); doc.setFont('helvetica', 'normal');
-    doc.text('Quallyx Saúde  ·  quallyx.com.br', ML, H - 6);
-    doc.text(`${numero}  ·  Pág. ${pg} / ${totalPages}`, W - MR, H - 6, { align: 'right' });
-  }
-
-  const fname = 'Orcamento_Preventiva_' + k.nome.replace(/[^a-zA-Z0-9]/g, '_') + '_' + numero.replace(/[^a-zA-Z0-9]/g, '_') + '.pdf';
-  doc.save(fname);
-  document.getElementById('modal-gerar-orc-kit-overlay')?.remove();
-  toast('PDF gerado: ' + fname, 'success');
+  }).catch(err => toast(err.message, 'error'));
 }
+
 
 function abrirModalOrcamento(id) {
   editOrcId = id || null;
   const o   = id ? db.orcamentos.find(x=>x.id===id) : null;
   const cfg = db.configOrcamento || {};
   orcItens  = o ? JSON.parse(JSON.stringify(o.itens||[])) : [];
+  orcItensOpcionais = o ? JSON.parse(JSON.stringify(o.itens_opcionais||[])) : [];
 
   document.getElementById('modal-orcamento-title').textContent = o ? 'Editar Orçamento' : 'Novo Orçamento';
   if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
@@ -3578,6 +3492,7 @@ function salvarOrcamento() {
     condicoes:  document.getElementById('orc-condicoes-geradas')?.value || '',
     assinatura: currentUser?.nome || '',
     itens:      [...orcItens],
+    itens_opcionais: [...orcItensOpcionais],
   };
 
   const fn = editOrcId ? API.put('/orcamentos/' + editOrcId, data) : API.post('/orcamentos', data);
@@ -3833,6 +3748,49 @@ function gerarPDFOrcamento(id) {
     const obsLines = doc.splitTextToSize(o.obs, W-ML-MR-12);
     doc.text(obsLines, ML+11, yNext);
     yNext += obsLines.length*4.5 + 8;
+  }
+
+  // ── Itens Opcionais (ex: kits preventivas trazem itens recomendados pelo
+  // fabricante, separados do valor principal do orçamento) ──────────────────
+  if (o.itens_opcionais && o.itens_opcionais.length) {
+    if (yNext > H - 70) { doc.addPage(); yNext = 20; }
+
+    doc.setFillColor(212, 140, 50);
+    doc.rect(ML, yNext, W-ML-MR, 7, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text('ITENS OPCIONAIS', ML+3, yNext+5);
+    yNext += 9;
+
+    doc.setTextColor(...MED); doc.setFont('helvetica','italic'); doc.setFontSize(8);
+    const obsOpcLines = doc.splitTextToSize('Itens recomendados trocar numa preventiva, segundo o fabricante.', W-ML-MR);
+    doc.text(obsOpcLines, ML, yNext+4);
+    yNext += obsOpcLines.length*4 + 6;
+
+    doc.autoTable({
+      startY: yNext,
+      head: [['#', 'Código', 'Descrição', 'Qtd', 'Valor Unit. (R$)', 'Total (R$)']],
+      body: o.itens_opcionais.map((it,i) => [
+        i+1,
+        it.cod||'—',
+        it.desc,
+        it.qtd,
+        parseFloat(it.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}),
+        (it.qtd*(parseFloat(it.valor)||0)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
+      ]),
+      styles:        { fontSize:9, cellPadding:3.5, textColor:DARK },
+      headStyles:    { fillColor:[212,140,50], textColor:[255,255,255], fontStyle:'bold', fontSize:9 },
+      alternateRowStyles: { fillColor:ROW_ALT },
+      columnStyles:  { 0:{cellWidth:8,halign:'center'}, 1:{cellWidth:28,font:'courier'}, 4:{halign:'right'}, 5:{halign:'right',fontStyle:'bold'} },
+      margin: { left:ML, right:MR },
+    });
+
+    const totalOpc = o.itens_opcionais.reduce((s,it)=>s+it.qtd*(parseFloat(it.valor)||0),0);
+    const tableEndYOpc = doc.lastAutoTable.finalY;
+    doc.setFillColor(212, 140, 50);
+    doc.roundedRect(W-MR-boxW, tableEndYOpc+4, boxW, boxH, 2, 2, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.text('OPCIONAIS: R$ ' + totalOpc.toLocaleString('pt-BR',{minimumFractionDigits:2}), W-MR-boxW/2, tableEndYOpc+10.5, {align:'center'});
+    yNext = tableEndYOpc + boxH + 14;
   }
 
   // ── Condições Gerais ────────────────────────────────────────────────────────
