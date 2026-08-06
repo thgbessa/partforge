@@ -495,35 +495,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Importa o kit VITROS 250 de exemplo (rodar uma vez, depois remover) ──
-    app.get('/api/admin/importar-kit-vitros250', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        const itens = [
-          { codigo: '356666',        fornecedor: '', desc: 'Lâmpada vitros 250', qtd: 1, custo_usd: 0, custo_rs: 166.21 },
-          { codigo: 'J24003',        fornecedor: '', desc: 'Evaporation caps', qtd: 1, custo_usd: 0, custo_rs: 282.31 },
-          { codigo: '1C3197/J10944', fornecedor: '', desc: 'Blade - Dispense', qtd: 1, custo_usd: 0, custo_rs: 45.70 },
-          { codigo: 'J10537',        fornecedor: '', desc: 'Belt - Rotor', qtd: 1, custo_usd: 0, custo_rs: 0 },
-          { codigo: '994659',        fornecedor: '', desc: 'Tubing - 0.030 ID x 6.5 in.', qtd: 1, custo_usd: 0, custo_rs: 116.45 },
-          { codigo: 'J02315',        fornecedor: '', desc: 'White reference slides (vem com vários slides, usa 1 a cada 6 meses)', qtd: 1, custo_usd: 0, custo_rs: 0 },
-          { codigo: 'J02316',        fornecedor: '', desc: 'Black reference slides (vem com vários slides, usa 1 a cada 6 meses)', qtd: 1, custo_usd: 0, custo_rs: 0 },
-          { codigo: 'MOBRA',         fornecedor: '', desc: 'HORA TÉCNICA : 2 a 4 HORAS', qtd: 4, custo_usd: 5, custo_rs: 0 },
-        ];
-        const id = db.uid();
-        const agora = Date.now();
-        db.run(`INSERT INTO kits_preventivas(id,nome,fonte,linha,taxa,dolar,markup,itens,obs,created_at,updated_at,created_by)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [id, 'VITROS 250 - SEMESTRAL', 'ORTHO', 'VITROS 250', 2, 5.5, 2, JSON.stringify(itens), 'Importado da planilha de preventivas (aba PREVENTIVA GERAL)', agora, agora, 'import-teste']);
-        res.json({ ok: true, id, totalItens: itens.length });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim importacao kit exemplo ──
-
     // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
     app.get('/api/admin/relatorio-teste', async (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
