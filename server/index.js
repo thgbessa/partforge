@@ -495,34 +495,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Importa o kit HMG 51 (rodar uma vez, depois remover) ──
-    app.get('/api/admin/importar-kit-hmg51', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        const itens = [
-          { codigo: 'ADF00002',    fornecedor: '', desc: 'TUBULAÇÃO 1,6 x 3,2mm - 15,24 Metros', qtd: 1, custo_usd: 15, custo_rs: 0 },
-          { codigo: 'ADF00004',    fornecedor: '', desc: 'TUBULAÇÃO 2,4 x 4,0mm - 15,24 Metros', qtd: 1, custo_usd: 15, custo_rs: 0 },
-          { codigo: 'ADF00007',    fornecedor: '', desc: 'TUBULAÇÃO 3,2 x 6,4mm - 15,24 Metros', qtd: 1, custo_usd: 15, custo_rs: 0 },
-          { codigo: '5-035-005-00', fornecedor: '', desc: 'FILTRO CAMARA RBC', qtd: 1, custo_usd: 15, custo_rs: 0 },
-          { codigo: '5-035-006-00', fornecedor: '', desc: 'FILTRO CAMARA WBC', qtd: 1, custo_usd: 15, custo_rs: 0 },
-          { codigo: '5-082-010-00', fornecedor: '', desc: 'WIPE BLOCK', qtd: 1, custo_usd: 35, custo_rs: 0 },
-          { codigo: 'MOBRA',       fornecedor: '', desc: 'HORA TÉCNICA : 4 HORAS', qtd: 4, custo_usd: 5, custo_rs: 0 },
-        ];
-        const id = db.uid();
-        const agora = Date.now();
-        db.run(`INSERT INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,itens_opcionais,obs,created_at,updated_at,created_by)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [id, 'HMG 51', 'KIT HMG51', 'DYMIND', 'HMG 51', 2, 5.5, 2, JSON.stringify(itens), '[]', 'Importado da planilha de preventivas (aba PREVENTIVA GERAL)', agora, agora, 'import-teste']);
-        res.json({ ok: true, id, totalItens: itens.length });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim importacao kit hmg51 ──
-
     // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
     app.get('/api/admin/relatorio-teste', async (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';

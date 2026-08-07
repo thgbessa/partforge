@@ -2813,6 +2813,53 @@ function fecharModalKitPreventiva() {
   kitItensOpcionais = []; editandoItemKitOpcionalIdx = null;
 }
 
+function sugerirPecaKit(q, prefixo) {
+  const ddId = prefixo + '-peca-dropdown';
+  const dd = document.getElementById(ddId);
+  if (!dd) return;
+  const ql = (q || '').toLowerCase().trim();
+  const list = db.pecas.filter(p =>
+    !ql ||
+    String(p.codigo || '').toLowerCase().includes(ql) ||
+    String(p.nome || '').toLowerCase().includes(ql) ||
+    String(p.fonte || '').toLowerCase().includes(ql)
+  ).slice(0, 30);
+
+  dd.style.display = list.length ? 'block' : 'none';
+  dd.innerHTML = list.map(p => {
+    const custo = p.custo || 0;
+    const img = p.imagem
+      ? `<img src="${p.imagem}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0">`
+      : `<div style="width:28px;height:28px;background:var(--surface2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px">⬡</div>`;
+    return `<div onmousedown="selecionarPecaKit('${p.id}','${prefixo}')"
+      style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${img}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${p.codigo}</div>
+        <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome}</div>
+        <div style="font-size:9px;color:var(--text3)">${p.fonte || ''}</div>
+      </div>
+      <div style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent);flex-shrink:0">R$ ${custo.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+}
+
+function selecionarPecaKit(pecaId, prefixo) {
+  const p = db.pecas.find(x => x.id === pecaId);
+  if (!p) return;
+  document.getElementById(prefixo + '-peca-dropdown').style.display = 'none';
+  document.getElementById(prefixo + '-codigo').value = p.codigo || '';
+  document.getElementById(prefixo + '-fornecedor').value = p.fonte || '';
+  document.getElementById(prefixo + '-desc').value = p.nome || '';
+  document.getElementById(prefixo + '-custo-rs').value = (p.custo || 0).toFixed(2);
+  document.getElementById(prefixo + '-custo-usd').value = '';
+}
+
+function fecharDropdownPecaKit(prefixo) {
+  const dd = document.getElementById(prefixo + '-peca-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+
 function adicionarItemKit() {
   const codigo = document.getElementById('kit-item-codigo').value.trim();
   const fornecedor = document.getElementById('kit-item-fornecedor').value.trim();
