@@ -1139,6 +1139,11 @@ function adicionarItemMov() {
   if (!pecaId) { toast('Selecione uma peca', 'error'); return; }
   if (qtd <= 0) { toast('Informe uma quantidade valida', 'error'); return; }
   const peca = db.pecas.find(function(x) { return x.id === pecaId; });
+  // Captura o equipamento selecionado NO MOMENTO em que este item é
+  // adicionado — assim, cada item da lista pode ir pra um equipamento
+  // diferente (troque o equipamento selecionado entre uma adição e outra).
+  const equipId = document.getElementById('mov-equip').value;
+  const equip   = equipId ? db.equipamentos.find(x => x.id === equipId) : null;
   movItens.push({
     peca_id: pecaId,
     peca_codigo: peca?.codigo || pecaId,
@@ -1146,7 +1151,11 @@ function adicionarItemMov() {
     peca_unidade: peca?.unidade || 'UN',
     peca_fonte: peca?.fonte || '',
     peca_custo: peca?.custo || 0,
-    qtd: qtd
+    qtd: qtd,
+    equip_id: equipId || '',
+    equip_serie: equip?.serie || equip?.codigo || '',
+    equip_cliente: equip?.nome_fantasia || equip?.cliente || '',
+    equip_modelo: equip?.modelo || '',
   });
   document.getElementById('mov-peca-search').value = '';
   document.getElementById('mov-peca').value = '';
@@ -1160,11 +1169,15 @@ function renderItensMov() {
   const el = document.getElementById('mov-itens-lista');
   if (!el) return;
   if (!movItens.length) { el.innerHTML = ''; return; }
-  el.innerHTML = '<table class="data-table"><thead><tr><th>P/N</th><th>Peca</th><th>Qtd</th><th></th></tr></thead><tbody>' +
+  el.innerHTML = '<table class="data-table"><thead><tr><th>P/N</th><th>Peca</th><th>Qtd</th><th>Equipamento</th><th></th></tr></thead><tbody>' +
     movItens.map(function(it, i) {
+      const equipInfo = it.equip_serie
+        ? '<span style="font-family:var(--mono)">' + it.equip_serie + '</span>' + (it.equip_cliente ? ' · ' + it.equip_cliente : '')
+        : '<span style="color:var(--text3);font-style:italic">sem equipamento</span>';
       return '<tr><td class="mono" style="font-size:11px;color:var(--accent)">' + (it.peca_codigo||'') + '</td>' +
         '<td style="font-size:12px">' + (it.peca_nome||'') + '</td>' +
         '<td class="mono">' + it.qtd + '</td>' +
+        '<td style="font-size:11px">' + equipInfo + '</td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="removerItemMov(' + i + ')">✕</button></td></tr>';
     }).join('') + '</tbody></table>';
 }
@@ -1178,20 +1191,23 @@ function criarSolicitacao() {
   var qtdAtual = parseInt(document.getElementById('mov-qtd').value) || 0;
   if (!listaFinal.length && pecaIdAtual && qtdAtual > 0) {
     var pecaAtual = db.pecas.find(function(x) { return x.id === pecaIdAtual; });
+    var equipIdAtual = document.getElementById('mov-equip').value;
+    var equipAtual   = equipIdAtual ? db.equipamentos.find(x => x.id === equipIdAtual) : null;
     listaFinal.push({
       peca_id: pecaIdAtual, peca_codigo: pecaAtual?.codigo || pecaIdAtual,
       peca_nome: pecaAtual?.nome || '?', peca_unidade: pecaAtual?.unidade || 'UN',
-      peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, qtd: qtdAtual
+      peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, qtd: qtdAtual,
+      equip_id: equipIdAtual || '', equip_serie: equipAtual?.serie || equipAtual?.codigo || '',
+      equip_cliente: equipAtual?.nome_fantasia || equipAtual?.cliente || '', equip_modelo: equipAtual?.modelo || '',
     });
   }
   if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
-  const equipId = document.getElementById('mov-equip').value;
-  const equip   = equipId ? db.equipamentos.find(x => x.id === equipId) : null;
   const tecnico = document.getElementById('mov-tecnico').value.trim() || currentUser?.nome || '';
   const obs     = document.getElementById('mov-obs').value.trim();
   // Itens de uma mesma solicitação (mais de 1 peça) compartilham um grupo_id,
   // para aparecerem agrupados visualmente no Histórico, mesmo cada um mantendo
-  // seu próprio status/rastreamento individual.
+  // seu próprio status/rastreamento individual — inclusive quando vão para
+  // equipamentos diferentes dentro da mesma solicitação em lote.
   const grupoId = listaFinal.length > 1 ? uid() : '';
   var criadas = 0, erros = 0;
   function processarProximo(i) {
@@ -1210,8 +1226,8 @@ function criarSolicitacao() {
       peca_id: item.peca_id, peca_codigo: item.peca_codigo, peca_nome: item.peca_nome,
       peca_unidade: item.peca_unidade, peca_fonte: item.peca_fonte, peca_custo: item.peca_custo,
       qtd: item.qtd,
-      equip_id: equipId || '', equip_serie: equip?.serie || equip?.codigo || '',
-      equip_cliente: equip?.nome_fantasia || equip?.cliente || '', equip_modelo: equip?.modelo || '',
+      equip_id: item.equip_id || '', equip_serie: item.equip_serie || '',
+      equip_cliente: item.equip_cliente || '', equip_modelo: item.equip_modelo || '',
       tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId
     };
     API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
@@ -2412,6 +2428,8 @@ function montarCardGrupo(itensDoGrupo) {
 
   const isFin = statusUnico && statusRep === 'FINALIZADO';
 
+  const equipUnico = itensDoGrupo.every(x => x.equipSerie === primeiro.equipSerie);
+
   return `
   <div class="sol-card ${isFin?'finalizado':''}" style="flex-direction:column;align-items:stretch;gap:10px;margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
@@ -2421,7 +2439,8 @@ function montarCardGrupo(itensDoGrupo) {
           ${ps ? `<span class="badge ${ps.badge}">${ps.label}</span>` : `<span class="badge badge-gray">STATUS MISTO</span>`}
           <span class="badge badge-gray" style="font-size:9px">📦 LOTE · ${itensDoGrupo.length} ITENS · ${qtdTotal} UNID.</span>
         </div>
-        ${primeiro.equipSerie ? `<div style="font-size:12px;color:var(--text2)">S/N: <span style="font-family:var(--mono);color:var(--text)">${primeiro.equipSerie}</span>${primeiro.equipCliente ? ' · <span style="color:var(--text3)">'+primeiro.equipCliente+'</span>' : ''}</div>` : ''}
+        ${equipUnico && primeiro.equipSerie ? `<div style="font-size:12px;color:var(--text2)">S/N: <span style="font-family:var(--mono);color:var(--text)">${primeiro.equipSerie}</span>${primeiro.equipCliente ? ' · <span style="color:var(--text3)">'+primeiro.equipCliente+'</span>' : ''}</div>` : ''}
+        ${!equipUnico ? `<div style="font-size:11px;color:var(--accent)">📍 ${new Set(itensDoGrupo.map(x=>x.equipSerie||'—')).size} equipamentos diferentes neste lote (veja a tabela abaixo)</div>` : ''}
         ${primeiro.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${primeiro.tecnico}</div>` : ''}
         ${primeiro.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic">"${primeiro.obs}"</div>` : ''}
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${formatDate(primeiro.eventos?.[0]?.data||0)}</div>
@@ -2433,14 +2452,18 @@ function montarCardGrupo(itensDoGrupo) {
       </div>
     </div>
     <table class="data-table" style="margin-top:2px">
-      <thead><tr><th>P/N</th><th>Peça</th><th>Qtd</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>P/N</th><th>Peça</th><th>Qtd</th>${!equipUnico ? '<th>Equipamento</th>' : ''}<th>Status</th><th></th></tr></thead>
       <tbody>
       ${itensDoGrupo.map(it => {
         const psIt = PIPELINE_STATUS[it.status] || PIPELINE_STATUS.SOLICITADA;
+        const equipCol = !equipUnico
+          ? `<td style="font-size:11px">${it.equipSerie ? `<span style="font-family:var(--mono)">${it.equipSerie}</span>${it.equipCliente ? ' · '+it.equipCliente : ''}` : '<span style="color:var(--text3);font-style:italic">—</span>'}</td>`
+          : '';
         return `<tr>
           <td class="mono" style="font-size:11px;color:var(--accent)">${it.pecaCodigo}</td>
           <td style="font-size:12px">${it.pecaNome}${!it.temEstoque ? ' <span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>' : ''}</td>
           <td class="mono">${it.qtd} ${it.pecaUnidade}</td>
+          ${equipCol}
           <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
           <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button></td>
         </tr>`;
