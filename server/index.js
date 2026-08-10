@@ -495,34 +495,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Importa os demais kits da planilha de preventivas (rodar 1x, depois remover) ──
-    app.get('/api/admin/importar-kits-preventivas-lote', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        const kits = require('./dados-kits-preventivas.json');
-        const existentes = db.query('SELECT codigo FROM kits_preventivas').map(k => (k.codigo || '').trim().toUpperCase());
-        let criados = 0, pulados = [];
-        const agora = Date.now();
-        for (const k of kits) {
-          if (existentes.includes((k.codigo || '').trim().toUpperCase())) { pulados.push(k.codigo); continue; }
-          const id = db.uid();
-          db.runBatch(`INSERT INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,itens_opcionais,obs,created_at,updated_at,created_by)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [id, k.nome, k.codigo, k.fonte || '', k.linha || '', k.taxa || 2, k.dolar || 5.27, k.markup || 2,
-             JSON.stringify(k.itens || []), '[]', 'Importado da planilha de preventivas (aba PREVENTIVA GERAL)', agora, agora, 'import-lote']);
-          criados++;
-        }
-        db.persist();
-        res.json({ ok: true, totalNaPlanilha: kits.length, criados, pulados });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim importacao kits em lote ──
-
     // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
     app.get('/api/admin/relatorio-teste', async (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
