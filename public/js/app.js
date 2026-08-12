@@ -2585,9 +2585,9 @@ function renderOrcamentos(q='') {
       <div class="empty-sub">Crie o primeiro orçamento</div></div>`;
     return;
   }
-  el.innerHTML = `<table class="data-table">
+  el.innerHTML = `<table class="data-table compact">
     <thead><tr>
-      <th>Nº de Orçamento</th><th>Status</th><th>Dias no Status</th><th>Cliente</th><th>S/N Equip.</th>
+      <th>Nº</th><th>Status</th><th>Dias</th><th>Cliente</th><th>S/N</th>
       <th>OS</th><th>Itens</th><th>Total</th><th>Data</th><th></th>
     </tr></thead>
     <tbody>
@@ -2596,18 +2596,18 @@ function renderOrcamentos(q='') {
       return `<tr>
         <td><strong style="font-family:var(--mono)">${o.numero}</strong></td>
         <td><span class="badge ${st.badge}">${st.label}</span></td>
-        <td class="mono" style="font-size:12px">${(function(){ var base = o.status_changed_at || o.created_at || Date.now(); var dias = Math.floor((Date.now() - base) / 86400000); return dias + (dias===1?' dia':' dias'); })()}</td>
-        <td style="font-size:12px">${o.cliente||'—'}</td>
+        <td class="mono" style="font-size:11px">${(function(){ var base = o.status_changed_at || o.created_at || Date.now(); var dias = Math.floor((Date.now() - base) / 86400000); return dias + 'd'; })()}</td>
+        <td style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.cliente||'—'}</td>
         <td class="mono">${(o.equipamentos&&o.equipamentos.length)?(o.equipamentos[0].serie||'—')+(o.equipamentos.length>1?' +'+(o.equipamentos.length-1):''):(o.equip_serie||'—')}</td>
         <td class="mono">${o.os||'—'}</td>
         <td class="mono">${(o.itens||[]).length}</td>
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${parseFloat(o.total||0).toFixed(2)}</td>
         <td class="mono">${o.data||'—'}</td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')">Editar</button>
-          <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')">Status ▾</button>
-          <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento('${o.id}')">⬇ PDF</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteOrcamento('${o.id}')">✕</button>
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')" title="Editar">✎</button>
+          <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')" title="Status">▾</button>
+          <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento('${o.id}')" title="Gerar PDF">⬇</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteOrcamento('${o.id}')" title="Excluir">✕</button>
         </td>
       </tr>`;
     }).join('')}

@@ -370,6 +370,12 @@
   .data-table tbody tr:hover td { background: var(--surface2); }
   .data-table .mono { font-family: var(--mono); font-size: 11px; color: var(--text2); }
 
+  /* Variante compacta (usada em Orçamentos) — reduz padding/fonte pra caber
+     mais colunas sem precisar rolar a página pro lado */
+  .data-table.compact th { padding: 6px 8px; font-size: 8px; }
+  .data-table.compact td { padding: 6px 8px; font-size: 12px; }
+  .data-table.compact .btn-sm { padding: 3px 7px; font-size: 10px; }
+
   /* BADGES */
   .badge {
     display: inline-flex;
