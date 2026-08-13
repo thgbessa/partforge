@@ -6248,6 +6248,40 @@ function exportarExcel(aba) {
 
     XLSX.writeFile(wb, 'partforge_orcamentos.xlsx');
     toast('Orçamentos exportados: ' + db.orcamentos.length);
+
+  } else if (aba === 'solicitacoescompra') {
+    const heads = ['Nº Solicitação eLoca','Status','Dias no Status','Demanda','Nome (Técnico/Cliente/Estoque)','S/N Equip.','Nome Equip.','Cliente Equip.','Total','Qtd Itens','Itens (Detalhe)','Observações'];
+    const rows = [heads, ...db.solicitacoesCompra.map(function(sc) {
+      const itensTexto = (sc.itens || []).map(function(it) {
+        const qtd = parseFloat(it.qtd || 0);
+        const valor = parseFloat(it.valor || 0);
+        const obsItem = it.obs ? ' [Obs: ' + it.obs + ']' : '';
+        return (it.cod || '') + ' - ' + (it.desc || '') + ' (Qtd: ' + qtd + ', Unit: R$ ' + valor.toFixed(2) + ', Total: R$ ' + (qtd * valor).toFixed(2) + ')' + obsItem;
+      }).join(' | ');
+      const total = (sc.itens || []).reduce(function(s, it) { return s + (parseFloat(it.qtd)||0) * (parseFloat(it.valor)||0); }, 0);
+      const baseData = sc.status_changed_at || sc.created_at || Date.now();
+      const diasStatus = Math.floor((Date.now() - baseData) / 86400000);
+      return [
+        sc.numero || '',
+        sc.status || '',
+        diasStatus,
+        sc.demanda || '',
+        sc.demanda_nome || '',
+        sc.equip_serie || '',
+        sc.equip_nome || '',
+        sc.equip_cliente || '',
+        total,
+        (sc.itens || []).length,
+        itensTexto,
+        sc.obs || ''
+      ];
+    })];
+    const ws = buildSheet(rows, heads);
+    ws['!cols'] = heads.map(function(h, i) { return i === 10 ? { wch: 80 } : { wch: 16 }; });
+    XLSX.utils.book_append_sheet(wb, ws, 'Solicitações de Compra');
+
+    XLSX.writeFile(wb, 'partforge_solicitacoes_compra.xlsx');
+    toast('Solicitações de compra exportadas: ' + db.solicitacoesCompra.length);
   }
 }
 
@@ -6317,6 +6351,12 @@ function importarExcel(aba) {
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
           importarOrcamentos(rows, sheetName);
+        } else if (aba === 'solicitacoescompra') {
+          sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('solicita')) || wb.SheetNames[0];
+          ws = wb.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+          if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
+          importarSolicitacoesCompra(rows, sheetName);
         }
 
       } catch(err) {
@@ -6390,6 +6430,73 @@ function importarOrcamentos(rows, sheetName) {
     };
     const existente = db.orcamentos.find(function(o) { return String(o.numero) === numero; });
     const prom = existente ? API.put('/orcamentos/' + existente.id, payload) : API.post('/orcamentos', payload);
+    prom.then(function() {
+      if (existente) atualizados++; else criados++;
+      processarLinha(i+1);
+    }).catch(function() {
+      erros++;
+      processarLinha(i+1);
+    });
+  }
+  processarLinha(0);
+}
+function importarSolicitacoesCompra(rows, sheetName) {
+  const norm = function(str) { return String(str||'').trim().toLowerCase(); };
+  const rawHeader = rows[0];
+  const idx = {};
+  rawHeader.forEach(function(h, i) {
+    const hn = norm(h);
+    if (hn === 'nº solicitação eloca' || hn === 'nº solicitacao eloca' || hn === 'numero' || hn === 'número') idx.numero = i;
+    else if (hn === 'status') idx.status = i;
+    else if (hn === 'demanda') idx.demanda = i;
+    else if (hn === 'nome (técnico/cliente/estoque)' || hn === 'nome (tecnico/cliente/estoque)') idx.demanda_nome = i;
+    else if (hn === 's/n equip.') idx.equip_serie = i;
+    else if (hn === 'nome equip.') idx.equip_nome = i;
+    else if (hn === 'cliente equip.') idx.equip_cliente = i;
+    else if (hn === 'itens (detalhe)') idx.itens = i;
+    else if (hn === 'observações' || hn === 'observacoes') idx.obs = i;
+  });
+  if (idx.numero === undefined) { toast('Coluna Nº Solicitação eLoca não encontrada', 'error'); return; }
+  const labelParaStatus = {};
+  Object.keys(STATUS_SC).forEach(function(code) { labelParaStatus[norm(STATUS_SC[code].label)] = code; });
+  function parseItens(texto) {
+    if (!texto) return [];
+    return String(texto).split(' | ').map(function(bloco) {
+      const obsMatch = bloco.match(/\[Obs: (.*?)\]$/);
+      const obs = obsMatch ? obsMatch[1].trim() : '';
+      const semObs = bloco.replace(/\s*\[Obs: .*?\]$/, '');
+      const m = semObs.match(/^(.*?) - (.*?) \(Qtd: ([\d.]+), Unit: R\$ ([\d.,]+), Total: R\$ ([\d.,]+)\)$/);
+      if (!m) return null;
+      return { cod: m[1].trim(), desc: m[2].trim(), qtd: parseFloat(m[3])||1, valor: parseFloat(m[4].replace(',','.'))||0, obs: obs };
+    }).filter(Boolean);
+  }
+  let criados = 0, atualizados = 0, erros = 0;
+  const linhas = rows.slice(1);
+  function processarLinha(i) {
+    if (i >= linhas.length) {
+      toast('Solicitações de compra importadas: ' + criados + ' criadas, ' + atualizados + ' atualizadas' + (erros?', ' + erros + ' erros':''), 'success');
+      loadAndRenderSolicitacoesCompra();
+      return;
+    }
+    const row = linhas[i];
+    const numero = String(row[idx.numero]||'').trim();
+    if (!numero) { processarLinha(i+1); return; }
+    const statusLabel = norm(row[idx.status]);
+    const statusCode = labelParaStatus[statusLabel] || 'SOLICITADO';
+    const itens = idx.itens !== undefined ? parseItens(row[idx.itens]) : [];
+    const payload = {
+      numero: numero,
+      status: statusCode,
+      demanda: idx.demanda !== undefined ? row[idx.demanda] : '',
+      demanda_nome: idx.demanda_nome !== undefined ? row[idx.demanda_nome] : '',
+      equip_serie: idx.equip_serie !== undefined ? row[idx.equip_serie] : '',
+      equip_nome: idx.equip_nome !== undefined ? row[idx.equip_nome] : '',
+      equip_cliente: idx.equip_cliente !== undefined ? row[idx.equip_cliente] : '',
+      obs: idx.obs !== undefined ? row[idx.obs] : '',
+      itens: itens
+    };
+    const existente = db.solicitacoesCompra.find(function(sc) { return String(sc.numero) === numero; });
+    const prom = existente ? API.put('/solicitacoes-compra/' + existente.id, payload) : API.post('/solicitacoes-compra', payload);
     prom.then(function() {
       if (existente) atualizados++; else criados++;
       processarLinha(i+1);
@@ -6920,7 +7027,10 @@ function navigate(page, el) {
       <button class="btn btn-primary" onclick="abrirModalOrcamento()">⊕ Novo Orçamento</button>`;
     loadAndRenderOrcamentos();
   } else if (page === 'solicitacoescompra') {
-    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalSolicitacaoCompra()">⊕ Nova Solicitação</button>`;
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-import" onclick="importarExcel('solicitacoescompra')">⬆ Importar Excel</button>
+      <button class="btn btn-excel" onclick="exportarExcel('solicitacoescompra')">⬇ Exportar Excel</button>
+      <button class="btn btn-primary" onclick="abrirModalSolicitacaoCompra()">⊕ Nova Solicitação</button>`;
     loadAndRenderSolicitacoesCompra();
   } else if (page === 'kits-preventivas') {
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalKitPreventiva()">⊕ Novo Kit</button>`;
