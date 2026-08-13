@@ -495,6 +495,26 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
+    app.get('/api/admin/cancelar-rascunhos', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const rascunhos = db.query("SELECT id, numero FROM orcamentos WHERE status='RASCUNHO' AND numero != '1041'");
+        const agora = Date.now();
+        for (const o of rascunhos) {
+          db.runBatch("UPDATE orcamentos SET status='CANCELADO', status_changed_at=?, updated_at=? WHERE id=?", [agora, agora, o.id]);
+        }
+        db.persist();
+        res.json({ ok: true, totalCancelados: rascunhos.length, numeros: rascunhos.map(o => o.numero) });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim cancelar rascunhos ──
+
     // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
     app.get('/api/admin/relatorio-teste', async (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
