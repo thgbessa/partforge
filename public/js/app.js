@@ -2682,7 +2682,9 @@ function renderKitsPreventivas(q = '') {
   const el = document.getElementById('kits-preventivas-table');
   if (!el) return;
   const ql = (q || document.querySelector('#page-kits-preventivas .search-input')?.value || '').toLowerCase().trim();
+  const fonteFiltro = document.getElementById('kits-filter-fonte')?.value || '';
   let list = [...(db.kitsPreventivas || [])].sort((a, b) => (a.nome || '').localeCompare(b.nome || ''));
+  if (fonteFiltro) list = list.filter(k => String(k.fonte || '') === fonteFiltro);
   if (ql) {
     list = list.filter(k =>
       String(k.nome || '').toLowerCase().includes(ql) ||
@@ -3086,12 +3088,23 @@ async function loadAndRenderKitsPreventivas(q = '') {
   try {
     const qs = q ? '?q=' + encodeURIComponent(q) : '';
     db.kitsPreventivas = await API.get('/kits-preventivas' + qs);
+    if (!q) popularFiltroFonteKits(); // só repopula com a lista completa (sem busca ativa)
     renderKitsPreventivas(q);
   } catch (e) {
     toast(e.message, 'error');
   } finally {
     setSyncing(false);
   }
+}
+
+function popularFiltroFonteKits() {
+  const sel = document.getElementById('kits-filter-fonte');
+  if (!sel) return;
+  const valorAtual = sel.value;
+  const fontes = [...new Set((db.kitsPreventivas || []).map(k => (k.fonte || '').trim()).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todas as fontes</option>' +
+    fontes.map(f => `<option value="${f}">${f}</option>`).join('');
+  if (fontes.includes(valorAtual)) sel.value = valorAtual;
 }
 
 // ── Gerar Orçamento a partir de um Kit Preventiva (PDF exclusivo, itens
