@@ -495,23 +495,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Define estoque minimo = 2 para todas as pecas (rodar 1x, depois remover) ──
-    app.get('/api/admin/definir-minimo-2', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        const totalPecas = db.get('SELECT COUNT(*) as n FROM pecas')?.n || 0;
-        const diferentes = db.get('SELECT COUNT(*) as n FROM pecas WHERE minimo != 2 OR minimo IS NULL')?.n || 0;
-        db.run('UPDATE pecas SET minimo = 2');
-        res.json({ ok: true, totalPecas, atualizadas: diferentes });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim definir minimo 2 ──
-
     // ── Gatilho manual de teste do relatorio diario (envia so para 1 e-mail) ──
     app.get('/api/admin/relatorio-teste', async (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
