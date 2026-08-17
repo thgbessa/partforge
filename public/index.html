@@ -840,7 +840,7 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Status</label>
-                <select class="form-select" id="orc-status">
+                <select class="form-select" id="orc-status" onchange="atualizarVisibilidadeTipoNF()">
                   <option value="RASCUNHO">Rascunho</option>
                   <option value="ENVIADO">Aguard. Aprov. Cliente</option>
                   <option value="APROVADO_TECNICO">Aprovado - Aguard. Tecnico</option>
@@ -849,6 +849,15 @@
                   <option value="A_FATURAR">A Faturar</option>
                   <option value="FATURADO">Faturado</option>
                   <option value="CANCELADO">Cancelado</option>
+                </select>
+              </div>
+              <div class="form-group" id="orc-tipo-nf-wrap" style="display:none">
+                <label class="form-label">Tipo de Nota Fiscal</label>
+                <select class="form-select" id="orc-tipo-nf">
+                  <option value="">— Não definido —</option>
+                  <option value="NFE">NFe</option>
+                  <option value="NFS">NFS</option>
+                  <option value="AMBAS">NFe + NFS</option>
                 </select>
               </div>
               <div class="form-group">
@@ -1825,4 +1834,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000055"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000056"></script></html>

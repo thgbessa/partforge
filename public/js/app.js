@@ -3222,6 +3222,12 @@ function criarOrcamentoDeKit(kitId) {
 }
 
 
+function atualizarVisibilidadeTipoNF() {
+  const status = document.getElementById('orc-status')?.value;
+  const wrap = document.getElementById('orc-tipo-nf-wrap');
+  if (wrap) wrap.style.display = (status === 'A_FATURAR' || status === 'FATURADO') ? '' : 'none';
+}
+
 function abrirModalOrcamento(id) {
   editOrcId = id || null;
   const o   = id ? db.orcamentos.find(x=>x.id===id) : null;
@@ -3232,6 +3238,8 @@ function abrirModalOrcamento(id) {
   document.getElementById('modal-orcamento-title').textContent = o ? 'Editar Orçamento' : 'Novo Orçamento';
   if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
   document.getElementById('orc-status').value      = o?.status     || 'RASCUNHO';
+  document.getElementById('orc-tipo-nf').value      = o?.tipo_nf   || '';
+  atualizarVisibilidadeTipoNF();
   document.getElementById('orc-cliente').value     = o?.cliente    || '';
   document.getElementById('orc-cnpj').value        = o?.cnpj       || '';
   _cnpjEditadoManualmente = !!(o?.cnpj);
@@ -3576,6 +3584,7 @@ function salvarOrcamento() {
     assinatura: currentUser?.nome || '',
     itens:      [...orcItens],
     itens_opcionais: [...orcItensOpcionais],
+    tipo_nf: document.getElementById('orc-tipo-nf')?.value || '',
   };
 
   const fn = editOrcId ? API.put('/orcamentos/' + editOrcId, data) : API.post('/orcamentos', data);

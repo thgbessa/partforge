@@ -171,6 +171,7 @@ async function init() {
   try { _db.run("UPDATE orcamentos SET updated_at = created_at WHERE updated_at IS NULL OR updated_at = 0"); } catch(e) {}
   try { _db.run("ALTER TABLE orcamentos ADD COLUMN cnpj TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE orcamentos ADD COLUMN itens_opcionais TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN tipo_nf TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run(`CREATE TABLE IF NOT EXISTS clientes (
     nome_norm TEXT PRIMARY KEY, nome TEXT, cnpj TEXT, updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando clientes', e.message); }
