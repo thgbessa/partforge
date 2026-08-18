@@ -692,9 +692,14 @@
             <div class="section-title" style="margin:18px 0 12px;font-size:12px">ITENS DA SOLICITAÇÃO</div>
             <div id="sc-itens-lista" style="margin-bottom:12px"></div>
             <div style="display:grid;grid-template-columns:1fr 2fr 80px 110px 1fr 90px;gap:8px;align-items:end">
-              <div>
+              <div style="position:relative">
                 <label class="form-label" style="font-size:9px">CÓDIGO (opcional)</label>
-                <input class="form-input" id="sc-item-cod" placeholder="P/N" style="font-family:var(--mono);font-size:12px">
+                <input class="form-input" id="sc-item-cod" placeholder="P/N ou nome..." style="font-family:var(--mono);font-size:12px"
+                  autocomplete="off" oninput="sugerirPecaSC(this.value)" onfocus="sugerirPecaSC(this.value)"
+                  onblur="setTimeout(()=>fecharDropdownPecaSC(),200)">
+                <div id="sc-item-peca-dropdown" style="display:none;position:absolute;top:100%;left:0;width:320px;z-index:9999;
+                  background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+                  max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
               </div>
               <div>
                 <label class="form-label" style="font-size:9px">DESCRIÇÃO *</label>
@@ -1845,4 +1850,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000057"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000058"></script></html>
