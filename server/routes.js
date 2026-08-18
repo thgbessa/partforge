@@ -570,6 +570,8 @@ router.get('/dashboard', autenticar, (req, res) => {
 
   // Gastos por cliente em Solicitações de Compra (soma qtd x valor dos itens,
   // agrupado pelo cliente do item ou, se não tiver, o da própria solicitação).
+  // Itens de demanda ESTOQUE (reposição, sem cliente vinculado) entram numa
+  // categoria própria "Reposição de Estoque", em vez de ficarem de fora.
   // Exclui as recusadas, que não representam gasto real.
   const todasSC = db.query("SELECT * FROM solicitacoes_compra WHERE status != 'RECUSADO'");
   const gastosPorClienteMap = {};
@@ -577,16 +579,22 @@ router.get('/dashboard', autenticar, (req, res) => {
     let itens = [];
     try { itens = JSON.parse(sc.itens || '[]'); } catch (e) { itens = []; }
     itens.forEach(it => {
-      const cliente = (
-        it.equip_cliente ||
-        (it.demanda === 'CLIENTE' ? it.demanda_nome : '') ||
-        sc.equip_cliente ||
-        (sc.demanda === 'CLIENTE' ? sc.demanda_nome : '') ||
-        ''
-      ).trim();
-      if (!cliente) return;
+      const demandaEfetiva = it.demanda || sc.demanda || '';
+      let categoria;
+      if (demandaEfetiva === 'ESTOQUE') {
+        categoria = 'Reposição de Estoque';
+      } else {
+        categoria = (
+          it.equip_cliente ||
+          (it.demanda === 'CLIENTE' ? it.demanda_nome : '') ||
+          sc.equip_cliente ||
+          (sc.demanda === 'CLIENTE' ? sc.demanda_nome : '') ||
+          ''
+        ).trim();
+      }
+      if (!categoria) return;
       const valorItem = (parseFloat(it.qtd) || 0) * (parseFloat(it.valor) || 0);
-      gastosPorClienteMap[cliente] = (gastosPorClienteMap[cliente] || 0) + valorItem;
+      gastosPorClienteMap[categoria] = (gastosPorClienteMap[categoria] || 0) + valorItem;
     });
   });
   const gastosPorCliente = Object.entries(gastosPorClienteMap)
