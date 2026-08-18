@@ -6342,40 +6342,53 @@ function exportarExcel(aba) {
     XLSX.writeFile(wb, 'partforge_historico.xlsx');
     toast(`Histórico exportado: ${rows.length - 1} solicitações`);
   } else if (aba === 'orcamentos') {
-    const heads = ['Nº de Orçamento','Status','Dias no Status','Cliente','Série Equip.','Nome Equip.','OS','Data','Validade','Pagamento','Entrega','Frete','Total','Qtd Itens','Itens (Detalhe)','Observações'];
-    const rows = [heads, ...db.orcamentos.map(function(o) {
+    // Respeita o filtro de status e a busca que estiverem ativos na tela,
+    // pra exportar só o que está sendo visualizado no momento.
+    const sfExport = document.getElementById('orc-filter-status')?.value || '';
+    const qExport = (document.querySelector('#page-orcamento .search-input')?.value || '').toLowerCase();
+    let listaOrcExport = [...db.orcamentos];
+    if (sfExport) listaOrcExport = listaOrcExport.filter(function(o) { return o.status === sfExport; });
+    if (qExport) listaOrcExport = listaOrcExport.filter(function(o) {
+      return (o.numero||'').toLowerCase().includes(qExport) ||
+        (o.cliente||'').toLowerCase().includes(qExport) ||
+        (o.equip_serie||'').toLowerCase().includes(qExport) ||
+        (o.itens||[]).some(function(i) { return (i.desc||'').toLowerCase().includes(qExport); });
+    });
+
+    const TIPO_NF_LABEL = { NFE:'NFe', NFS:'NFS', AMBAS:'NFe + NFS' };
+    const heads = ['Nº Orçamento','Status','Cliente','Equip','OS','Pagamento','Tipo de Nota','Total','Itens','Obs'];
+    const rows = [heads, ...listaOrcExport.map(function(o) {
       const itensTexto = (o.itens || []).map(function(it) {
         const qtd = parseFloat(it.qtd || 0);
         const valor = parseFloat(it.valor || 0);
         return (it.cod || '') + ' - ' + (it.desc || '') + ' (Qtd: ' + qtd + ', Unit: R$ ' + valor.toFixed(2) + ', Total: R$ ' + (qtd * valor).toFixed(2) + ')';
       }).join(' | ');
-      const baseData = o.status_changed_at || o.created_at || Date.now();
-      const diasStatus = Math.floor((Date.now() - baseData) / 86400000);
+      const equipList = (o.equipamentos && o.equipamentos.length) ? o.equipamentos
+        : ((o.equip_serie || o.equip_nome) ? [{ serie: o.equip_serie, nome: o.equip_nome }] : []);
+      const equipTexto = equipList.map(function(e) { return [e.serie, e.nome].filter(Boolean).join(' - '); }).join(' | ');
+      const stLabel = (ORC_STATUS[o.status] || {}).label || o.status || '';
       return [
         o.numero || '',
-        o.status || '',
-        diasStatus,
+        stLabel,
         o.cliente || '',
-        o.equip_serie || '',
-        o.equip_nome || '',
+        equipTexto,
         o.os || '',
-        o.data || '',
-        o.validade || '',
         o.pagamento || '',
-        o.entrega || '',
-        o.frete || '',
+        TIPO_NF_LABEL[o.tipo_nf] || '',
         parseFloat(o.total || 0),
-        (o.itens || []).length,
         itensTexto,
         o.obs || ''
       ];
     })];
     const ws = buildSheet(rows, heads);
-    ws['!cols'] = heads.map(function(h, i) { return i === 14 ? { wch: 80 } : { wch: 16 }; });
-    XLSX.utils.book_append_sheet(wb, ws, 'Orçamentos');
+    ws['!cols'] = heads.map(function(h, i) { return i === 8 ? { wch: 80 } : { wch: 18 }; });
+    const stLabelArquivo = sfExport ? ((ORC_STATUS[sfExport]||{}).label || sfExport) : '';
+    const nomeAba = ('Orçamentos' + (stLabelArquivo ? ' - ' + stLabelArquivo : '')).slice(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, nomeAba);
 
-    XLSX.writeFile(wb, 'partforge_orcamentos.xlsx');
-    toast('Orçamentos exportados: ' + db.orcamentos.length);
+    const nomeArquivo = 'partforge_orcamentos' + (sfExport ? '_' + sfExport.toLowerCase() : '') + '.xlsx';
+    XLSX.writeFile(wb, nomeArquivo);
+    toast('Orçamentos exportados: ' + listaOrcExport.length + (stLabelArquivo ? ' (status: ' + stLabelArquivo + ')' : ''));
 
   } else if (aba === 'solicitacoescompra') {
     const heads = ['Nº Solicitação eLoca','Status','Dias no Status','Demanda','Nome (Técnico/Cliente/Estoque)','S/N Equip.','Nome Equip.','Cliente Equip.','Total','Qtd Itens','Itens (Detalhe)','Observações'];
@@ -6502,23 +6515,26 @@ function importarOrcamentos(rows, sheetName) {
   const idx = {};
   rawHeader.forEach(function(h, i) {
     const hn = norm(h);
-    if (hn === 'nº de orçamento' || hn === 'numero' || hn === 'número') idx.numero = i;
+    if (hn === 'nº de orçamento' || hn === 'nº orçamento' || hn === 'numero' || hn === 'número') idx.numero = i;
     else if (hn === 'status') idx.status = i;
     else if (hn === 'cliente') idx.cliente = i;
+    else if (hn === 'equip') idx.equip = i;
     else if (hn === 'série equip.' || hn === 'serie equip.') idx.equip_serie = i;
     else if (hn === 'nome equip.') idx.equip_nome = i;
     else if (hn === 'os') idx.os = i;
     else if (hn === 'data') idx.data = i;
     else if (hn === 'validade') idx.validade = i;
     else if (hn === 'pagamento') idx.pagamento = i;
+    else if (hn === 'tipo de nota') idx.tipo_nf = i;
     else if (hn === 'entrega') idx.entrega = i;
     else if (hn === 'frete') idx.frete = i;
-    else if (hn === 'itens (detalhe)') idx.itens = i;
-    else if (hn === 'observações' || hn === 'observacoes') idx.obs = i;
+    else if (hn === 'itens' || hn === 'itens (detalhe)') idx.itens = i;
+    else if (hn === 'obs' || hn === 'observações' || hn === 'observacoes') idx.obs = i;
   });
   if (idx.numero === undefined) { toast('Coluna Nº de Orçamento não encontrada', 'error'); return; }
   const labelParaStatus = {};
   Object.keys(ORC_STATUS).forEach(function(code) { labelParaStatus[norm(ORC_STATUS[code].label)] = code; });
+  const labelParaTipoNf = { 'nfe': 'NFE', 'nfs': 'NFS', 'nfe + nfs': 'AMBAS' };
   function parseItens(texto) {
     if (!texto) return [];
     return String(texto).split(' | ').map(function(bloco) {
@@ -6541,18 +6557,29 @@ function importarOrcamentos(rows, sheetName) {
     const statusLabel = norm(row[idx.status]);
     const statusCode = labelParaStatus[statusLabel] || 'RASCUNHO';
     const itens = idx.itens !== undefined ? parseItens(row[idx.itens]) : [];
+    // Coluna combinada "Equip" (formato "Série - Nome | Série2 - Nome2"): usa
+    // o primeiro equipamento pros campos únicos equip_serie/equip_nome.
+    let equipSerie = idx.equip_serie !== undefined ? row[idx.equip_serie] : '';
+    let equipNome  = idx.equip_nome  !== undefined ? row[idx.equip_nome]  : '';
+    if (idx.equip !== undefined && row[idx.equip]) {
+      const primeiro = String(row[idx.equip]).split(' | ')[0] || '';
+      const partes = primeiro.split(' - ');
+      equipSerie = partes[0] ? partes[0].trim() : equipSerie;
+      equipNome  = partes.slice(1).join(' - ').trim() || equipNome;
+    }
     const payload = {
       numero: numero,
       status: statusCode,
       cliente: idx.cliente !== undefined ? row[idx.cliente] : '',
-      equip_serie: idx.equip_serie !== undefined ? row[idx.equip_serie] : '',
-      equip_nome: idx.equip_nome !== undefined ? row[idx.equip_nome] : '',
+      equip_serie: equipSerie,
+      equip_nome: equipNome,
       os: idx.os !== undefined ? row[idx.os] : '',
       data: idx.data !== undefined ? row[idx.data] : '',
       validade: idx.validade !== undefined ? row[idx.validade] : '7 dias',
       pagamento: idx.pagamento !== undefined ? row[idx.pagamento] : '30 dias',
       entrega: idx.entrega !== undefined ? row[idx.entrega] : 'A combinar',
       frete: idx.frete !== undefined ? row[idx.frete] : 'FOB',
+      tipo_nf: idx.tipo_nf !== undefined ? (labelParaTipoNf[norm(row[idx.tipo_nf])] || '') : '',
       obs: idx.obs !== undefined ? row[idx.obs] : '',
       itens: itens
     };
