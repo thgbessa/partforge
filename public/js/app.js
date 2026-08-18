@@ -4214,13 +4214,34 @@ function adicionarItemSC() {
   const obs  = document.getElementById('sc-item-obs').value.trim();
   if (!desc) { toast('Informe a descrição do item', 'error'); return; }
 
+  // Ao editar um item já existente, mantém a demanda/equipamento originais
+  // dele — só captura do formulário quando é um item NOVO sendo adicionado.
+  let demanda, demandaNome, equipSerie, equipNome, equipCliente;
   if (editandoItemScIdx !== null) {
-    scItens[editandoItemScIdx] = { cod, desc, qtd, valor, obs };
+    const original = scItens[editandoItemScIdx];
+    demanda = original.demanda; demandaNome = original.demanda_nome;
+    equipSerie = original.equip_serie; equipNome = original.equip_nome; equipCliente = original.equip_cliente;
+  } else {
+    demanda = document.getElementById('sc-demanda').value;
+    demandaNome = document.getElementById('sc-demanda-nome-search')?.value.trim() || '';
+    equipSerie = document.getElementById('sc-equip-serie').value.trim();
+    equipNome = document.getElementById('sc-equip-nome').value.trim();
+    equipCliente = document.getElementById('sc-equip-cliente').value.trim();
+  }
+
+  const item = {
+    cod, desc, qtd, valor, obs,
+    demanda, demanda_nome: demandaNome,
+    equip_serie: equipSerie, equip_nome: equipNome, equip_cliente: equipCliente,
+  };
+
+  if (editandoItemScIdx !== null) {
+    scItens[editandoItemScIdx] = item;
     editandoItemScIdx = null;
     const btn = document.getElementById('sc-add-item-btn');
     if (btn) btn.textContent = '⊕ Add';
   } else {
-    scItens.push({ cod, desc, qtd, valor, obs });
+    scItens.push(item);
   }
 
   ['sc-item-cod', 'sc-item-desc', 'sc-item-valor', 'sc-item-obs'].forEach(id => {
@@ -4254,20 +4275,28 @@ function renderItensSC() {
   if (!scItens.length) {
     el.innerHTML = `<div style="font-size:12px;color:var(--text3);font-style:italic">Nenhum item adicionado</div>`;
   } else {
+    const clientesDistintos = new Set(scItens.map(it => (it.equip_cliente || it.demanda_nome || '').trim())).size;
+    const mostrarCliente = clientesDistintos > 1;
     el.innerHTML = `<table class="data-table">
-      <thead><tr><th>P/N</th><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th><th>Obs.</th><th></th></tr></thead>
-      <tbody>${scItens.map((it, i) => `<tr>
+      <thead><tr><th>P/N</th><th>Descrição</th><th>Qtd</th><th>Valor Unit.</th><th>Total</th>${mostrarCliente ? '<th>Cliente/Equip.</th>' : ''}<th>Obs.</th><th></th></tr></thead>
+      <tbody>${scItens.map((it, i) => {
+        const clienteCol = mostrarCliente
+          ? `<td style="font-size:11px">${it.equip_serie ? `<span style="font-family:var(--mono)">${it.equip_serie}</span>` : ''}${it.equip_cliente ? (it.equip_serie ? ' · ' : '') + it.equip_cliente : (it.demanda_nome ? ' ' + it.demanda_nome : '')}${!it.equip_serie && !it.equip_cliente && !it.demanda_nome ? '<span style="color:var(--text3);font-style:italic">—</span>' : ''}</td>`
+          : '';
+        return `<tr>
         <td class="mono" style="font-size:11px;color:var(--accent)">${it.cod || '—'}</td>
         <td style="font-size:12px">${it.desc}</td>
         <td class="mono">${it.qtd}</td>
         <td class="mono">R$ ${parseFloat(it.valor || 0).toFixed(2)}</td>
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${(it.qtd * (parseFloat(it.valor) || 0)).toFixed(2)}</td>
+        ${clienteCol}
         <td style="font-size:11px;color:var(--text3)">${it.obs || '—'}</td>
         <td>
           <button class="btn btn-ghost btn-sm" onclick="editarItemSC(${i})">✎</button>
           <button class="btn btn-danger btn-sm" onclick="removerItemSC(${i})">✕</button>
         </td>
-      </tr>`).join('')}</tbody></table>`;
+      </tr>`;
+      }).join('')}</tbody></table>`;
   }
   const total = scItens.reduce((s, it) => s + it.qtd * (parseFloat(it.valor) || 0), 0);
   const totalEl = document.getElementById('sc-total-display');
@@ -4751,6 +4780,51 @@ function renderChartEnviosCliente(dados) {
   });
 }
 
+let _chartGastosSC = null;
+function renderChartGastosSC(dados) {
+  const canvas = document.getElementById('chart-gastos-sc-cliente');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (_chartGastosSC) { _chartGastosSC.destroy(); _chartGastosSC = null; }
+
+  let msg = document.getElementById('chart-gastos-sc-empty');
+  if (!dados.length) {
+    canvas.style.display = 'none';
+    if (!msg) {
+      msg = document.createElement('div');
+      msg.id = 'chart-gastos-sc-empty';
+      msg.className = 'empty-state';
+      msg.innerHTML = `<div class="empty-icon">🛒</div><div class="empty-title">Sem Gastos</div><div class="empty-sub">Nenhuma solicitação de compra com cliente identificado ainda</div>`;
+      canvas.parentElement.appendChild(msg);
+    }
+    msg.style.display = '';
+    return;
+  }
+  canvas.style.display = 'block';
+  if (msg) msg.style.display = 'none';
+
+  const labels = dados.map(d => String(d.cliente||'—').replace(/\[\d+\]$/,'').trim().slice(0,30));
+  const totais = dados.map(d => Number(d.total)||0);
+
+  _chartGastosSC = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Gasto em Compras (R$)', data: totais, backgroundColor: 'rgba(155,89,182,0.75)', borderRadius: 3 },
+    ]},
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `R$ ${ctx.parsed.x.toLocaleString('pt-BR',{minimumFractionDigits:2})}` } }
+      },
+      scales: {
+        x: { ticks: { color: '#8a94a6', callback: v => 'R$ ' + Number(v).toLocaleString('pt-BR') }, grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { ticks: { color: '#8a94a6' }, grid: { display: false } }
+      }
+    }
+  });
+}
+
 function renderDashboard() {
   // Total de estoque: soma db.estoque (peças cadastradas) + depósitos sem peça vinculada
   const estoqueKnown = new Set(db.pecas.map(p => String(p.codigo)));
@@ -4782,6 +4856,7 @@ function renderDashboard() {
 
   renderChartFaturamentoMensal(dash.faturamentoPorMes || []);
   renderChartEnviosCliente(dash.enviosPorCliente || []);
+  renderChartGastosSC(dash.gastosPorCliente || []);
 
   // Últimas solicitações
   const movsEl = document.getElementById('dash-movs');

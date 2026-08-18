@@ -568,8 +568,34 @@ router.get('/dashboard', autenticar, (req, res) => {
     ORDER BY qtdPecas DESC
     LIMIT 15`);
 
+  // Gastos por cliente em Solicitações de Compra (soma qtd x valor dos itens,
+  // agrupado pelo cliente do item ou, se não tiver, o da própria solicitação).
+  // Exclui as recusadas, que não representam gasto real.
+  const todasSC = db.query("SELECT * FROM solicitacoes_compra WHERE status != 'RECUSADO'");
+  const gastosPorClienteMap = {};
+  todasSC.forEach(sc => {
+    let itens = [];
+    try { itens = JSON.parse(sc.itens || '[]'); } catch (e) { itens = []; }
+    itens.forEach(it => {
+      const cliente = (
+        it.equip_cliente ||
+        (it.demanda === 'CLIENTE' ? it.demanda_nome : '') ||
+        sc.equip_cliente ||
+        (sc.demanda === 'CLIENTE' ? sc.demanda_nome : '') ||
+        ''
+      ).trim();
+      if (!cliente) return;
+      const valorItem = (parseFloat(it.qtd) || 0) * (parseFloat(it.valor) || 0);
+      gastosPorClienteMap[cliente] = (gastosPorClienteMap[cliente] || 0) + valorItem;
+    });
+  });
+  const gastosPorCliente = Object.entries(gastosPorClienteMap)
+    .map(([cliente, total]) => ({ cliente, total }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 15);
+
   res.json({totalPecas,totalEquip,movAbertos,compPendente,orcAbertos,pedAbertos,estoqueMin,ultMovs,
-    valorFaturado, pecasEnviadas, faturamentoPorMes, enviosPorCliente});
+    valorFaturado, pecasEnviadas, faturamentoPorMes, enviosPorCliente, gastosPorCliente});
 });
 
 // ── BACKUP / RESTORE ──────────────────────────────────────────
