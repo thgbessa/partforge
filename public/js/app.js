@@ -1463,7 +1463,7 @@ function abrirActionModal(id, acao) {
           </select>
         </div>` : '';
 
-    const custoUnit  = parseFloat(sol.pecaCusto)||0;
+    const custoUnit  = parseFloat(sol.peca_custo)||0;
     const vendaUnit  = parseFloat(sol.pecaValorVenda)||0;
     const orcValUnit = orc ? parseFloat(orc.total||0)/Math.max(sol.qtd,1) : 0;
 
@@ -1552,9 +1552,9 @@ function abrirActionModal(id, acao) {
       valorLabel  = 'Valor da NF — Venda (R$)';
       valorHint   = `<div style="font-size:11px;color:var(--blue);margin-top:3px">Valor venda unitário: R$ ${parseFloat(sol.pecaValorVenda||0).toFixed(2)} × ${sol.qtd} un</div>`;
     } else if (isConsumo) {
-      valorNFBase = (parseFloat(sol.pecaCusto)||0) * sol.qtd;
+      valorNFBase = (parseFloat(sol.peca_custo)||0) * sol.qtd;
       valorLabel  = 'Valor da NF — Uso/Consumo (custo R$)';
-      valorHint   = `<div style="font-size:11px;color:var(--text3);margin-top:3px">Custo unitário: R$ ${parseFloat(sol.pecaCusto||0).toFixed(2)} × ${sol.qtd} un</div>`;
+      valorHint   = `<div style="font-size:11px;color:var(--text3);margin-top:3px">Custo unitário: R$ ${parseFloat(sol.peca_custo||0).toFixed(2)} × ${sol.qtd} un</div>`;
     }
 
     body.innerHTML = pInfoBox + `
@@ -1766,7 +1766,7 @@ function simularEmail(tipo, sol) {
       `  Código:      ${sol.pecaCodigo}\n` +
       `  Descrição:   ${sol.pecaNome}\n` +
       `  Fonte:       ${sol.pecaFonte||'—'}\n` +
-      `  Valor R$:    ${sol.pecaCusto ? 'R$ '+parseFloat(sol.pecaCusto).toFixed(2) : 'N/D'}\n` +
+      `  Valor R$:    ${sol.peca_custo ? 'R$ '+parseFloat(sol.peca_custo).toFixed(2) : 'N/D'}\n` +
       `  Quantidade:  ${sol.qtd} ${sol.pecaUnidade}\n\n` +
       `EQUIPAMENTO\n` +
       `  Descrição:   ${sol.equipNome||'—'}\n` +
@@ -5900,7 +5900,7 @@ function renderPendencias(q = '') {
   }
 
   const totalVenda = list.reduce((s,m) => s + (m.pecaValorVenda||0)*(m.qtd||1), 0);
-  const totalCusto = list.reduce((s,m) => s + (m.pecaCusto||0)*(m.qtd||1), 0);
+  const totalCusto = list.reduce((s,m) => s + (m.peca_custo||0)*(m.qtd||1), 0);
 
   el.innerHTML = `
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">
@@ -5932,7 +5932,7 @@ function renderPendencias(q = '') {
           <div style="font-size:11px;color:var(--text2)">${m.pecaNome||'—'}</div>
         </td>
         <td class="mono" style="font-weight:700">${m.qtd||1}</td>
-        ${isAdmin ? `<td class="mono" style="font-size:11px;color:var(--accent)">R$ ${((m.pecaCusto||0)*(m.qtd||1)).toFixed(2)}</td>` : ''}
+        ${isAdmin ? `<td class="mono" style="font-size:11px;color:var(--accent)">R$ ${((m.peca_custo||0)*(m.qtd||1)).toFixed(2)}</td>` : ''}
         <td class="mono" style="font-size:11px;font-weight:700;color:var(--green)">R$ ${((m.pecaValorVenda||0)*(m.qtd||1)).toFixed(2)}</td>
         <td style="font-size:11px">${m.equipNome||'—'} <span style="color:var(--text3)">${m.equipSerie ? '· '+m.equipSerie : ''}</span></td>
         <td style="font-size:11px">${m.tecnico||'—'}</td>
@@ -6284,7 +6284,7 @@ function exportarExcel(aba) {
         dataEvt,
         m.pecaCodigo || '',
         m.pecaNome   || '',
-        parseFloat(m.pecaCusto || 0),
+        parseFloat(m.peca_custo || 0),
         m.qtd        || 0,
         m.equipNome  || '',
         m.equipSerie || '',
