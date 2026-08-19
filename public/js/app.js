@@ -3775,7 +3775,7 @@ function gerarPDFOrcamento(id) {
     y += 5.5;
   }
 
-  desenharInfoRow('Cliente', o.cliente || '—');
+  desenharInfoRow('Cliente', (o.cliente || '—') + (o.cnpj ? '  -  CNPJ: ' + o.cnpj : ''));
 
   // Lista de equipamentos: usa o array completo (o.equipamentos) quando
   // existir; senão cai para os campos únicos (compatibilidade com
