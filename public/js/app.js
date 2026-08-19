@@ -1151,6 +1151,7 @@ function adicionarItemMov() {
     peca_unidade: peca?.unidade || 'UN',
     peca_fonte: peca?.fonte || '',
     peca_custo: peca?.custo || 0,
+    peca_valor_venda: peca?.valor_venda || 0,
     qtd: qtd,
     equip_id: equipId || '',
     equip_serie: equip?.serie || equip?.codigo || '',
@@ -1196,7 +1197,7 @@ function criarSolicitacao() {
     listaFinal.push({
       peca_id: pecaIdAtual, peca_codigo: pecaAtual?.codigo || pecaIdAtual,
       peca_nome: pecaAtual?.nome || '?', peca_unidade: pecaAtual?.unidade || 'UN',
-      peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, qtd: qtdAtual,
+      peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, peca_valor_venda: pecaAtual?.valor_venda || 0, qtd: qtdAtual,
       equip_id: equipIdAtual || '', equip_serie: equipAtual?.serie || equipAtual?.codigo || '',
       equip_cliente: equipAtual?.nome_fantasia || equipAtual?.cliente || '', equip_modelo: equipAtual?.modelo || '',
     });
@@ -1225,6 +1226,7 @@ function criarSolicitacao() {
     var data = {
       peca_id: item.peca_id, peca_codigo: item.peca_codigo, peca_nome: item.peca_nome,
       peca_unidade: item.peca_unidade, peca_fonte: item.peca_fonte, peca_custo: item.peca_custo,
+      peca_valor_venda: item.peca_valor_venda,
       qtd: item.qtd,
       equip_id: item.equip_id || '', equip_serie: item.equip_serie || '',
       equip_cliente: item.equip_cliente || '', equip_modelo: item.equip_modelo || '',

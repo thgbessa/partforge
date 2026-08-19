@@ -192,6 +192,7 @@ const toMov=m=>({
   pecaCodigo:  m.peca_codigo,
   pecaNome:    m.peca_nome,
   pecaUnidade: m.peca_unidade,
+  pecaValorVenda: m.peca_valor_venda,
   equipSerie:  m.equip_serie,
   equipCliente:m.equip_cliente,
   equipModelo: m.equip_modelo,
@@ -222,11 +223,11 @@ router.post('/movimentacoes', autenticar, (req, res) => {
   db.run("UPDATE configuracoes SET valor=? WHERE chave='seq_counter'",[String(seq)]);
   const id=uid();
   const eventos=J([{status:'SOLICITADA',data:now(),obs:'',user:req.user.nome}]);
-  db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,
+  db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,peca_valor_venda,
     qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem,grupo_id)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,seq,'SOLICITADA',m.peca_id||'',m.peca_codigo||'',m.peca_nome||'',m.peca_unidade||'UN',
-     m.peca_fonte||'',m.peca_custo||0,m.qtd||1,m.equip_id||'',m.equip_serie||'',m.equip_cliente||'',
+     m.peca_fonte||'',m.peca_custo||0,m.peca_valor_venda||0,m.qtd||1,m.equip_id||'',m.equip_serie||'',m.equip_cliente||'',
      m.equip_modelo||'',m.tecnico||req.user.nome,m.tem_estoque?1:0,m.tipo_alocacao||'',
      m.valor_por_orc?1:0,m.obs||'',eventos,now(),req.user.id,m.origem||'desktop',m.grupo_id||'']);
   res.status(201).json({id,seq_num:seq});
@@ -271,8 +272,8 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
       const retId=uid2();
       const retSeq=(db.get('SELECT MAX(seq_num) as m FROM movimentacoes')?.m||0)+1;
       const retEvt=JSON.stringify([{status:'SOLICITADA',data:Date.now(),obs:'Devolucao solicitada pelo desktop. Motivo: '+(motivo_devolucao||'Peca defeituosa'),user:req.user.nome}]);
-      db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
+      db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_custo,peca_valor_venda,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.peca_custo||0,sol.peca_valor_venda||0,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
     }
   } else if (acao==='CANCELAR') {
     upd.status='CANCELADA'; addEv('CANCELADA');
