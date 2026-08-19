@@ -6273,71 +6273,32 @@ function exportarExcel(aba) {
 
   } else if (aba === 'historico') {
     const heads = [
-      'Nº','Status','Data Solicitação','Peça Código','Peça Descrição','Qtd','Unidade',
-      'Equipamento Descrição','Nº de Série','Cliente',
-      'Técnico','OS','Tipo Alocação',
-      'Transporte','Rastreio','Previsão Entrega',
-      'Data Recebimento','Hora Recebimento',
-      'NF Número','NF Data','Devolução','Nº Retorno',
-      'Data Finalização','Observação'
+      'Data','Peça Cód','Peça Desc','Valor Peça','Qtd',
+      'Equipamento','Nº Série','Cliente','Técnico','OS',
+      'Transporte','Valor','Rastreio','Obs'
     ];
-
-    const statusLabel = s => ({
-      SOLICITADA:'Solicitada', ENVIADA:'Enviada', COMPRA_PENDENTE:'Compra Pendente',
-      DESPACHADA:'Despachada', RECEBIDA:'Recebida', ALOCADA:'Alocada',
-      NF_EMITIDA:'NF Emitida', FINALIZADO:'Finalizado'
-    }[s] || s);
-
-    const statusColor = s => ({
-      SOLICITADA:'D0D0D0', ENVIADA:'AED6F1', COMPRA_PENDENTE:'FAD7A0',
-      DESPACHADA:'D7BDE2', RECEBIDA:'A2D9CE', ALOCADA:'A9DFBA',
-      NF_EMITIDA:'F9E79F', FINALIZADO:'A9DFBA'
-    }[s] || 'FFFFFF');
 
     const rows = [heads, ...db.movimentacoes.map(m => {
       const dataEvt = m.eventos?.[0]?.data ? new Date(m.eventos[0].data).toLocaleString('pt-BR') : '';
       return [
-        m.numSeq || '—',
-        statusLabel(m.status),
         dataEvt,
         m.pecaCodigo || '',
         m.pecaNome   || '',
+        parseFloat(m.pecaCusto || 0),
         m.qtd        || 0,
-        m.pecaUnidade|| '',
         m.equipNome  || '',
         m.equipSerie || '',
         m.equipCliente || '',
         m.tecnico    || '',
         m.osNum      || '',
-        m.tipoAlocacao || '',
         m.transportadora || '',
+        parseFloat(m.valor_frete || 0),
         m.rastreio   || '',
-        m.previsaoEntrega || '',
-        m.dataRecebimento || '',
-        m.horaRecebimento || '',
-        m.nfNumero   || '',
-        m.nfData     || '',
-        m.devolucao  ? 'Sim' : '',
-        m.numSeqRetorno || '',
-        m.dataFinalizacao || '',
         m.obs        || '',
       ];
     })];
 
     const ws = buildSheet(rows, heads);
-
-    // Colorir coluna Status (índice 1)
-    rows.slice(1).forEach((row, i) => {
-      const cell = ws[XLSX.utils.encode_cell({r: i+1, c: 1})];
-      if (cell) {
-        cell.s = {
-          fill: { fgColor: { rgb: statusColor(db.movimentacoes[i]?.status) } },
-          font: { bold: true },
-          alignment: { horizontal: 'center' }
-        };
-      }
-    });
-
     XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
     XLSX.writeFile(wb, 'partforge_historico.xlsx');
     toast(`Histórico exportado: ${rows.length - 1} solicitações`);
