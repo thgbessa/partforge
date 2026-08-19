@@ -6367,10 +6367,11 @@ function exportarExcel(aba) {
         : ((o.equip_serie || o.equip_nome) ? [{ serie: o.equip_serie, nome: o.equip_nome }] : []);
       const equipTexto = equipList.map(function(e) { return [e.serie, e.nome].filter(Boolean).join(' - '); }).join(' | ');
       const stLabel = (ORC_STATUS[o.status] || {}).label || o.status || '';
+      const clienteTexto = (o.cliente || '') + (o.cnpj ? ' - ' + o.cnpj : '');
       return [
         o.numero || '',
         stLabel,
-        o.cliente || '',
+        clienteTexto,
         equipTexto,
         o.os || '',
         o.pagamento || '',
