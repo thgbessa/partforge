@@ -495,6 +495,45 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Sincroniza peca_custo/peca_valor_venda de movimentacoes existentes
+    //    com o valor ATUAL da peca no catalogo (uso pontual, apos corrigir
+    //    um preco que estava zerado/errado quando as solicitacoes foram
+    //    criadas). Sem ?codigo, sincroniza TODAS as pecas de uma vez.
+    app.get('/api/admin/sincronizar-custo-movimentacoes', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const codigoFiltro = (req.query.codigo || '').trim();
+        const pecas = codigoFiltro
+          ? db.query('SELECT id, codigo, custo, valor_venda FROM pecas WHERE codigo=?', [codigoFiltro])
+          : db.query('SELECT id, codigo, custo, valor_venda FROM pecas');
+
+        let movsAtualizadas = 0;
+        const detalhes = [];
+        for (const p of pecas) {
+          const movs = db.query('SELECT id, peca_custo, peca_valor_venda FROM movimentacoes WHERE peca_id=?', [p.id]);
+          let atualizadasDestaPeca = 0;
+          for (const m of movs) {
+            if (m.peca_custo !== p.custo || m.peca_valor_venda !== p.valor_venda) {
+              db.runBatch('UPDATE movimentacoes SET peca_custo=?, peca_valor_venda=? WHERE id=?', [p.custo || 0, p.valor_venda || 0, m.id]);
+              atualizadasDestaPeca++;
+            }
+          }
+          if (atualizadasDestaPeca > 0) {
+            movsAtualizadas += atualizadasDestaPeca;
+            detalhes.push({ codigo: p.codigo, custoNovo: p.custo, valorVendaNovo: p.valor_venda, movimentacoesAtualizadas: atualizadasDestaPeca });
+          }
+        }
+        db.persist();
+        res.json({ ok: true, pecasChecadas: pecas.length, movimentacoesAtualizadas: movsAtualizadas, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim sincronizar custo movimentacoes ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
