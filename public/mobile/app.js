@@ -350,6 +350,66 @@ function renderOrcItens(){
     </div>`).join('');
 }
 
+let buscaClienteOrcTimer;
+async function buscarClienteOrc(q) {
+  clearTimeout(buscaClienteOrcTimer);
+  const el = document.getElementById('orc-cliente-resultados');
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  buscaClienteOrcTimer = setTimeout(async () => {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+      const equips = await api('GET', '/equipamentos?q=' + encodeURIComponent(q));
+      const nomesVistos = new Set();
+      const clientes = [];
+      (equips || []).forEach(e => {
+        const nome = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
+        if (nome && !nomesVistos.has(nome.toUpperCase())) { nomesVistos.add(nome.toUpperCase()); clientes.push(nome); }
+      });
+      if (!clientes.length) { el.innerHTML = '<div class="empty">Nenhum cliente encontrado</div>'; return; }
+      el.innerHTML = clientes.slice(0, 12).map(nome =>
+        '<div class="peca-card" onclick="selecionarClienteOrc(\''+nome.replace(/'/g,"\\'")+'\')"><div class="peca-nome">'+nome+'</div></div>'
+      ).join('');
+    } catch (err) { el.innerHTML = '<div class="empty">Erro na busca</div>'; }
+  }, 400);
+}
+function selecionarClienteOrc(nome) {
+  document.getElementById('orc-cliente').value = nome;
+  document.getElementById('orc-cliente-resultados').innerHTML = '';
+}
+
+let buscaEquipOrcTimer;
+async function buscarEquipOrc(q) {
+  clearTimeout(buscaEquipOrcTimer);
+  const el = document.getElementById('orc-equip-resultados');
+  const hint = document.getElementById('orc-equip-cliente-hint');
+  if (hint) hint.textContent = '';
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  buscaEquipOrcTimer = setTimeout(async () => {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+      const equips = await api('GET', '/equipamentos?q=' + encodeURIComponent(q));
+      if (!equips || !equips.length) { el.innerHTML = '<div class="empty">Nenhum equipamento encontrado</div>'; return; }
+      el.innerHTML = equips.slice(0, 15).map(e => {
+        const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
+        return '<div class="peca-card" onclick="selecionarEquipOrc(\''+((e.serie||'').replace(/'/g,"\\'"))+'\',\''+((e.modelo||'').replace(/'/g,"\\'"))+'\',\''+(cliente.replace(/'/g,"\\'"))+'\')">'+
+          '<div class="peca-codigo">'+(e.serie||'—')+'</div>'+
+          '<div class="peca-nome">'+(e.modelo||'')+'</div>'+
+          (cliente ? '<div class="peca-tags"><span class="tag fonte">'+cliente+'</span></div>' : '')+
+        '</div>';
+      }).join('');
+    } catch (err) { el.innerHTML = '<div class="empty">Erro na busca</div>'; }
+  }, 400);
+}
+function selecionarEquipOrc(serie, modelo, cliente) {
+  document.getElementById('orc-equip').value = serie;
+  document.getElementById('orc-equip-resultados').innerHTML = '';
+  const hint = document.getElementById('orc-equip-cliente-hint');
+  if (hint) hint.textContent = cliente ? '✓ Cliente: ' + cliente : '';
+  // Preenche o nome do cliente sozinho, se ainda estiver vazio
+  const clienteEl = document.getElementById('orc-cliente');
+  if (clienteEl && !clienteEl.value.trim() && cliente) clienteEl.value = cliente;
+}
+
 async function enviarOrcamento(){
   if(!orcItens.length){toast('Adicione pelo menos um item','error');return;}
   const cliente=document.getElementById('orc-cliente').value.trim();
@@ -469,6 +529,39 @@ function movQty(d) {
   const el = document.getElementById('mov-qtd');
   el.value = Math.max(1, (parseInt(el.value)||1) + d);
 }
+let buscaEquipMovTimer;
+let movEquipSel = null;
+async function buscarEquipMov(q) {
+  clearTimeout(buscaEquipMovTimer);
+  const el = document.getElementById('mov-equip-resultados');
+  const hint = document.getElementById('mov-equip-cliente-hint');
+  movEquipSel = null;
+  if (hint) hint.textContent = '';
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  buscaEquipMovTimer = setTimeout(async () => {
+    el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    try {
+      const equips = await api('GET', '/equipamentos?q=' + encodeURIComponent(q));
+      if (!equips || !equips.length) { el.innerHTML = '<div class="empty">Nenhum equipamento encontrado</div>'; return; }
+      el.innerHTML = equips.slice(0, 15).map(e => {
+        const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
+        return '<div class="peca-card" onclick="selecionarEquipMov(\''+(e.id||'')+'\',\''+((e.serie||'').replace(/'/g,"\\'"))+'\',\''+((e.modelo||'').replace(/'/g,"\\'"))+'\',\''+(cliente.replace(/'/g,"\\'"))+'\')">'+
+          '<div class="peca-codigo">'+(e.serie||'—')+'</div>'+
+          '<div class="peca-nome">'+(e.modelo||'')+'</div>'+
+          (cliente ? '<div class="peca-tags"><span class="tag fonte">'+cliente+'</span></div>' : '')+
+        '</div>';
+      }).join('');
+    } catch (err) { el.innerHTML = '<div class="empty">Erro na busca</div>'; }
+  }, 400);
+}
+function selecionarEquipMov(id, serie, modelo, cliente) {
+  movEquipSel = { id, serie, modelo, cliente };
+  document.getElementById('mov-equip').value = serie;
+  document.getElementById('mov-equip-resultados').innerHTML = '';
+  const hint = document.getElementById('mov-equip-cliente-hint');
+  if (hint) hint.textContent = cliente ? '✓ Cliente: ' + cliente : '';
+}
+
 async function enviarMovimentacao() {
   if (!movPecaSel) { toast('Selecione uma peca', 'error'); return; }
   const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
@@ -501,8 +594,12 @@ async function enviarMovimentacao() {
       peca_codigo: movPecaSel.codigo,
       peca_nome: movPecaSel.nome,
       peca_unidade: movPecaSel.unidade || 'UN',
+      peca_custo: movPecaSel.custo || 0,
       qtd,
       equip_serie: serie,
+      equip_id: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.id : '',
+      equip_cliente: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.cliente : '',
+      equip_modelo: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.modelo : '',
       tecnico,
       tecnico_email: email,
       chamado,
