@@ -495,61 +495,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
-    // ── Diagnostico + sincronizacao do nome do cliente em movimentacoes,
-    //    puxando o nome ATUAL do equipamento (mesmo caso do custo: o nome
-    //    fica "congelado" na movimentacao no momento em que ela e criada).
-    app.get('/api/admin/sincronizar-cliente-guararapes', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        // Busca o(s) equipamento(s) pela SÉRIE exata (não mais pelo nome antigo
-        // do cliente, que já foi trocado — buscar por "GUARARAPES" no cliente
-        // não acha mais nada porque o cliente atual já é outro nome).
-        const serieAlvo = req.query.serie || '862505032';
-        const equipamentos = db.query('SELECT id, modelo, serie, cliente FROM equipamentos WHERE serie=?', [serieAlvo]);
-        const clienteAtual = equipamentos[0]?.cliente || '';
-
-        // Também acha qualquer equipamento cujo cliente ainda mencione
-        // "GUARARAPES" hoje (caso sobre algum não renomeado) — usado só pro
-        // diagnóstico, não pra decidir o nome novo.
-        const equipamentosAindaComGuararapes = db.query("SELECT id, modelo, serie, cliente FROM equipamentos WHERE cliente LIKE '%GUARARAPES%'");
-
-        // Atualiza toda movimentação que menciona "GUARARAPES" no cliente OU
-        // que está vinculada à série alvo, usando o nome ATUAL do cliente
-        // desse equipamento específico.
-        const porSerie = db.query('SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_serie=?', [serieAlvo]);
-        const porNome  = db.query("SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_cliente LIKE '%GUARARAPES%'");
-        const todasMap = new Map();
-        [...porSerie, ...porNome].forEach(m => todasMap.set(m.id, m));
-        const todas = [...todasMap.values()];
-
-        let movsAtualizadas = 0;
-        const antes = [];
-        for (const m of todas) {
-          if (clienteAtual && m.equip_cliente !== clienteAtual) {
-            antes.push({ id: m.id, equipCliente_antes: m.equip_cliente, equipSerie: m.equip_serie });
-            db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [clienteAtual, m.id]);
-            movsAtualizadas++;
-          }
-        }
-        db.persist();
-        res.json({
-          ok: true,
-          equipamentoAlvo: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
-          equipamentosAindaComGuararapesNoNome: equipamentosAindaComGuararapes.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
-          clienteAtualUsado: clienteAtual,
-          totalMovimentacoesRelacionadas: todas.length,
-          movimentacoesAtualizadas: movsAtualizadas,
-          antes
-        });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim sincronizar cliente guararapes ──
-
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
