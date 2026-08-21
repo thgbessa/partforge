@@ -505,24 +505,44 @@ app.listen(PORT, '0.0.0.0', () => {
       }
       try {
         const equipamentos = db.query("SELECT id, modelo, serie, cliente FROM equipamentos WHERE cliente LIKE '%GUARARAPES%'");
+        const series = equipamentos.map(e => e.serie);
+        // Nome canônico (mais recente/atual) de cliente pra esse grupo de equipamentos
+        const clienteCanonico = equipamentos[0]?.cliente || '';
+
+        // Pega TODAS as movimentacoes relacionadas, por 3 caminhos: id do
+        // equipamento, série do equipamento, ou nome do cliente já contendo
+        // "GUARARAPES" de alguma forma (cobre casos digitados manualmente
+        // ou vinculados a um cadastro de equipamento antigo/duplicado).
+        const porId = equipamentos.length
+          ? db.query(`SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_id IN (${equipamentos.map(()=>'?').join(',')})`, equipamentos.map(e=>e.id))
+          : [];
+        const porSerie = series.length
+          ? db.query(`SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_serie IN (${series.map(()=>'?').join(',')})`, series)
+          : [];
+        const porNome = db.query("SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_cliente LIKE '%GUARARAPES%'");
+
+        const todasMap = new Map();
+        [...porId, ...porSerie, ...porNome].forEach(m => todasMap.set(m.id, m));
+        const todas = [...todasMap.values()];
+
         let movsAtualizadas = 0;
-        const detalhes = [];
-        for (const e of equipamentos) {
-          const movs = db.query('SELECT id, equip_cliente FROM movimentacoes WHERE equip_id=?', [e.id]);
-          let atualizadasDesteEquip = 0;
-          for (const m of movs) {
-            if (m.equip_cliente !== e.cliente) {
-              db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [e.cliente || '', m.id]);
-              atualizadasDesteEquip++;
-            }
-          }
-          if (atualizadasDesteEquip > 0) {
-            movsAtualizadas += atualizadasDesteEquip;
-            detalhes.push({ equipamento: e.modelo, serie: e.serie, clienteNovo: e.cliente, movimentacoesAtualizadas: atualizadasDesteEquip });
+        const antes = [];
+        for (const m of todas) {
+          if (m.equip_cliente !== clienteCanonico) {
+            antes.push({ id: m.id, equipCliente_antes: m.equip_cliente, equipSerie: m.equip_serie });
+            db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [clienteCanonico, m.id]);
+            movsAtualizadas++;
           }
         }
         db.persist();
-        res.json({ ok: true, equipamentosEncontrados: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })), movimentacoesAtualizadas: movsAtualizadas, detalhes });
+        res.json({
+          ok: true,
+          equipamentosEncontrados: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
+          clienteCanonicoUsado: clienteCanonico,
+          totalMovimentacoesRelacionadas: todas.length,
+          movimentacoesAtualizadas: movsAtualizadas,
+          antes
+        });
       } catch (err) {
         res.status(500).json({ ok: false, erro: err.message });
       }
