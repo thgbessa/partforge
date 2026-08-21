@@ -495,6 +495,40 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Diagnostico + sincronizacao do nome do cliente em movimentacoes,
+    //    puxando o nome ATUAL do equipamento (mesmo caso do custo: o nome
+    //    fica "congelado" na movimentacao no momento em que ela e criada).
+    app.get('/api/admin/sincronizar-cliente-guararapes', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const equipamentos = db.query("SELECT id, modelo, serie, cliente FROM equipamentos WHERE cliente LIKE '%GUARARAPES%'");
+        let movsAtualizadas = 0;
+        const detalhes = [];
+        for (const e of equipamentos) {
+          const movs = db.query('SELECT id, equip_cliente FROM movimentacoes WHERE equip_id=?', [e.id]);
+          let atualizadasDesteEquip = 0;
+          for (const m of movs) {
+            if (m.equip_cliente !== e.cliente) {
+              db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [e.cliente || '', m.id]);
+              atualizadasDesteEquip++;
+            }
+          }
+          if (atualizadasDesteEquip > 0) {
+            movsAtualizadas += atualizadasDesteEquip;
+            detalhes.push({ equipamento: e.modelo, serie: e.serie, clienteNovo: e.cliente, movimentacoesAtualizadas: atualizadasDesteEquip });
+          }
+        }
+        db.persist();
+        res.json({ ok: true, equipamentosEncontrados: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })), movimentacoesAtualizadas: movsAtualizadas, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim sincronizar cliente guararapes ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
