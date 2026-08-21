@@ -504,41 +504,42 @@ app.listen(PORT, '0.0.0.0', () => {
         return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
       }
       try {
-        const equipamentos = db.query("SELECT id, modelo, serie, cliente FROM equipamentos WHERE cliente LIKE '%GUARARAPES%'");
-        const series = equipamentos.map(e => e.serie);
-        // Nome canônico (mais recente/atual) de cliente pra esse grupo de equipamentos
-        const clienteCanonico = equipamentos[0]?.cliente || '';
+        // Busca o(s) equipamento(s) pela SÉRIE exata (não mais pelo nome antigo
+        // do cliente, que já foi trocado — buscar por "GUARARAPES" no cliente
+        // não acha mais nada porque o cliente atual já é outro nome).
+        const serieAlvo = req.query.serie || '862505032';
+        const equipamentos = db.query('SELECT id, modelo, serie, cliente FROM equipamentos WHERE serie=?', [serieAlvo]);
+        const clienteAtual = equipamentos[0]?.cliente || '';
 
-        // Pega TODAS as movimentacoes relacionadas, por 3 caminhos: id do
-        // equipamento, série do equipamento, ou nome do cliente já contendo
-        // "GUARARAPES" de alguma forma (cobre casos digitados manualmente
-        // ou vinculados a um cadastro de equipamento antigo/duplicado).
-        const porId = equipamentos.length
-          ? db.query(`SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_id IN (${equipamentos.map(()=>'?').join(',')})`, equipamentos.map(e=>e.id))
-          : [];
-        const porSerie = series.length
-          ? db.query(`SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_serie IN (${series.map(()=>'?').join(',')})`, series)
-          : [];
-        const porNome = db.query("SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_cliente LIKE '%GUARARAPES%'");
+        // Também acha qualquer equipamento cujo cliente ainda mencione
+        // "GUARARAPES" hoje (caso sobre algum não renomeado) — usado só pro
+        // diagnóstico, não pra decidir o nome novo.
+        const equipamentosAindaComGuararapes = db.query("SELECT id, modelo, serie, cliente FROM equipamentos WHERE cliente LIKE '%GUARARAPES%'");
 
+        // Atualiza toda movimentação que menciona "GUARARAPES" no cliente OU
+        // que está vinculada à série alvo, usando o nome ATUAL do cliente
+        // desse equipamento específico.
+        const porSerie = db.query('SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_serie=?', [serieAlvo]);
+        const porNome  = db.query("SELECT id, equip_cliente, equip_serie FROM movimentacoes WHERE equip_cliente LIKE '%GUARARAPES%'");
         const todasMap = new Map();
-        [...porId, ...porSerie, ...porNome].forEach(m => todasMap.set(m.id, m));
+        [...porSerie, ...porNome].forEach(m => todasMap.set(m.id, m));
         const todas = [...todasMap.values()];
 
         let movsAtualizadas = 0;
         const antes = [];
         for (const m of todas) {
-          if (m.equip_cliente !== clienteCanonico) {
+          if (clienteAtual && m.equip_cliente !== clienteAtual) {
             antes.push({ id: m.id, equipCliente_antes: m.equip_cliente, equipSerie: m.equip_serie });
-            db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [clienteCanonico, m.id]);
+            db.runBatch('UPDATE movimentacoes SET equip_cliente=? WHERE id=?', [clienteAtual, m.id]);
             movsAtualizadas++;
           }
         }
         db.persist();
         res.json({
           ok: true,
-          equipamentosEncontrados: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
-          clienteCanonicoUsado: clienteCanonico,
+          equipamentoAlvo: equipamentos.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
+          equipamentosAindaComGuararapesNoNome: equipamentosAindaComGuararapes.map(e => ({ modelo: e.modelo, serie: e.serie, cliente: e.cliente })),
+          clienteAtualUsado: clienteAtual,
           totalMovimentacoesRelacionadas: todas.length,
           movimentacoesAtualizadas: movsAtualizadas,
           antes
