@@ -241,6 +241,24 @@ router.post('/movimentacoes', autenticar, (req, res) => {
   res.status(201).json({id,seq_num:seq});
 });
 
+// Edita a data de uma solicitação já existente (ex: envio feito num dia mas
+// só lançado no sistema depois). Atualiza o evento inicial e o created_at,
+// pra valer certo em Histórico, Dashboard e relatórios.
+router.put('/movimentacoes/:id/data', autenticar, (req, res) => {
+  const { data_solicitacao } = req.body;
+  if (!data_solicitacao) return res.status(400).json({ erro: 'Data obrigatória' });
+  const parsed = new Date(data_solicitacao + 'T12:00:00-03:00').getTime();
+  if (isNaN(parsed)) return res.status(400).json({ erro: 'Data inválida' });
+  const sol = db.get('SELECT * FROM movimentacoes WHERE id=?', [req.params.id]);
+  if (!sol) return res.status(404).json({ erro: 'Não encontrada' });
+  let eventos = [];
+  try { eventos = JSON.parse(sol.eventos || '[]'); } catch (e) { eventos = []; }
+  if (eventos.length) eventos[0].data = parsed;
+  else eventos = [{ status: 'SOLICITADA', data: parsed, obs: '', user: req.user.nome }];
+  db.run('UPDATE movimentacoes SET eventos=?, created_at=? WHERE id=?', [JSON.stringify(eventos), parsed, req.params.id]);
+  res.json({ ok: true });
+});
+
 router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   try {
   const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento,valor_frete}=req.body;

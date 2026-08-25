@@ -2154,6 +2154,60 @@ function renderLogistica(tab) {
   }).join('');
 }
 
+let _editarDataMovIds = [];
+
+function abrirModalEditarDataMov(idsOuId) {
+  const ids = Array.isArray(idsOuId) ? idsOuId : [idsOuId];
+  _editarDataMovIds = ids;
+  const primeiro = db.movimentacoes.find(x => ids.includes(x.id));
+  const dataAtual = primeiro?.eventos?.[0]?.data
+    ? new Date(primeiro.eventos[0].data).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+
+  let overlay = document.getElementById('modal-editar-data-mov-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-editar-data-mov-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:380px;width:95%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Editar Data da Solicitação</span>
+        <button onclick="document.getElementById('modal-editar-data-mov-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        ${ids.length > 1 ? `<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Vale pros ${ids.length} itens deste lote.</div>` : ''}
+        <div class="form-group">
+          <label class="form-label">Data real do envio</label>
+          <input class="form-input" type="date" id="editar-data-mov-input" value="${dataAtual}">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-editar-data-mov-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarDataMov()">✓ Salvar</button>
+      </div>
+    </div>`;
+}
+
+function salvarDataMov() {
+  const ids = _editarDataMovIds;
+  const data = document.getElementById('editar-data-mov-input')?.value;
+  if (!data) { toast('Escolha uma data', 'error'); return; }
+  Promise.all(ids.map(id => API.put('/movimentacoes/' + id + '/data', { data_solicitacao: data })))
+    .then(() => {
+      toast('Data atualizada' + (ids.length > 1 ? ` (${ids.length} itens)` : ''));
+      document.getElementById('modal-editar-data-mov-overlay')?.remove();
+      loadAndRenderHistorico();
+      loadAndRenderDashboard();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 function cancelarMovimentacao(id) {
   if (!confirm('Cancelar esta solicitação? Se o estoque já tinha sido baixado (peça já enviada), ele será devolvido automaticamente.')) return;
   API.put('/movimentacoes/' + id + '/acao', { acao: 'CANCELAR', obs: '' })
@@ -2373,6 +2427,7 @@ function montarCardMov(m) {
     <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
       ${acoes}
       <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarDataMov('${m.id}')" style="font-size:10px">📅 Data</button>
       ${!['FINALIZADO','CANCELADA'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:10px" onclick="cancelarMovimentacao('${m.id}')">✕ Cancelar</button>` : ''}
       <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
     </div>
@@ -2451,6 +2506,7 @@ function montarCardGrupo(itensDoGrupo) {
       </div>
       <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
         ${acoes}
+        <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarDataMov(${idsJs})" style="font-size:10px">📅 Data</button>
         ${!isFin && statusRep !== 'CANCELADA' ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:10px" onclick="cancelarMovimentacaoGrupo('${primeiro.grupoId}')">✕ Cancelar Lote</button>` : ''}
         <button class="btn btn-danger btn-sm" onclick="deleteMovimentacaoGrupo('${primeiro.grupoId}')" style="font-size:10px">X Excluir Lote</button>
       </div>
