@@ -222,14 +222,22 @@ router.post('/movimentacoes', autenticar, (req, res) => {
   const seq  = parseInt(cfg?.valor||'0') + 1;
   db.run("UPDATE configuracoes SET valor=? WHERE chave='seq_counter'",[String(seq)]);
   const id=uid();
-  const eventos=J([{status:'SOLICITADA',data:now(),obs:'',user:req.user.nome}]);
+  // Se vier uma data customizada (lançamento retroativo de um envio que
+  // aconteceu em outro dia), usa ela tanto no evento inicial quanto no
+  // created_at — assim entra certo em relatórios/dashboard filtrados por data.
+  let dataMs = now();
+  if (m.data_solicitacao) {
+    const parsed = new Date(m.data_solicitacao + 'T12:00:00-03:00').getTime();
+    if (!isNaN(parsed)) dataMs = parsed;
+  }
+  const eventos=J([{status:'SOLICITADA',data:dataMs,obs:'',user:req.user.nome}]);
   db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,peca_valor_venda,
     qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem,grupo_id)
     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,seq,'SOLICITADA',m.peca_id||'',m.peca_codigo||'',m.peca_nome||'',m.peca_unidade||'UN',
      m.peca_fonte||'',m.peca_custo||0,m.peca_valor_venda||0,m.qtd||1,m.equip_id||'',m.equip_serie||'',m.equip_cliente||'',
      m.equip_modelo||'',m.tecnico||req.user.nome,m.tem_estoque?1:0,m.tipo_alocacao||'',
-     m.valor_por_orc?1:0,m.obs||'',eventos,now(),req.user.id,m.origem||'desktop',m.grupo_id||'']);
+     m.valor_por_orc?1:0,m.obs||'',eventos,dataMs,req.user.id,m.origem||'desktop',m.grupo_id||'']);
   res.status(201).json({id,seq_num:seq});
 });
 

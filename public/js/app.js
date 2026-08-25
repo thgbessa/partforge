@@ -1205,6 +1205,7 @@ function criarSolicitacao() {
   if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
   const tecnico = document.getElementById('mov-tecnico').value.trim() || currentUser?.nome || '';
   const obs     = document.getElementById('mov-obs').value.trim();
+  const dataSolicitacao = document.getElementById('mov-data')?.value || '';
   // Itens de uma mesma solicitação (mais de 1 peça) compartilham um grupo_id,
   // para aparecerem agrupados visualmente no Histórico, mesmo cada um mantendo
   // seu próprio status/rastreamento individual — inclusive quando vão para
@@ -1230,7 +1231,7 @@ function criarSolicitacao() {
       qtd: item.qtd,
       equip_id: item.equip_id || '', equip_serie: item.equip_serie || '',
       equip_cliente: item.equip_cliente || '', equip_modelo: item.equip_modelo || '',
-      tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId
+      tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId, data_solicitacao: dataSolicitacao
     };
     API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
       .catch(function() { erros++; processarProximo(i + 1); });
@@ -1249,6 +1250,7 @@ function populateMovSelects() {
   document.getElementById('mov-qtd').value = '';
   document.getElementById('mov-tecnico').value = '';
   document.getElementById('mov-tecnico-email').value = '';
+  document.getElementById('mov-data').value = new Date().toISOString().slice(0, 10);
   document.getElementById('mov-obs').value = '';
   document.getElementById('mov-doadora-search').value = '';
   document.getElementById('mov-doadora').value = '';
