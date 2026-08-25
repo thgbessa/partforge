@@ -495,6 +495,56 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Cria kits preventivas DYMIND (so nome/codigo, sem itens - itens
+    //    serao adicionados manualmente depois). Rodar 1x, depois remover. ──
+    app.get('/api/admin/criar-kits-dymind', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const lista = [
+          { modelo: 'CA1200 Series',            codigo: '68.03.0151A', precoFob: 150.00 },
+          { modelo: 'DH-800 Series',             codigo: '68.03.0106A', precoFob: 695.00 },
+          { modelo: 'DH-615',                    codigo: '68.02.0372A', precoFob: 420.00 },
+          { modelo: 'DH73 & DH76',               codigo: '68.02.0121A', precoFob: 522.50 },
+          { modelo: 'UN73 & UN73Vet',            codigo: '68.02.0121A', precoFob: 522.50 },
+          { modelo: 'D7-CRP',                    codigo: '68.02.0137A', precoFob: 330.00 },
+          { modelo: 'DH56',                      codigo: '68.02.0120A', precoFob: 286.00 },
+          { modelo: 'DF55 & DF56 Vet',           codigo: '68.02.0192A', precoFob: 160.00 },
+          { modelo: 'DF50 & DF52 & DF50VET',     codigo: '68.02.0121A', precoFob: 176.00 },
+          { modelo: 'DF50CRP',                   codigo: '68.02.0123A', precoFob: 253.00 },
+          { modelo: 'DH36 Series',               codigo: '68.02.0119A', precoFob: 154.00 },
+          { modelo: 'DH21 & DH26',               codigo: '68.02.0139A', precoFob: 137.50 },
+          { modelo: 'DH20 & DH22',               codigo: '68.02.0097A', precoFob: 250.00 },
+          { modelo: 'DM61 Vet',                  codigo: '68.02.0468A', precoFob: 268.00 },
+          { modelo: 'DM73 Vet',                  codigo: '68.02.0121A', precoFob: 176.00 },
+          { modelo: 'DP-C16',                    codigo: '20.01.1337A', precoFob: 35.00 },
+        ];
+        const existentes = db.query('SELECT codigo FROM kits_preventivas').map(k => (k.codigo || '').trim().toUpperCase());
+        let criados = 0, pulados = [];
+        const agora = Date.now();
+        for (const item of lista) {
+          const nome = item.modelo + ' - KIT CÓDIGO : ' + item.codigo;
+          const codigoKit = ('KIT ' + item.modelo).trim().toUpperCase();
+          if (existentes.includes(codigoKit)) { pulados.push(nome); continue; }
+          const id = db.uid();
+          db.runBatch(`INSERT INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,itens_opcionais,obs,created_at,updated_at,created_by)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [id, nome, codigoKit, 'DYMIND', item.modelo, 2, 5.27, 2, '[]', '[]',
+             'Preço FOB de referência do kit (fabricante): US$ ' + item.precoFob.toFixed(2) + ' — itens a adicionar manualmente.',
+             agora, agora, 'import-lote']);
+          criados++;
+          existentes.push(codigoKit);
+        }
+        db.persist();
+        res.json({ ok: true, totalNaLista: lista.length, criados, pulados });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim criar kits dymind ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
