@@ -259,6 +259,42 @@ router.put('/movimentacoes/:id/data', autenticar, (req, res) => {
   res.json({ ok: true });
 });
 
+// Edição geral de uma solicitação já existente (peça, quantidade, equipamento,
+// técnico, obs). Se o estoque já tinha sido baixado (status além de
+// SOLICITADA/COMPRA_PENDENTE), ajusta o estoque automaticamente: devolve a
+// quantidade antiga na peça antiga e baixa a nova quantidade na peça nova.
+router.put('/movimentacoes/:id', autenticar, (req, res) => {
+  const m = req.body;
+  const sol = db.get('SELECT * FROM movimentacoes WHERE id=?', [req.params.id]);
+  if (!sol) return res.status(404).json({ erro: 'Não encontrada' });
+
+  const estoqueJaBaixado = sol.status && !['SOLICITADA', 'COMPRA_PENDENTE', 'CANCELADA'].includes(sol.status);
+  const pecaMudou = m.peca_id !== undefined && m.peca_id !== sol.peca_id;
+  const qtdMudou  = m.qtd !== undefined && Number(m.qtd) !== Number(sol.qtd);
+
+  if (estoqueJaBaixado && (pecaMudou || qtdMudou)) {
+    // Devolve a quantidade antiga pra peça antiga
+    if (sol.peca_id) {
+      db.run('UPDATE estoque SET quantidade=quantidade+?,updated_at=? WHERE peca_id=?', [sol.qtd || 0, now(), sol.peca_id]);
+    }
+    // Baixa a quantidade nova na peça nova
+    const novaPecaId = pecaMudou ? m.peca_id : sol.peca_id;
+    const novaQtd = qtdMudou ? m.qtd : sol.qtd;
+    if (novaPecaId) {
+      db.run('UPDATE estoque SET quantidade=MAX(0,quantidade-?),updated_at=? WHERE peca_id=?', [novaQtd || 0, now(), novaPecaId]);
+    }
+  }
+
+  db.run(`UPDATE movimentacoes SET peca_id=?,peca_codigo=?,peca_nome=?,peca_unidade=?,peca_fonte=?,peca_custo=?,peca_valor_venda=?,
+    qtd=?,equip_id=?,equip_serie=?,equip_cliente=?,equip_modelo=?,tecnico=?,obs=? WHERE id=?`,
+    [m.peca_id ?? sol.peca_id, m.peca_codigo ?? sol.peca_codigo, m.peca_nome ?? sol.peca_nome, m.peca_unidade ?? sol.peca_unidade,
+     m.peca_fonte ?? sol.peca_fonte, m.peca_custo ?? sol.peca_custo, m.peca_valor_venda ?? sol.peca_valor_venda,
+     m.qtd ?? sol.qtd, m.equip_id ?? sol.equip_id, m.equip_serie ?? sol.equip_serie, m.equip_cliente ?? sol.equip_cliente,
+     m.equip_modelo ?? sol.equip_modelo, m.tecnico ?? sol.tecnico, m.obs ?? sol.obs, req.params.id]);
+
+  res.json({ ok: true, estoqueAjustado: estoqueJaBaixado && (pecaMudou || qtdMudou) });
+});
+
 router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   try {
   const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento,valor_frete}=req.body;

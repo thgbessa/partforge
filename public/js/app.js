@@ -2208,6 +2208,156 @@ function salvarDataMov() {
     .catch(err => toast(err.message, 'error'));
 }
 
+// ── EDIÇÃO GERAL DE UMA SOLICITAÇÃO JÁ EXISTENTE (peça, qtd, equipamento) ──
+let _editMovId = null;
+let _editMovPecaSel = null;
+let _editMovEquipSel = null;
+
+function abrirModalEditarSolicitacao(id) {
+  const m = db.movimentacoes.find(x => x.id === id);
+  if (!m) return;
+  _editMovId = id;
+  _editMovPecaSel = { id: m.pecaId, codigo: m.pecaCodigo, nome: m.pecaNome, unidade: m.pecaUnidade, fonte: m.peca_fonte || '', custo: m.peca_custo || 0, valor_venda: m.pecaValorVenda || 0 };
+  _editMovEquipSel = { id: m.equip_id || '', serie: m.equipSerie || '', cliente: m.equipCliente || '', modelo: m.equipModelo || '' };
+
+  let overlay = document.getElementById('modal-editar-sol-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-editar-sol-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:480px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Editar Solicitação #${m.numSeq || '—'}</span>
+        <button onclick="document.getElementById('modal-editar-sol-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div class="form-group" style="position:relative">
+          <label class="form-label">Peça</label>
+          <input class="form-input" id="editmov-peca-search" placeholder="Buscar por código ou nome..." autocomplete="off"
+            value="${(m.pecaCodigo||'') + ' - ' + (m.pecaNome||'')}"
+            oninput="sugerirPecaEditMov(this.value)" onfocus="sugerirPecaEditMov(this.value)"
+            onblur="setTimeout(()=>{const dd=document.getElementById('editmov-peca-dropdown'); if(dd) dd.style.display='none';},200)">
+          <div id="editmov-peca-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
+            background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantidade</label>
+          <input class="form-input" type="number" min="1" id="editmov-qtd" value="${m.qtd || 1}">
+        </div>
+        <div class="form-group" style="position:relative">
+          <label class="form-label">Equipamento (Nº de Série)</label>
+          <input class="form-input" id="editmov-equip-search" placeholder="Buscar por série, modelo ou cliente..." autocomplete="off"
+            value="${m.equipSerie || ''}"
+            oninput="sugerirEquipEditMov(this.value)" onfocus="sugerirEquipEditMov(this.value)"
+            onblur="setTimeout(()=>{const dd=document.getElementById('editmov-equip-dropdown'); if(dd) dd.style.display='none';},200)">
+          <div id="editmov-equip-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
+            background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
+          <div id="editmov-equip-cliente-hint" style="font-size:11px;color:var(--accent);margin-top:5px;font-weight:600">${m.equipCliente ? '✓ Cliente: ' + m.equipCliente : ''}</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Técnico Solicitante</label>
+          <input class="form-input" id="editmov-tecnico" value="${m.tecnico || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea class="form-textarea" id="editmov-obs" style="min-height:60px">${m.obs || ''}</textarea>
+        </div>
+        ${!['SOLICITADA','COMPRA_PENDENTE','CANCELADA'].includes(m.status) ? `<div style="font-size:11px;color:var(--accent);background:rgba(212,140,50,0.1);border:1px solid rgba(212,140,50,0.3);border-radius:var(--radius);padding:8px 10px">⚠ Essa solicitação já passou por "Enviada" — se você trocar a peça ou a quantidade, o estoque é ajustado automaticamente (devolve o que tinha sido baixado da peça antiga e baixa da nova).</div>` : ''}
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-editar-sol-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarEdicaoSolicitacao()">✓ Salvar</button>
+      </div>
+    </div>`;
+}
+
+function sugerirPecaEditMov(q) {
+  const dd = document.getElementById('editmov-peca-dropdown');
+  if (!dd) return;
+  const ql = (q || '').toLowerCase().trim();
+  const list = db.pecas.filter(p =>
+    !ql || String(p.codigo||'').toLowerCase().includes(ql) || String(p.nome||'').toLowerCase().includes(ql) || String(p.fonte||'').toLowerCase().includes(ql)
+  ).slice(0, 20);
+  dd.style.display = list.length ? 'block' : 'none';
+  dd.innerHTML = list.map(p => `<div onmousedown="selecionarPecaEditMov('${p.id}')"
+      style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
+      onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${p.codigo}</div>
+      <div style="font-size:12px;color:var(--text2)">${p.nome}</div>
+    </div>`).join('');
+}
+function selecionarPecaEditMov(pecaId) {
+  const p = db.pecas.find(x => x.id === pecaId);
+  if (!p) return;
+  _editMovPecaSel = { id: p.id, codigo: p.codigo, nome: p.nome, unidade: p.unidade, fonte: p.fonte || '', custo: p.custo || 0, valor_venda: p.valor_venda || 0 };
+  document.getElementById('editmov-peca-search').value = p.codigo + ' - ' + p.nome;
+  document.getElementById('editmov-peca-dropdown').style.display = 'none';
+}
+
+function sugerirEquipEditMov(q) {
+  const dd = document.getElementById('editmov-equip-dropdown');
+  if (!dd) return;
+  const ql = (q || '').toLowerCase().trim();
+  if (!ql || ql.length < 2) { dd.style.display = 'none'; return; }
+  API.get('/equipamentos?q=' + encodeURIComponent(ql)).then(equips => {
+    const list = (equips || []).slice(0, 15);
+    dd.style.display = list.length ? 'block' : 'none';
+    dd.innerHTML = list.map(e => {
+      const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
+      return `<div onmousedown="selecionarEquipEditMov('${e.id||''}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${cliente.replace(/'/g,"\\'")}')"
+        style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}</div>
+        <div style="font-size:12px;color:var(--text2)">${e.modelo || ''}</div>
+        ${cliente ? `<div style="font-size:10px;color:var(--text3)">${cliente}</div>` : ''}
+      </div>`;
+    }).join('');
+  }).catch(() => { dd.style.display = 'none'; });
+}
+function selecionarEquipEditMov(id, serie, modelo, cliente) {
+  _editMovEquipSel = { id, serie, cliente, modelo };
+  document.getElementById('editmov-equip-search').value = serie;
+  document.getElementById('editmov-equip-dropdown').style.display = 'none';
+  const hint = document.getElementById('editmov-equip-cliente-hint');
+  if (hint) hint.textContent = cliente ? '✓ Cliente: ' + cliente : '';
+}
+
+function salvarEdicaoSolicitacao() {
+  const qtd = parseInt(document.getElementById('editmov-qtd')?.value) || 1;
+  const tecnico = document.getElementById('editmov-tecnico')?.value.trim() || '';
+  const obs = document.getElementById('editmov-obs')?.value.trim() || '';
+  const serieAtual = document.getElementById('editmov-equip-search')?.value.trim() || '';
+
+  const payload = {
+    peca_id: _editMovPecaSel?.id, peca_codigo: _editMovPecaSel?.codigo, peca_nome: _editMovPecaSel?.nome,
+    peca_unidade: _editMovPecaSel?.unidade, peca_fonte: _editMovPecaSel?.fonte, peca_custo: _editMovPecaSel?.custo,
+    peca_valor_venda: _editMovPecaSel?.valor_venda,
+    qtd,
+    equip_id: (_editMovEquipSel?.serie === serieAtual) ? (_editMovEquipSel?.id || '') : '',
+    equip_serie: serieAtual,
+    equip_cliente: (_editMovEquipSel?.serie === serieAtual) ? (_editMovEquipSel?.cliente || '') : '',
+    equip_modelo: (_editMovEquipSel?.serie === serieAtual) ? (_editMovEquipSel?.modelo || '') : '',
+    tecnico, obs,
+  };
+
+  API.put('/movimentacoes/' + _editMovId, payload)
+    .then(res => {
+      toast('Solicitação atualizada' + (res?.estoqueAjustado ? ' — estoque ajustado' : ''));
+      document.getElementById('modal-editar-sol-overlay')?.remove();
+      loadAndRenderHistorico();
+      loadAndRenderDashboard();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 function cancelarMovimentacao(id) {
   if (!confirm('Cancelar esta solicitação? Se o estoque já tinha sido baixado (peça já enviada), ele será devolvido automaticamente.')) return;
   API.put('/movimentacoes/' + id + '/acao', { acao: 'CANCELAR', obs: '' })
@@ -2427,6 +2577,7 @@ function montarCardMov(m) {
     <div style="flex-shrink:0;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
       ${acoes}
       <button class="btn btn-ghost btn-sm" onclick="verEventos('${m.id}')" style="font-size:10px">⊙ Histórico</button>
+      <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarSolicitacao('${m.id}')" style="font-size:10px">✎ Editar</button>
       <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarDataMov('${m.id}')" style="font-size:10px">📅 Data</button>
       ${!['FINALIZADO','CANCELADA'].includes(m.status) ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);font-size:10px" onclick="cancelarMovimentacao('${m.id}')">✕ Cancelar</button>` : ''}
       <button class="btn btn-danger btn-sm" onclick="deleteMovimentacao('${m.id}')" style="font-size:10px">X Excluir</button>
@@ -2525,7 +2676,10 @@ function montarCardGrupo(itensDoGrupo) {
           <td class="mono">${it.qtd} ${it.pecaUnidade}</td>
           ${equipCol}
           <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
-          <td style="text-align:right"><button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarSolicitacao('${it.id}')" style="font-size:9px" title="Editar este item">✎</button>
+            <button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button>
+          </td>
         </tr>`;
       }).join('')}
       </tbody>
