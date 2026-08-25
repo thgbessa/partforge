@@ -2251,6 +2251,17 @@ function abrirModalEditarSolicitacao(id) {
           <label class="form-label">Quantidade</label>
           <input class="form-input" type="number" min="1" id="editmov-qtd" value="${m.qtd || 1}">
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label class="form-label">Custo Unit. (R$)</label>
+            <input class="form-input" type="number" step="0.01" min="0" id="editmov-custo" value="${(m.peca_custo || 0).toFixed(2)}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Valor de Venda (R$)</label>
+            <input class="form-input" type="number" step="0.01" min="0" id="editmov-valor-venda" value="${(m.pecaValorVenda || 0).toFixed(2)}">
+          </div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin:-6px 0 10px">Vêm preenchidos com o preço da peça no catálogo — mude aqui se precisar registrar um valor diferente pra essa solicitação específica.</div>
         <div class="form-group" style="position:relative">
           <label class="form-label">Equipamento (Nº de Série)</label>
           <input class="form-input" id="editmov-equip-search" placeholder="Buscar por série, modelo ou cliente..." autocomplete="off"
@@ -2300,6 +2311,10 @@ function selecionarPecaEditMov(pecaId) {
   _editMovPecaSel = { id: p.id, codigo: p.codigo, nome: p.nome, unidade: p.unidade, fonte: p.fonte || '', custo: p.custo || 0, valor_venda: p.valor_venda || 0 };
   document.getElementById('editmov-peca-search').value = p.codigo + ' - ' + p.nome;
   document.getElementById('editmov-peca-dropdown').style.display = 'none';
+  const custoEl = document.getElementById('editmov-custo');
+  const vendaEl = document.getElementById('editmov-valor-venda');
+  if (custoEl) custoEl.value = (p.custo || 0).toFixed(2);
+  if (vendaEl) vendaEl.value = (p.valor_venda || 0).toFixed(2);
 }
 
 function sugerirEquipEditMov(q) {
@@ -2332,14 +2347,16 @@ function selecionarEquipEditMov(id, serie, modelo, cliente) {
 
 function salvarEdicaoSolicitacao() {
   const qtd = parseInt(document.getElementById('editmov-qtd')?.value) || 1;
+  const custo = parseFloat(document.getElementById('editmov-custo')?.value) || 0;
+  const valorVenda = parseFloat(document.getElementById('editmov-valor-venda')?.value) || 0;
   const tecnico = document.getElementById('editmov-tecnico')?.value.trim() || '';
   const obs = document.getElementById('editmov-obs')?.value.trim() || '';
   const serieAtual = document.getElementById('editmov-equip-search')?.value.trim() || '';
 
   const payload = {
     peca_id: _editMovPecaSel?.id, peca_codigo: _editMovPecaSel?.codigo, peca_nome: _editMovPecaSel?.nome,
-    peca_unidade: _editMovPecaSel?.unidade, peca_fonte: _editMovPecaSel?.fonte, peca_custo: _editMovPecaSel?.custo,
-    peca_valor_venda: _editMovPecaSel?.valor_venda,
+    peca_unidade: _editMovPecaSel?.unidade, peca_fonte: _editMovPecaSel?.fonte,
+    peca_custo: custo, peca_valor_venda: valorVenda,
     qtd,
     equip_id: (_editMovEquipSel?.serie === serieAtual) ? (_editMovEquipSel?.id || '') : '',
     equip_serie: serieAtual,
