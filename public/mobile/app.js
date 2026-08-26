@@ -501,19 +501,24 @@ async function buscarPecasMov(q) {
   clearTimeout(buscaMovTimer);
   const el = document.getElementById('mov-resultados');
   if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  const qEsc = q.replace(/'/g,"\\'");
+  const opcaoAvulsa = '<div class="peca-card" style="border:1px dashed var(--accent,#d48c32)" onclick="usarPecaAvulsaRapida(\''+qEsc+'\')">'+
+    '<div class="peca-codigo" style="color:var(--accent,#d48c32)">➕ Usar "'+q+'" como peça avulsa</div>'+
+    '<div class="peca-nome" style="font-size:12px">Peça não cadastrada — segue com esse código/descrição mesmo assim</div>'+
+    '</div>';
   buscaMovTimer = setTimeout(async()=>{
     el.innerHTML='<div class="loading"><div class="spinner"></div></div>';
     try {
       const pecas = await api('GET', '/pecas?q='+encodeURIComponent(q));
-      if (!pecas||!pecas.length) { el.innerHTML='<div class="empty">Nenhuma peca encontrada</div>'; return; }
+      if (!pecas||!pecas.length) { el.innerHTML = opcaoAvulsa; return; }
       el.innerHTML = pecas.slice(0,20).map(p=>
         '<div class="peca-card" onclick="selecionarPecaMov(\''+p.id+'\',\''+((p.codigo||'').replace(/'/g,"\\'"))+'\',\''+((p.nome||'').replace(/'/g,"\\'"))+'\',\''+( p.unidade||'UN')+'\','+( p.custo||0)+')">'+
         '<div class="peca-codigo">'+(p.codigo||p.id)+'</div>'+
         '<div class="peca-nome">'+(p.nome||'')+'</div>'+
         '<div class="peca-tags">'+(p.fonte?'<span class="tag fonte">'+p.fonte+'</span>':'')+'<span class="tag">'+(p.unidade||'UN')+'</span></div>'+
         '</div>'
-      ).join('');
-    } catch(e) { el.innerHTML='<div class="empty">Erro na busca</div>'; }
+      ).join('') + opcaoAvulsa;
+    } catch(e) { el.innerHTML='<div class="empty">Erro na busca</div>' + opcaoAvulsa; }
   }, 400);
 }
 function selecionarPecaMov(id,codigo,nome,unidade,custo) {
@@ -544,6 +549,17 @@ function confirmarPecaManual() {
   sel.style.display = '';
   sel.querySelector('.selected-peca-codigo').textContent = cod + ' (peça avulsa, não cadastrada)';
   sel.querySelector('.selected-peca-nome').textContent = desc;
+}
+function usarPecaAvulsaRapida(texto) {
+  // Atalho direto na lista de resultados: usa o que foi digitado na busca
+  // como código E descrição da peça avulsa, sem precisar abrir outro formulário.
+  movPecaSel = { id: '', codigo: texto, nome: texto, unidade: 'UN', custo: 0, manual: true };
+  document.getElementById('mov-busca-wrap').style.display = 'none';
+  document.getElementById('mov-peca-manual').style.display = 'none';
+  const sel = document.getElementById('mov-peca-sel');
+  sel.style.display = '';
+  sel.querySelector('.selected-peca-codigo').textContent = texto + ' (peça avulsa, não cadastrada)';
+  sel.querySelector('.selected-peca-nome').textContent = 'Toque em "Alterar peça" pra corrigir, se precisar';
 }
 function alterarPecaMov() {
   movPecaSel = null;
