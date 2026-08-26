@@ -478,8 +478,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 let movPecaSel = null;
+let movItensLista = [];
 function abrirMovimentacao() {
   movPecaSel = null;
+  movItensLista = [];
   document.getElementById('mov-busca').value = '';
   document.getElementById('mov-resultados').innerHTML = '';
   document.getElementById('mov-busca-wrap').style.display = '';
@@ -488,6 +490,7 @@ function abrirMovimentacao() {
   document.getElementById('mov-equip').value = '';
   document.getElementById('mov-tecnico').value = currentUser ? currentUser.nome : '';
   document.getElementById('mov-obs').value = '';
+  renderMovItensLista();
   showScreen('screen-mov');
 }
 let buscaMovTimer;
@@ -529,6 +532,35 @@ function movQty(d) {
   const el = document.getElementById('mov-qtd');
   el.value = Math.max(1, (parseInt(el.value)||1) + d);
 }
+function adicionarItemMovLista() {
+  if (!movPecaSel) { toast('Selecione uma peça primeiro', 'error'); return; }
+  const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
+  movItensLista.push({
+    peca_id: movPecaSel.id, peca_codigo: movPecaSel.codigo, peca_nome: movPecaSel.nome,
+    peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd
+  });
+  alterarPecaMov();
+  document.getElementById('mov-qtd').value = '1';
+  renderMovItensLista();
+  toast('Peça adicionada à lista', 'success');
+}
+function removerItemMovLista(idx) {
+  movItensLista.splice(idx, 1);
+  renderMovItensLista();
+}
+function renderMovItensLista() {
+  const el = document.getElementById('mov-itens-lista');
+  if (!el) return;
+  if (!movItensLista.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:12px;color:var(--text-secondary,#888);margin-bottom:6px">'+movItensLista.length+' peça(s) na lista:</div>' +
+    movItensLista.map((it,i) =>
+      '<div class="selected-peca" style="margin-bottom:6px">'+
+      '<div class="selected-peca-codigo">'+(it.peca_codigo||'')+' · Qtd: '+it.qtd+'</div>'+
+      '<div class="selected-peca-nome">'+(it.peca_nome||'')+'</div>'+
+      '<button class="btn-change" style="color:#e74c3c" onclick="removerItemMovLista('+i+')">Remover</button>'+
+      '</div>'
+    ).join('');
+}
 let buscaEquipMovTimer;
 let movEquipSel = null;
 async function buscarEquipMov(q) {
@@ -563,8 +595,17 @@ function selecionarEquipMov(id, serie, modelo, cliente) {
 }
 
 async function enviarMovimentacao() {
-  if (!movPecaSel) { toast('Selecione uma peca', 'error'); return; }
-  const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
+  // Junta a lista já montada + a peça atualmente selecionada (se o usuário
+  // não clicou em "Adicionar" pra ela, trata como o único item).
+  let listaFinal = movItensLista.slice();
+  if (movPecaSel) {
+    const qtdAtual = parseInt(document.getElementById('mov-qtd').value)||1;
+    listaFinal.push({
+      peca_id: movPecaSel.id, peca_codigo: movPecaSel.codigo, peca_nome: movPecaSel.nome,
+      peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd: qtdAtual
+    });
+  }
+  if (!listaFinal.length) { toast('Selecione ao menos uma peca', 'error'); return; }
   const serie = document.getElementById('mov-equip').value.trim();
   const chamado = document.getElementById('mov-chamado') ? document.getElementById('mov-chamado').value.trim() : '';
   const tecnico = document.getElementById('mov-tecnico').value.trim();
@@ -573,51 +614,53 @@ async function enviarMovimentacao() {
   if (!chamado) { toast('Informe o numero do chamado', 'error'); return; }
   if (!tecnico) { toast('Informe o tecnico solicitante', 'error'); return; }
   if (!email) { toast('Informe o e-mail do tecnico', 'error'); return; }
-  // Busca proximo numero P-XXX
-  let proxNum = 'P-001';
-  try {
-    const movsExist = await api('GET','/movimentacoes');
-    const pNums = (movsExist||[])
-      .map(m=>m.obs_num||m.peca_num||'')
-      .filter(n=>n.startsWith('P-'))
-      .map(n=>parseInt(n.replace('P-',''))||0);
-    const seqNums = (movsExist||[])
-      .map(m=>m.seq_num||m.seqNum||0);
-    const proxSeq = seqNums.length ? Math.max(...seqNums)+1 : 1;
-    proxNum = 'P-' + String(proxSeq).padStart(3,'0');
-  } catch(e){}
+
+  const obs = document.getElementById('mov-obs').value.trim();
+  // Compartilha um grupo_id quando há mais de uma peça, pra aparecerem
+  // agrupadas numa única solicitação no sistema (igual acontece no desktop).
+  const grupoId = listaFinal.length > 1 ? ('g'+Date.now().toString(36)+Math.random().toString(36).slice(2,8)) : '';
+
   const btn = document.getElementById('btn-enviar-mov');
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
-    const body = {
-      peca_id: movPecaSel.id,
-      peca_codigo: movPecaSel.codigo,
-      peca_nome: movPecaSel.nome,
-      peca_unidade: movPecaSel.unidade || 'UN',
-      peca_custo: movPecaSel.custo || 0,
-      qtd,
-      equip_serie: serie,
-      equip_id: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.id : '',
-      equip_cliente: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.cliente : '',
-      equip_modelo: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.modelo : '',
-      tecnico,
-      tecnico_email: email,
-      chamado,
-      obs: document.getElementById('mov-obs').value.trim(),
-      origem: 'mobile'
-    };
-    const r = await fetch('/api/movimentacoes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify(body)
-    });
-    if (!r.ok) throw new Error('Erro ao enviar');
-    toast('Movimentacao enviada!', 'success');
-    btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
-    goBack();
+    let enviados = 0, erros = 0;
+    for (const item of listaFinal) {
+      const body = {
+        peca_id: item.peca_id,
+        peca_codigo: item.peca_codigo,
+        peca_nome: item.peca_nome,
+        peca_unidade: item.peca_unidade || 'UN',
+        peca_custo: item.peca_custo || 0,
+        qtd: item.qtd,
+        equip_serie: serie,
+        equip_id: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.id : '',
+        equip_cliente: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.cliente : '',
+        equip_modelo: (movEquipSel && movEquipSel.serie === serie) ? movEquipSel.modelo : '',
+        tecnico,
+        tecnico_email: email,
+        chamado,
+        obs,
+        grupo_id: grupoId,
+        origem: 'mobile'
+      };
+      try {
+        const r = await fetch('/api/movimentacoes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(body)
+        });
+        if (!r.ok) throw new Error('Erro ao enviar');
+        enviados++;
+      } catch (e) { erros++; }
+    }
+    if (erros) toast(enviados + ' peça(s) enviada(s), ' + erros + ' com erro', 'error');
+    else toast(enviados > 1 ? enviados + ' peças enviadas!' : 'Solicitação enviada!', 'success');
+    btn.disabled = false; btn.textContent = '⇄ Enviar Solicitação';
+    movItensLista = [];
+    if (!erros) goBack();
   } catch(e) {
     toast('Erro: ' + e.message, 'error');
-    btn.disabled = false; btn.textContent = 'Enviar Movimentacao';
+    btn.disabled = false; btn.textContent = '⇄ Enviar Solicitação';
   }
 }
 
