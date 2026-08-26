@@ -95,7 +95,16 @@
   <div class="scroll-body">
     <div class="form-section">
       <div class="form-section-title">Peça *</div>
-      <div id="mov-busca-wrap"><div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="mov-busca" placeholder="Buscar por código ou descrição..." oninput="buscarPecasMov(this.value)" autocomplete="off"></div><div class="peca-list" id="mov-resultados"></div></div>
+      <div id="mov-busca-wrap">
+        <div class="search-wrap"><span class="search-icon">🔍</span><input type="text" id="mov-busca" placeholder="Buscar por código ou descrição..." oninput="buscarPecasMov(this.value)" autocomplete="off"></div>
+        <div class="peca-list" id="mov-resultados"></div>
+        <button class="btn-change" style="margin-top:8px;width:100%;text-align:center" onclick="mostrarPecaManual()">Não achou a peça? Adicionar manualmente</button>
+        <div id="mov-peca-manual" style="display:none;margin-top:10px">
+          <div class="form-row"><label class="form-label">Código da Peça</label><input type="text" id="mov-peca-manual-cod" class="form-input" placeholder="Ex: 123NOVO"></div>
+          <div class="form-row"><label class="form-label">Descrição da Peça</label><input type="text" id="mov-peca-manual-desc" class="form-input" placeholder="Descreva a peça"></div>
+          <button class="btn-change" style="width:100%;text-align:center" onclick="confirmarPecaManual()">Usar esta peça</button>
+        </div>
+      </div>
       <div id="mov-peca-sel" class="selected-peca" style="display:none"><div class="selected-peca-codigo"></div><div class="selected-peca-nome"></div><button class="btn-change" onclick="alterarPecaMov()">Alterar peça</button></div>
     </div>
     <div class="form-section">
@@ -170,6 +179,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="/mobile/app.js?v=1787600000"></script>
+<script src="/mobile/app.js?v=1787700000"></script>
 </body>
 </html>

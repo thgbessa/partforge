@@ -485,6 +485,9 @@ function abrirMovimentacao() {
   document.getElementById('mov-busca').value = '';
   document.getElementById('mov-resultados').innerHTML = '';
   document.getElementById('mov-busca-wrap').style.display = '';
+  document.getElementById('mov-peca-manual').style.display = 'none';
+  document.getElementById('mov-peca-manual-cod').value = '';
+  document.getElementById('mov-peca-manual-desc').value = '';
   document.getElementById('mov-peca-sel').style.display = 'none';
   document.getElementById('mov-qtd').value = '1';
   document.getElementById('mov-equip').value = '';
@@ -521,10 +524,32 @@ function selecionarPecaMov(id,codigo,nome,unidade,custo) {
   sel.querySelector('.selected-peca-codigo').textContent = codigo || '';
   sel.querySelector('.selected-peca-nome').textContent = nome || '';
 }
+function mostrarPecaManual() {
+  document.getElementById('mov-peca-manual').style.display = '';
+  document.getElementById('mov-resultados').innerHTML = '';
+}
+function confirmarPecaManual() {
+  const cod = document.getElementById('mov-peca-manual-cod').value.trim();
+  const desc = document.getElementById('mov-peca-manual-desc').value.trim();
+  if (!cod || !desc) { toast('Preencha código e descrição', 'error'); return; }
+  // Peça sem cadastro: id vazio (não existe no catálogo), fica marcada como
+  // manual pra entrar nas observações da solicitação em vez de vincular a
+  // uma peça real.
+  movPecaSel = { id: '', codigo: cod, nome: desc, unidade: 'UN', custo: 0, manual: true };
+  document.getElementById('mov-busca-wrap').style.display = 'none';
+  document.getElementById('mov-peca-manual').style.display = 'none';
+  document.getElementById('mov-peca-manual-cod').value = '';
+  document.getElementById('mov-peca-manual-desc').value = '';
+  const sel = document.getElementById('mov-peca-sel');
+  sel.style.display = '';
+  sel.querySelector('.selected-peca-codigo').textContent = cod + ' (peça avulsa, não cadastrada)';
+  sel.querySelector('.selected-peca-nome').textContent = desc;
+}
 function alterarPecaMov() {
   movPecaSel = null;
   document.getElementById('mov-busca-wrap').style.display = '';
   document.getElementById('mov-peca-sel').style.display = 'none';
+  document.getElementById('mov-peca-manual').style.display = 'none';
   document.getElementById('mov-busca').value = '';
   document.getElementById('mov-resultados').innerHTML = '';
 }
@@ -537,7 +562,8 @@ function adicionarItemMovLista() {
   const qtd = parseInt(document.getElementById('mov-qtd').value)||1;
   movItensLista.push({
     peca_id: movPecaSel.id, peca_codigo: movPecaSel.codigo, peca_nome: movPecaSel.nome,
-    peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd
+    peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd,
+    manual: !!movPecaSel.manual
   });
   alterarPecaMov();
   document.getElementById('mov-qtd').value = '1';
@@ -555,7 +581,7 @@ function renderMovItensLista() {
   el.innerHTML = '<div style="font-size:12px;color:var(--text-secondary,#888);margin-bottom:6px">'+movItensLista.length+' peça(s) na lista:</div>' +
     movItensLista.map((it,i) =>
       '<div class="selected-peca" style="margin-bottom:6px">'+
-      '<div class="selected-peca-codigo">'+(it.peca_codigo||'')+' · Qtd: '+it.qtd+'</div>'+
+      '<div class="selected-peca-codigo">'+(it.peca_codigo||'')+(it.manual?' (avulsa)':'')+' · Qtd: '+it.qtd+'</div>'+
       '<div class="selected-peca-nome">'+(it.peca_nome||'')+'</div>'+
       '<button class="btn-change" style="color:#e74c3c" onclick="removerItemMovLista('+i+')">Remover</button>'+
       '</div>'
@@ -602,7 +628,8 @@ async function enviarMovimentacao() {
     const qtdAtual = parseInt(document.getElementById('mov-qtd').value)||1;
     listaFinal.push({
       peca_id: movPecaSel.id, peca_codigo: movPecaSel.codigo, peca_nome: movPecaSel.nome,
-      peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd: qtdAtual
+      peca_unidade: movPecaSel.unidade||'UN', peca_custo: movPecaSel.custo||0, qtd: qtdAtual,
+      manual: !!movPecaSel.manual
     });
   }
   if (!listaFinal.length) { toast('Selecione ao menos uma peca', 'error'); return; }
@@ -625,8 +652,13 @@ async function enviarMovimentacao() {
   try {
     let enviados = 0, erros = 0;
     for (const item of listaFinal) {
+      // Peça avulsa (sem cadastro): sem peca_id, deixa registrado nas
+      // observações qual código/descrição o técnico informou na hora.
+      const obsFinal = item.manual
+        ? ('PEÇA NÃO CADASTRADA: ' + item.peca_codigo + ' - ' + item.peca_nome + (obs ? ' | ' + obs : ''))
+        : obs;
       const body = {
-        peca_id: item.peca_id,
+        peca_id: item.manual ? '' : item.peca_id,
         peca_codigo: item.peca_codigo,
         peca_nome: item.peca_nome,
         peca_unidade: item.peca_unidade || 'UN',
@@ -639,7 +671,7 @@ async function enviarMovimentacao() {
         tecnico,
         tecnico_email: email,
         chamado,
-        obs,
+        obs: obsFinal,
         grupo_id: grupoId,
         origem: 'mobile'
       };
