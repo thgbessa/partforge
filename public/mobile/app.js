@@ -654,9 +654,6 @@ async function enviarMovimentacao() {
   const tecnico = document.getElementById('mov-tecnico').value.trim();
   const email = document.getElementById('mov-email') ? document.getElementById('mov-email').value.trim() : '';
   if (!serie) { toast('Informe o numero de serie', 'error'); return; }
-  if (!chamado) { toast('Informe o numero do chamado', 'error'); return; }
-  if (!tecnico) { toast('Informe o tecnico solicitante', 'error'); return; }
-  if (!email) { toast('Informe o e-mail do tecnico', 'error'); return; }
 
   const obs = document.getElementById('mov-obs').value.trim();
   // Compartilha um grupo_id quando há mais de uma peça, pra aparecerem
