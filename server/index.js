@@ -381,43 +381,6 @@ app.listen(PORT, '0.0.0.0', () => {
     // ── fim backup automatico ──
 
     // ============================================================
-    //  CANCELAMENTO AUTOMÁTICO DE ORÇAMENTOS VENCIDOS
-    //  Orçamento em "Aguard. Aprov. Cliente" (ENVIADO) que passa 7 dias
-    //  sem o cliente aprovar é movido automaticamente para CANCELADO.
-    //  Roda a cada 15 minutos.
-    // ============================================================
-    const PRAZO_APROVACAO_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
-
-    function cancelarOrcamentosVencidos() {
-      try {
-        const limite = Date.now() - PRAZO_APROVACAO_MS;
-        const vencidos = db.query(
-          "SELECT id, numero, status_changed_at FROM orcamentos WHERE status = 'ENVIADO' AND status_changed_at <= ?",
-          [limite]
-        );
-        if (!vencidos.length) return;
-
-        const agora = Date.now();
-        for (const o of vencidos) {
-          db.runBatch(
-            "UPDATE orcamentos SET status='CANCELADO', status_changed_at=?, updated_at=? WHERE id=?",
-            [agora, agora, o.id]
-          );
-        }
-        db.persist();
-        console.log(`Cancelamento automatico: ${vencidos.length} orcamento(s) vencido(s) (7 dias sem aprovacao) -> CANCELADO:`,
-          vencidos.map(o => o.numero).join(', '));
-      } catch (err) {
-        console.error('Erro ao cancelar orcamentos vencidos:', err.message);
-      }
-    }
-
-    setInterval(cancelarOrcamentosVencidos, 15 * 60 * 1000);
-    // Roda uma vez logo na subida também (não precisa esperar 15min pela primeira checagem)
-    setTimeout(cancelarOrcamentosVencidos, 20 * 1000);
-    // ── fim cancelamento automatico de orcamentos ──
-
-    // ============================================================
     //  IMPORTAÇÃO DE CNPJ POR Nº DE CONTRATO (uso único, sob demanda)
     //  Cruza server/dados-cnpj-contrato.json (Cliente/CNPJ/Contrato) com os
     //  equipamentos já cadastrados pelo campo "contrato" e preenche o CNPJ
