@@ -113,9 +113,10 @@ app.listen(PORT, '0.0.0.0', () => {
         );
         // Relação completa de TODOS os orçamentos em aberto no sistema (não só
         // os criados/atualizados no período), para acompanhar há quantos dias
-        // cada um está parado no status atual. Cancelados ficam de fora.
+        // cada um está parado no status atual. Cancelados e Faturados ficam
+        // de fora — já não estão mais "em aberto".
         const orcamentosCompleto = db.query(
-          "SELECT * FROM orcamentos WHERE status != 'CANCELADO' ORDER BY status_changed_at ASC"
+          "SELECT * FROM orcamentos WHERE status NOT IN ('CANCELADO','FATURADO') ORDER BY status_changed_at ASC"
         );
         const solicitacoesCompra = db.query(
           "SELECT * FROM solicitacoes_compra WHERE updated_at BETWEEN ? AND ?",
