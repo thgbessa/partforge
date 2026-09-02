@@ -459,6 +459,46 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importacao de cnpj por contrato ──
 
+    // ── Cria os kits DAKEWE como pecas novas (rodar 1x, depois remover) ──
+    app.get('/api/admin/criar-kits-dakewe-pecas', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const lista = [
+          { modelo: 'S200',      qtd: 3 },
+          { modelo: 'DP360',     qtd: 2 },
+          { modelo: 'S10',       qtd: 2 },
+          { modelo: 'C100',      qtd: 1 },
+          { modelo: 'CS500',     qtd: 1 },
+          { modelo: '6250',      qtd: 0 },
+          { modelo: 'HP 300',    qtd: 0 },
+          { modelo: 'HP300 Plus',qtd: 0 },
+          { modelo: 'CS600',     qtd: 0 },
+        ];
+        const existentes = db.query('SELECT codigo FROM pecas').map(p => (p.codigo || '').trim().toUpperCase());
+        let criadas = 0, pulados = [];
+        const agora = Date.now();
+        for (const item of lista) {
+          const codigo = ('KIT ' + item.modelo).trim().toUpperCase();
+          if (existentes.includes(codigo)) { pulados.push(codigo); continue; }
+          const id = db.uid();
+          const nome = 'KIT MANUTENÇÃO PREVENTIVA ' + item.modelo.toUpperCase();
+          db.run(`INSERT INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,taxa,dolar,markup,custo,valor_venda,preco_usd,localizacao,localizacao_bin,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [id, codigo, nome, 'UN', '', 'DAKEWE', item.modelo, 2, 0, 0, 0, 0, 0, 0, '', '', agora]);
+          db.run('INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)', [id, item.qtd, agora]);
+          criadas++;
+          existentes.push(codigo);
+        }
+        res.json({ ok: true, totalNaLista: lista.length, criadas, pulados });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim criar kits dakewe pecas ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
