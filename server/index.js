@@ -499,6 +499,33 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim criar kits dakewe pecas ──
 
+    // ── Restaura fonte=DAKEWE nos kits que perderam a marca ao serem
+    //    editados (bug do dropdown sem essa opção, ja corrigido). Nao mexe
+    //    em custo/valor_venda que ja foram preenchidos. Rodar 1x, depois remover. ──
+    app.get('/api/admin/reparar-fonte-dakewe', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const codigos = ['KIT S200','KIT DP360','KIT S10','KIT C100','KIT CS500','KIT 6250','KIT HP 300','KIT HP300 PLUS','KIT CS600'];
+        let corrigidas = 0;
+        const detalhes = [];
+        for (const cod of codigos) {
+          const p = db.get('SELECT id, codigo, fonte, custo, valor_venda FROM pecas WHERE codigo=?', [cod]);
+          if (p && p.fonte !== 'DAKEWE') {
+            db.run("UPDATE pecas SET fonte='DAKEWE' WHERE id=?", [p.id]);
+            corrigidas++;
+            detalhes.push({ codigo: p.codigo, fonteAntes: p.fonte, custo: p.custo, valor_venda: p.valor_venda });
+          }
+        }
+        res.json({ ok: true, corrigidas, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim reparar fonte dakewe ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
