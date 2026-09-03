@@ -1744,7 +1744,7 @@ function simularEmail(tipo, sol) {
       `  Descrição:   ${sol.pecaNome}\n` +
       `  Quantidade:  ${sol.qtd} ${sol.pecaUnidade}\n\n` +
       `EQUIPAMENTO\n` +
-      `  Descrição:   ${sol.equipNome||'—'}\n` +
+      `  Descrição:   ${sol.equipModelo||'—'}\n` +
       `  Nº de Série: ${sol.equipSerie||'—'}\n` +
       `  Cliente:     ${sol.equipCliente||'—'}\n\n` +
       (sol.doadId ? `╔══════════════════════════════════╗\n⚠ ORIGEM DA PEÇA: EQUIPAMENTO DOADOR\n  Doadora: ${sol.doadModelo||'—'}\n  Série:   ${sol.doadSerie||'—'}\n  Tipo:    ${sol.doadClass==='SUCATA'?'SUCATA (50%)':'Em Uso (100%)'}\n*** PEÇA VEM DA ÁREA TÉCNICA — NÃO REALIZAR COMPRA ***\n╚══════════════════════════════════╝\n\n` : '') +
@@ -1773,7 +1773,7 @@ function simularEmail(tipo, sol) {
       `  Valor R$:    ${sol.peca_custo ? 'R$ '+parseFloat(sol.peca_custo).toFixed(2) : 'N/D'}\n` +
       `  Quantidade:  ${sol.qtd} ${sol.pecaUnidade}\n\n` +
       `EQUIPAMENTO\n` +
-      `  Descrição:   ${sol.equipNome||'—'}\n` +
+      `  Descrição:   ${sol.equipModelo||'—'}\n` +
       `  Nº de Série: ${sol.equipSerie||'—'}\n` +
       `  Cliente:     ${sol.equipCliente||'—'}\n\n` +
       `SOLICITANTE\n` +
@@ -1798,7 +1798,7 @@ function simularEmail(tipo, sol) {
       `  Descrição:   ${sol.pecaNome}\n` +
       `  Quantidade:  ${sol.qtd} ${sol.pecaUnidade}\n\n` +
       `EQUIPAMENTO\n` +
-      `  Descrição:   ${sol.equipNome||'—'}\n` +
+      `  Descrição:   ${sol.equipModelo||'—'}\n` +
       `  Nº de Série: ${sol.equipSerie||'—'}\n` +
       `  Cliente:     ${sol.equipCliente||'—'}\n\n` +
       `TÉCNICO RESPONSÁVEL\n` +
@@ -2134,7 +2134,7 @@ function renderLogistica(tab) {
         </div>
         ${m.equipSerie ? `<div style="font-size:12px;color:var(--text2)">
           S/N: <span style="font-family:var(--mono);color:var(--text)">${m.equipSerie}</span>
-          · <span style="color:var(--text3)">${m.equipNome||''}</span>
+          · <span style="color:var(--text3)">${m.equipModelo||''}</span>
           ${m.equipCliente ? `· <span style="color:var(--text3)">${m.equipCliente}</span>` : ''}
         </div>` : ''}
         ${m.doadoraModelo ? `<div style="font-size:11px;margin-top:3px;display:flex;align-items:center;gap:6px">
@@ -2465,7 +2465,7 @@ function processarURLAction() {
         `====================================\n\n` +
         `Peça:        ${sol.pecaCodigo} — ${sol.pecaNome}\n` +
         `Quantidade:  ${sol.qtd} ${sol.pecaUnidade}\n` +
-        `Equipamento: ${sol.equipNome||'—'}\n` +
+        `Equipamento: ${sol.equipModelo||'—'}\n` +
         `Nº de Série: ${sol.equipSerie||'—'}\n` +
         `Cliente:     ${sol.equipCliente||'—'}\n\n` +
         `>> CLIQUE AQUI PARA CONFIRMAR O RECEBIMENTO:\n` +
@@ -2580,7 +2580,7 @@ function montarCardMov(m) {
       ${m.equipSerie ? `<div style="font-size:12px;color:var(--text2)">
         S/N: <span style="font-family:var(--mono);color:var(--text)">${m.equipSerie}</span>
         ${m.equipCliente ? `· <span style="color:var(--text3)">${m.equipCliente}</span>` : ''}
-        ${m.equipNome ? `· <span style="color:var(--text3);font-size:11px">${m.equipNome}</span>` : ''}
+        ${m.equipModelo ? `· <span style="color:var(--text3);font-size:11px">${m.equipModelo}</span>` : ''}
       </div>` : ''}
       ${m.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${m.tecnico}${m.emailTecnico?` · <span style="font-family:var(--mono)">${m.emailTecnico}</span>`:''}</div>` : ''}
       ${despachoInfo}${recInfo}${nfInfo}
@@ -6165,7 +6165,7 @@ function renderPendencias(q = '') {
         <td class="mono" style="font-weight:700">${m.qtd||1}</td>
         ${isAdmin ? `<td class="mono" style="font-size:11px;color:var(--accent)">R$ ${((m.peca_custo||0)*(m.qtd||1)).toFixed(2)}</td>` : ''}
         <td class="mono" style="font-size:11px;font-weight:700;color:var(--green)">R$ ${((m.pecaValorVenda||0)*(m.qtd||1)).toFixed(2)}</td>
-        <td style="font-size:11px">${m.equipNome||'—'} <span style="color:var(--text3)">${m.equipSerie ? '· '+m.equipSerie : ''}</span></td>
+        <td style="font-size:11px">${m.equipModelo||'—'} <span style="color:var(--text3)">${m.equipSerie ? '· '+m.equipSerie : ''}</span></td>
         <td style="font-size:11px">${m.tecnico||'—'}</td>
         <td class="mono" style="font-size:10px;color:var(--text3)">${new Date(m.eventos[0]?.data||Date.now()).toLocaleDateString('pt-BR')}</td>
         <td><button class="btn btn-ghost btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">📦 Despachar</button></td>
@@ -6517,7 +6517,7 @@ function exportarExcel(aba) {
         m.pecaNome   || '',
         parseFloat(m.peca_custo || 0),
         m.qtd        || 0,
-        m.equipNome  || '',
+        m.equipModelo  || '',
         m.equipSerie || '',
         m.equipCliente || '',
         m.tecnico    || '',
