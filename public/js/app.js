@@ -1203,7 +1203,10 @@ function criarSolicitacao() {
     });
   }
   if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
-  const tecnico = document.getElementById('mov-tecnico').value.trim() || currentUser?.nome || '';
+  const tecnicoSelect = document.getElementById('mov-tecnico').value.trim();
+  const tecnico = tecnicoSelect === 'OUTROS'
+    ? (document.getElementById('mov-tecnico-outro')?.value.trim() || '')
+    : (tecnicoSelect || currentUser?.nome || '');
   const obs     = document.getElementById('mov-obs').value.trim();
   const dataSolicitacao = document.getElementById('mov-data')?.value || '';
   // Itens de uma mesma solicitação (mais de 1 peça) compartilham um grupo_id,
@@ -1249,6 +1252,8 @@ function populateMovSelects() {
   document.getElementById('mov-equip-card').style.display = 'none';
   document.getElementById('mov-qtd').value = '';
   document.getElementById('mov-tecnico').value = '';
+  document.getElementById('mov-tecnico-outro').value = '';
+  document.getElementById('mov-tecnico-outro-wrap').style.display = 'none';
   document.getElementById('mov-tecnico-email').value = '';
   document.getElementById('mov-data').value = new Date().toISOString().slice(0, 10);
   document.getElementById('mov-obs').value = '';
