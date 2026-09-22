@@ -53,6 +53,10 @@
           <span class="icon">🛠</span> Kit's Preventivas
           <span class="nav-badge" id="badge-kits-preventivas">0</span>
         </div>
+        <div class="nav-item" onclick="navigate('garantia', this)">
+          <span class="icon">🛡</span> Garantia
+          <span class="nav-badge" id="badge-garantia">0</span>
+        </div>
       </div>
       <div class="nav-group">
         <div class="nav-label">Estoque</div>
@@ -478,6 +482,27 @@
           </select>
         </div>
         <div class="table-wrap" id="kits-preventivas-table"></div>
+      </div>
+
+      <!-- GARANTIA -->
+      <div class="page" id="page-garantia">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por série, modelo ou marca..."
+              oninput="renderGarantia(this.value)">
+          </div>
+          <select class="form-select" style="width:200px" id="garantia-filter-status"
+            onchange="renderGarantia(document.querySelector('#page-garantia .search-input').value)">
+            <option value="">Todos os status</option>
+            <option value="EM_GARANTIA">Em garantia</option>
+            <option value="FORA_GARANTIA">Fora da garantia</option>
+            <option value="SEM_PRAZO">Prazo não configurado</option>
+            <option value="SEM_DATA">Sem data de compra</option>
+          </select>
+        </div>
+        <div id="garantia-resumo" style="margin-bottom:16px"></div>
+        <div id="garantia-content"></div>
       </div>
 
       <!-- MODAL KIT PREVENTIVA -->
@@ -1879,4 +1904,4 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000070"></script></html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="/js/api.js?v=2"></script><script src="/js/app.js?v=100000071"></script></html>

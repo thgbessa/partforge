@@ -3319,6 +3319,224 @@ function deleteKitPreventiva(id) {
     .catch(err => toast(err.message, 'error'));
 }
 
+// ============================================================
+//  GARANTIA — controle de garantia de equipamentos por fabricante
+// ============================================================
+async function loadAndRenderGarantia() {
+  setSyncing(true);
+  try {
+    const [equips, config] = await Promise.all([
+      API.get('/equipamentos'),
+      API.get('/garantia-config'),
+    ]);
+    db.equipamentos = equips;
+    db.garantiaConfig = config;
+    renderGarantia();
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setSyncing(false);
+  }
+}
+
+const GARANTIA_STATUS_LABEL = {
+  EM_GARANTIA:   { label: 'Em garantia',           badge: 'badge-green'  },
+  FORA_GARANTIA: { label: 'Fora da garantia',      badge: 'badge-red'    },
+  SEM_PRAZO:     { label: 'Prazo não configurado', badge: 'badge-gray'   },
+  SEM_DATA:      { label: 'Sem data de compra',    badge: 'badge-orange' },
+};
+
+function calcularStatusGarantia(equip, configMap) {
+  const marca = (equip.marca || '').trim().toUpperCase() || 'NÃO IDENTIFICADO';
+  const cfg = configMap[marca];
+  const dataCompra = (equip.data_compra || '').trim();
+  let dataFim = null, status;
+  if (!dataCompra) {
+    status = 'SEM_DATA';
+  } else if (!cfg || !parseFloat(cfg.anos_equipamento)) {
+    status = 'SEM_PRAZO';
+  } else {
+    const inicio = new Date(dataCompra + 'T00:00:00');
+    if (isNaN(inicio.getTime())) {
+      status = 'SEM_DATA';
+    } else {
+      dataFim = new Date(inicio);
+      dataFim.setFullYear(dataFim.getFullYear() + parseFloat(cfg.anos_equipamento));
+      status = dataFim.getTime() >= Date.now() ? 'EM_GARANTIA' : 'FORA_GARANTIA';
+    }
+  }
+  return { marca, status, dataFim };
+}
+
+function renderGarantia(q = '') {
+  const resumoEl = document.getElementById('garantia-resumo');
+  const contentEl = document.getElementById('garantia-content');
+  if (!resumoEl || !contentEl) return;
+  const ql = (q || document.querySelector('#page-garantia .search-input')?.value || '').toLowerCase().trim();
+  const statusFiltro = document.getElementById('garantia-filter-status')?.value || '';
+
+  const configMap = {};
+  (db.garantiaConfig || []).forEach(g => { configMap[(g.marca || '').toUpperCase()] = g; });
+
+  let equipsEmpresa = (db.equipamentos || []).filter(e => (e.proprietario || '').trim() === 'Empresa');
+
+  const badgeEl = document.getElementById('badge-garantia');
+  if (badgeEl) badgeEl.textContent = equipsEmpresa.length || '';
+
+  equipsEmpresa = equipsEmpresa.map(e => ({ ...e, _garantia: calcularStatusGarantia(e, configMap) }));
+
+  if (statusFiltro) equipsEmpresa = equipsEmpresa.filter(e => e._garantia.status === statusFiltro);
+  if (ql) equipsEmpresa = equipsEmpresa.filter(e =>
+    String(e.serie || '').toLowerCase().includes(ql) ||
+    String(e.modelo || '').toLowerCase().includes(ql) ||
+    String(e.marca || '').toLowerCase().includes(ql)
+  );
+
+  const totais = { EM_GARANTIA: 0, FORA_GARANTIA: 0, SEM_PRAZO: 0, SEM_DATA: 0 };
+  equipsEmpresa.forEach(e => { totais[e._garantia.status] = (totais[e._garantia.status] || 0) + 1; });
+  resumoEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+      <div class="table-wrap" style="padding:14px 16px">
+        <div style="font-size:11px;color:var(--text3)">EM GARANTIA</div>
+        <div style="font-size:22px;font-weight:700;color:var(--green)">${totais.EM_GARANTIA}</div>
+      </div>
+      <div class="table-wrap" style="padding:14px 16px">
+        <div style="font-size:11px;color:var(--text3)">FORA DA GARANTIA</div>
+        <div style="font-size:22px;font-weight:700;color:var(--red)">${totais.FORA_GARANTIA}</div>
+      </div>
+      <div class="table-wrap" style="padding:14px 16px">
+        <div style="font-size:11px;color:var(--text3)">PRAZO NÃO CONFIGURADO</div>
+        <div style="font-size:22px;font-weight:700;color:var(--text2)">${totais.SEM_PRAZO}</div>
+      </div>
+      <div class="table-wrap" style="padding:14px 16px">
+        <div style="font-size:11px;color:var(--text3)">SEM DATA DE COMPRA</div>
+        <div style="font-size:22px;font-weight:700;color:var(--accent)">${totais.SEM_DATA}</div>
+      </div>
+    </div>`;
+
+  if (!equipsEmpresa.length) {
+    contentEl.innerHTML = `<div class="empty-state"><div class="empty-icon">🛡</div>
+      <div class="empty-title">Nenhum equipamento encontrado</div>
+      <div class="empty-sub">Ajuste os filtros ou a busca</div></div>`;
+    return;
+  }
+
+  const porMarca = {};
+  equipsEmpresa.forEach(e => {
+    const m = e._garantia.marca;
+    (porMarca[m] = porMarca[m] || []).push(e);
+  });
+  const marcasOrdenadas = Object.keys(porMarca).sort((a, b) => porMarca[b].length - porMarca[a].length);
+
+  contentEl.innerHTML = marcasOrdenadas.map(marca => {
+    const lista = porMarca[marca];
+    const cfg = configMap[marca] || {};
+    const temPrazo = parseFloat(cfg.anos_equipamento) > 0;
+    const emG = lista.filter(e => e._garantia.status === 'EM_GARANTIA').length;
+    const foraG = lista.filter(e => e._garantia.status === 'FORA_GARANTIA').length;
+    const marcaJs = marca.replace(/'/g, "\\'");
+
+    return `
+    <div class="table-wrap" style="margin-bottom:16px;padding:0;overflow:hidden">
+      <div style="padding:14px 18px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-weight:700;font-size:14px">${marca}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">
+            ${lista.length} equipamento(s)${temPrazo ? ` · ${emG} em garantia · ${foraG} fora` : ' · prazo de garantia não configurado'}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${temPrazo ? `<span style="font-size:11px;color:var(--text2)">Prazo: ${cfg.anos_equipamento}a equip. / ${cfg.anos_acessorio || 0}a acessório</span>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="abrirModalGarantiaConfig('${marcaJs}')">⚙ Configurar Prazo</button>
+        </div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Série</th><th>Modelo</th><th>Data Compra</th><th>Fim da Garantia</th><th>Status</th></tr></thead>
+        <tbody>
+          ${lista.map(e => {
+            const st = GARANTIA_STATUS_LABEL[e._garantia.status];
+            const dataFimTxt = e._garantia.dataFim ? e._garantia.dataFim.toLocaleDateString('pt-BR') : '—';
+            const dataCompraTxt = e.data_compra ? new Date(e.data_compra + 'T00:00:00').toLocaleDateString('pt-BR') : '—';
+            return `<tr>
+              <td class="mono" style="font-size:11px;color:var(--accent)">${e.serie || '—'}</td>
+              <td style="font-size:12px">${e.modelo || '—'}</td>
+              <td class="mono">${dataCompraTxt}</td>
+              <td class="mono">${dataFimTxt}</td>
+              <td><span class="badge ${st.badge}">${st.label}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+function abrirModalGarantiaConfig(marca) {
+  const cfg = (db.garantiaConfig || []).find(g => (g.marca || '').toUpperCase() === marca.toUpperCase()) || {};
+  let overlay = document.getElementById('modal-garantia-config-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-garantia-config-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  const marcaJs = marca.replace(/'/g, "\\'");
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:400px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Prazo de Garantia — ${marca}</span>
+        <button onclick="document.getElementById('modal-garantia-config-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div class="form-group">
+          <label class="form-label">Anos de garantia — Equipamento</label>
+          <input class="form-input" type="number" step="0.5" min="0" id="garantia-cfg-anos-equip" value="${cfg.anos_equipamento || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Anos de garantia — Acessórios</label>
+          <input class="form-input" type="number" step="0.5" min="0" id="garantia-cfg-anos-acessorio" value="${cfg.anos_acessorio || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea class="form-textarea" id="garantia-cfg-obs" style="min-height:50px">${cfg.obs || ''}</textarea>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px">
+        ${cfg.marca ? `<button class="btn btn-ghost" style="color:var(--red)" onclick="excluirGarantiaConfig('${marcaJs}')">Remover Prazo</button>` : '<div></div>'}
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="document.getElementById('modal-garantia-config-overlay').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarGarantiaConfig('${marcaJs}')">✓ Salvar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function salvarGarantiaConfig(marca) {
+  const anos_equipamento = parseFloat(document.getElementById('garantia-cfg-anos-equip')?.value) || 0;
+  const anos_acessorio = parseFloat(document.getElementById('garantia-cfg-anos-acessorio')?.value) || 0;
+  const obs = document.getElementById('garantia-cfg-obs')?.value.trim() || '';
+  API.post('/garantia-config', { marca, anos_equipamento, anos_acessorio, obs })
+    .then(() => {
+      toast('Prazo de garantia salvo');
+      document.getElementById('modal-garantia-config-overlay')?.remove();
+      loadAndRenderGarantia();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
+function excluirGarantiaConfig(marca) {
+  if (!confirm('Remover a configuração de prazo desta marca?')) return;
+  API.delete('/garantia-config/' + encodeURIComponent(marca))
+    .then(() => {
+      toast('Prazo removido');
+      document.getElementById('modal-garantia-config-overlay')?.remove();
+      loadAndRenderGarantia();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 async function loadAndRenderKitsPreventivas(q = '') {
   setSyncing(true);
   try {
@@ -7310,6 +7528,7 @@ function navigate(page, el) {
     pecas:        ['Peças',        '/ cadastro'],
     equipamentos: ['Equipamentos', '/ cadastro'],
     'kits-preventivas': ["Kit's Preventivas", '/ itens, valores e fornecedor'],
+    garantia:     ['Garantia',     '/ equipamentos próprios, por fabricante'],
     estoque:      ['Estoque',      '/ posição atual'],
     movimentacao: ['Movimentação', '/ nova solicitação'],
     historico:    ['Histórico',    '/ solicitações'],
@@ -7388,6 +7607,9 @@ function navigate(page, el) {
   } else if (page === 'kits-preventivas') {
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalKitPreventiva()">⊕ Novo Kit</button>`;
     loadAndRenderKitsPreventivas();
+  } else if (page === 'garantia') {
+    if (actionsEl) actionsEl.innerHTML = '';
+    loadAndRenderGarantia();
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalUsuario()">⊕ Novo Usuário</button>`;

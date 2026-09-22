@@ -464,6 +464,20 @@ router.delete('/kits-preventivas/:id', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM kits_preventivas WHERE id=?',[req.params.id]); res.json({ok:true});
 });
 
+// -- GARANTIA: prazos por marca/fabricante --
+router.get('/garantia-config', autenticar, (req, res) => {
+  res.json(db.query('SELECT * FROM garantia_config ORDER BY marca'));
+});
+router.post('/garantia-config', autenticar, isAdmin, (req, res) => {
+  const g = req.body; if (!g.marca) return res.status(400).json({erro:'Marca obrigatória'});
+  db.run(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)`,
+    [g.marca.toUpperCase().trim(), g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', now()]);
+  res.status(201).json({ok:true});
+});
+router.delete('/garantia-config/:marca', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM garantia_config WHERE marca=?', [req.params.marca]); res.json({ok:true});
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
@@ -681,6 +695,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     orcamentos:    db.query('SELECT * FROM orcamentos').map(o=>({...o,itens:P(o.itens),itens_opcionais:P(o.itens_opcionais)})),
     solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
     kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens),itens_opcionais:P(k.itens_opcionais)})),
+    garantia_config: db.query('SELECT * FROM garantia_config'),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -807,6 +822,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.kits_preventivas?.length) for (const k of s.kits_preventivas)
       db.runBatch(`INSERT OR REPLACE INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,itens_opcionais,obs,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [k.id||uid(),k.nome||'',k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),J(k.itens_opcionais||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
+
+    if (s.garantia_config?.length) for (const g of s.garantia_config)
+      db.runBatch(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)`,
+        [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', g.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

@@ -186,6 +186,20 @@ async function init() {
   try { _db.run("ALTER TABLE kits_preventivas ADD COLUMN codigo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE kits_preventivas ADD COLUMN itens_opcionais TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
 
+  try { _db.run(`CREATE TABLE IF NOT EXISTS garantia_config (
+    marca TEXT PRIMARY KEY, anos_equipamento REAL DEFAULT 1, anos_acessorio REAL DEFAULT 1,
+    obs TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
+  )`); } catch(e) { console.log('erro criando garantia_config', e.message); }
+  // Prazo conhecido do fabricante DYMIND (2 anos equipamento, 1 ano acessorios).
+  // Os demais fabricantes ficam sem prazo definido ate o usuario configurar.
+  try {
+    const jaTem = _db.exec("SELECT marca FROM garantia_config WHERE marca='DYMIND'");
+    if (!jaTem.length || !jaTem[0].values.length) {
+      _db.run("INSERT INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)",
+        ['DYMIND', 2, 1, '', Date.now()]);
+    }
+  } catch(e) { /* ignora */ }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;

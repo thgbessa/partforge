@@ -292,6 +292,7 @@ app.listen(PORT, '0.0.0.0', () => {
           orcamentos:          db.query('SELECT * FROM orcamentos'),
           solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra'),
           kits_preventivas:    db.query('SELECT * FROM kits_preventivas'),
+          garantia_config:     db.query('SELECT * FROM garantia_config'),
           clientes:            db.query('SELECT * FROM clientes'),
           doadoras:            db.query('SELECT * FROM doadoras'),
           retiradas:           db.query('SELECT * FROM retiradas'),
@@ -525,6 +526,67 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     });
     // ── fim reparar fonte dakewe ──
+
+    // ── Importa/sincroniza dados de garantia dos equipamentos da Empresa
+    //    (planilha ConsultaEquipamentos). Casa por série: atualiza os que já
+    //    existem (mescla campos extras, sem apagar o que já tinha; só define
+    //    marca se estiver vazia) e cria os que não existem ainda. Rodar 1x,
+    //    depois remover. ──
+    app.get('/api/admin/importar-garantia-equipamentos', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const itens = require('./dados-equip-empresa.json');
+        let atualizados = 0, criados = 0, semSerie = 0;
+        const agora = Date.now();
+
+        for (const it of itens) {
+          const serie = (it.serie || '').trim();
+          if (!serie) { semSerie++; continue; }
+
+          const existente = db.get('SELECT id, modelo, marca, campos FROM equipamentos WHERE serie=?', [serie]);
+          const camposExtra = {
+            proprietario: 'Empresa',
+            data_compra: it.data_compra || '',
+            ano_fab: it.ano_fab || '',
+            fornecedor: it.fornecedor_raw || '',
+            status: it.status || '',
+            usado: it.usado || '',
+            cod_produto: it.cod_produto || '',
+            valor_compra: it.valor_compra || '',
+            valor_mercado: it.valor_mercado || '',
+            termino_garantia: it.termino_garantia_planilha || '',
+            nf_compra: it.nf_compra || '',
+            grupo: it.grupo || '',
+            grupo2: it.grupo2 || '',
+            local: it.local || '',
+          };
+
+          if (existente) {
+            let camposAtuais = {};
+            try { camposAtuais = JSON.parse(existente.campos || '{}'); } catch (e) { camposAtuais = {}; }
+            const camposMesclados = { ...camposAtuais, ...camposExtra };
+            const marcaFinal = existente.marca && existente.marca.trim() ? existente.marca : (it.marca || '');
+            db.runBatch('UPDATE equipamentos SET marca=?, campos=? WHERE id=?',
+              [marcaFinal, JSON.stringify(camposMesclados), existente.id]);
+            atualizados++;
+          } else {
+            const id = db.uid();
+            db.runBatch(`INSERT INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+              [id, it.produto || '', it.marca || '', serie, '', '', it.local || '', '', '', JSON.stringify(camposExtra), agora]);
+            criados++;
+          }
+        }
+        db.persist();
+        res.json({ ok: true, totalNaPlanilha: itens.length, atualizados, criados, semSerie });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim importar garantia equipamentos ──
 
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
