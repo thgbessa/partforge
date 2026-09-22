@@ -3435,21 +3435,28 @@ function renderGarantia(q = '') {
     const emG = lista.filter(e => e._garantia.status === 'EM_GARANTIA').length;
     const foraG = lista.filter(e => e._garantia.status === 'FORA_GARANTIA').length;
     const marcaJs = marca.replace(/'/g, "\\'");
+    const marcaId = 'garantia-grupo-' + marca.replace(/[^a-zA-Z0-9]/g, '_');
+    const aberto = _garantiaExpandido.has(marca);
 
     return `
     <div class="table-wrap" style="margin-bottom:16px;padding:0;overflow:hidden">
-      <div style="padding:14px 18px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-        <div>
-          <div style="font-weight:700;font-size:14px">${marca}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">
-            ${lista.length} equipamento(s)${temPrazo ? ` · ${emG} em garantia · ${foraG} fora` : ' · prazo de garantia não configurado'}
+      <div style="padding:14px 18px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;cursor:pointer"
+        onclick="toggleGrupoGarantia('${marcaJs}')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="${marcaId}-seta" style="font-size:11px;color:var(--text3);transition:transform .15s${aberto ? ';transform:rotate(90deg)' : ''}">▶</span>
+          <div>
+            <div style="font-weight:700;font-size:14px">${marca}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">
+              ${lista.length} equipamento(s)${temPrazo ? ` · ${emG} em garantia · ${foraG} fora` : ' · prazo de garantia não configurado'}
+            </div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
           ${temPrazo ? `<span style="font-size:11px;color:var(--text2)">Prazo: ${cfg.anos_equipamento}a equip. / ${cfg.anos_acessorio || 0}a acessório</span>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirModalGarantiaConfig('${marcaJs}')">⚙ Configurar Prazo</button>
         </div>
       </div>
+      <div id="${marcaId}" style="display:${aberto ? '' : 'none'};max-height:70vh;overflow-y:auto">
       <table class="data-table">
         <thead><tr><th>Série</th><th>Modelo</th><th>Data Compra</th><th>Fim da Garantia</th><th>Status</th></tr></thead>
         <tbody>
@@ -3460,15 +3467,86 @@ function renderGarantia(q = '') {
             return `<tr>
               <td class="mono" style="font-size:11px;color:var(--accent)">${e.serie || '—'}</td>
               <td style="font-size:12px">${e.modelo || '—'}</td>
-              <td class="mono">${dataCompraTxt}</td>
+              <td class="mono">
+                ${dataCompraTxt}
+                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px" onclick="abrirModalEditarDataCompraGarantia('${e.id}')" title="Editar data de compra">✎</button>
+              </td>
               <td class="mono">${dataFimTxt}</td>
               <td><span class="badge ${st.badge}">${st.label}</span></td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
+      </div>
     </div>`;
   }).join('');
+}
+
+let _garantiaExpandido = new Set();
+function toggleGrupoGarantia(marca) {
+  const marcaId = 'garantia-grupo-' + marca.replace(/[^a-zA-Z0-9]/g, '_');
+  const wrap = document.getElementById(marcaId);
+  const seta = document.getElementById(marcaId + '-seta');
+  if (!wrap) return;
+  if (_garantiaExpandido.has(marca)) {
+    _garantiaExpandido.delete(marca);
+    wrap.style.display = 'none';
+    if (seta) seta.style.transform = '';
+  } else {
+    _garantiaExpandido.add(marca);
+    wrap.style.display = '';
+    if (seta) seta.style.transform = 'rotate(90deg)';
+  }
+}
+
+function abrirModalEditarDataCompraGarantia(equipId) {
+  const e = (db.equipamentos || []).find(x => x.id === equipId);
+  if (!e) return;
+  let overlay = document.getElementById('modal-garantia-data-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-garantia-data-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:380px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Data de Compra</span>
+        <button onclick="document.getElementById('modal-garantia-data-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${e.modelo || ''} · S/N: ${e.serie || '—'}</div>
+        <div class="form-group">
+          <label class="form-label">Data de Compra</label>
+          <input class="form-input" type="date" id="garantia-data-compra-input" value="${e.data_compra || ''}">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-garantia-data-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarDataCompraGarantia('${equipId}')">✓ Salvar</button>
+      </div>
+    </div>`;
+}
+
+function salvarDataCompraGarantia(equipId) {
+  const data = document.getElementById('garantia-data-compra-input')?.value || '';
+  const e = (db.equipamentos || []).find(x => x.id === equipId);
+  if (!e) return;
+  const payload = {
+    modelo: e.modelo, marca: e.marca, serie: e.serie, linha: e.linha,
+    cliente: e.cliente, local: e.local, contrato: e.contrato, obs: e.obs,
+    campos: { ...(e.campos || {}), data_compra: data },
+  };
+  API.put('/equipamentos/' + equipId, payload)
+    .then(() => {
+      toast('Data de compra atualizada');
+      document.getElementById('modal-garantia-data-overlay')?.remove();
+      loadAndRenderGarantia();
+    })
+    .catch(err => toast(err.message, 'error'));
 }
 
 function abrirModalGarantiaConfig(marca) {
