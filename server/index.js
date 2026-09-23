@@ -617,6 +617,32 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim corrigir marcas garantia 5 ──
 
+    // ── Corrige a fonte dos kits preventivos da familia HMG (equipamento
+    //    e' RAYTO, nao DYMIND). Rodar 1x, depois remover. ──
+    app.get('/api/admin/corrigir-kits-hmg-rayto', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const kits = db.query("SELECT id, nome, codigo, fonte FROM kits_preventivas WHERE nome LIKE '%HMG%' OR codigo LIKE '%HMG%'");
+        let corrigidos = 0;
+        const detalhes = [];
+        for (const k of kits) {
+          if (k.fonte !== 'RAYTO') {
+            db.runBatch('UPDATE kits_preventivas SET fonte=? WHERE id=?', ['RAYTO', k.id]);
+            detalhes.push({ nome: k.nome, codigo: k.codigo, fonteAntes: k.fonte });
+            corrigidos++;
+          }
+        }
+        db.persist();
+        res.json({ ok: true, totalEncontrados: kits.length, corrigidos, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim corrigir kits hmg rayto ──
+
     // ── Corrige marca: Biossays 240 -> SNIBE, linha BS (BS120/BS200/
     //    BS200E/BS240/BS380) -> MINDRAY (revisao da aba Biobase pedida
     //    pelo usuario). Rodar 1x, depois remover. ──
