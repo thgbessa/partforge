@@ -588,6 +588,35 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importar garantia equipamentos ──
 
+    // ── Corrige marca: familia HMG (31/51/51AL/51VET/51 INATIVO/86) e
+    //    Hemacounter (60/SL) -> RAYTO, confirmado pelo usuario. Rodar 1x,
+    //    depois remover. ──
+    app.get('/api/admin/corrigir-marcas-garantia-5', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const correcoes = require('./dados-correcoes-marca-5.json');
+        let corrigidos = 0;
+        const detalhes = [];
+        for (const [id, marcaNova] of Object.entries(correcoes)) {
+          const eq = db.get('SELECT id, modelo, marca FROM equipamentos WHERE id=?', [id]);
+          if (!eq) continue;
+          if (eq.marca !== marcaNova) {
+            db.runBatch('UPDATE equipamentos SET marca=? WHERE id=?', [marcaNova, id]);
+            detalhes.push({ modelo: eq.modelo, marcaAntes: eq.marca, marcaNova });
+            corrigidos++;
+          }
+        }
+        db.persist();
+        res.json({ ok: true, totalNaLista: Object.keys(correcoes).length, corrigidos, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim corrigir marcas garantia 5 ──
+
     // ── Corrige marca: Biossays 240 -> SNIBE, linha BS (BS120/BS200/
     //    BS200E/BS240/BS380) -> MINDRAY (revisao da aba Biobase pedida
     //    pelo usuario). Rodar 1x, depois remover. ──
