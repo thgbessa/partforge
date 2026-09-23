@@ -588,34 +588,6 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importar garantia equipamentos ──
 
-    // ── Corrige marca: STA Satellite Max -> STAGO, grupo CA -> SIEMENS
-    //    (avisado pelo usuario). Rodar 1x, depois remover. ──
-    app.get('/api/admin/corrigir-marcas-garantia-3', (req, res) => {
-      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
-      if (req.query.secret !== secret) {
-        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
-      }
-      try {
-        const correcoes = require('./dados-correcoes-marca-3.json');
-        let corrigidos = 0;
-        const detalhes = [];
-        for (const [id, marcaNova] of Object.entries(correcoes)) {
-          const eq = db.get('SELECT id, modelo, marca FROM equipamentos WHERE id=?', [id]);
-          if (!eq) continue;
-          if (eq.marca !== marcaNova) {
-            db.runBatch('UPDATE equipamentos SET marca=? WHERE id=?', [marcaNova, id]);
-            detalhes.push({ modelo: eq.modelo, marcaAntes: eq.marca, marcaNova });
-            corrigidos++;
-          }
-        }
-        db.persist();
-        res.json({ ok: true, totalNaLista: Object.keys(correcoes).length, corrigidos, detalhes });
-      } catch (err) {
-        res.status(500).json({ ok: false, erro: err.message });
-      }
-    });
-    // ── fim corrigir marcas garantia 3 ──
-
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
