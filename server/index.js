@@ -616,7 +616,7 @@ app.listen(PORT, '0.0.0.0', () => {
         return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
       }
       try {
-        const correcoes = require('./dados-correcoes-marca.json');
+        const correcoes = { ...require('./dados-correcoes-marca.json'), ...require('./dados-correcoes-marca-2.json') };
         let corrigidos = 0;
         const detalhes = [];
         for (const [id, marcaNova] of Object.entries(correcoes)) {
