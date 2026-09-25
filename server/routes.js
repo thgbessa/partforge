@@ -4,17 +4,131 @@ const db      = require('./database');
 const bcrypt  = require('bcryptjs');
 const { gerarToken, autenticar, isAdmin } = require('./auth');
 const nodemailer = require('nodemailer');
+const PDFDocument = require('pdfkit');
 
 function uid() { return db.uid(); }
 function now() { return db.now(); }
 function J(v)  { return JSON.stringify(v); }
 function P(v)  { try { return JSON.parse(v||'null') || []; } catch(e) { return []; } }
 
+// ── Geração do PDF do orçamento no servidor (pra anexar no e-mail) ──
+function desenharTabelaItensPdf(doc, itens, y, ML, CONTENT_W, corHeader, corTexto) {
+  const wCod=65, wDesc=215, wQtd=40, wUnit=100, wTotal=CONTENT_W-(65+215+40+100);
+  const colCod=ML, colDesc=ML+wCod, colQtd=ML+wCod+wDesc, colUnit=ML+wCod+wDesc+wQtd, colTotal=ML+wCod+wDesc+wQtd+wUnit;
+  doc.rect(ML, y, CONTENT_W, 18).fill(corHeader);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8);
+  doc.text('CÓD.', colCod+3, y+5, {width:wCod-6});
+  doc.text('DESCRIÇÃO', colDesc+3, y+5, {width:wDesc-6});
+  doc.text('QTD', colQtd, y+5, {width:wQtd, align:'center'});
+  doc.text('VALOR UNIT.', colUnit, y+5, {width:wUnit-3, align:'right'});
+  doc.text('TOTAL', colTotal, y+5, {width:wTotal-3, align:'right'});
+  y += 18;
+  itens.forEach((it, i) => {
+    const qtd = parseFloat(it.qtd)||0, valor = parseFloat(it.valor)||0, rowH = 16;
+    if (y > 760) { doc.addPage(); y = 40; }
+    if (i % 2 === 1) doc.rect(ML, y, CONTENT_W, rowH).fill('#f7f8fa');
+    doc.fillColor(corTexto).font('Helvetica').fontSize(8.5);
+    doc.text(it.cod || '—', colCod+3, y+4, {width:wCod-6});
+    doc.text(it.desc || '', colDesc+3, y+4, {width:wDesc-6, ellipsis:true});
+    doc.text(String(qtd), colQtd, y+4, {width:wQtd, align:'center'});
+    doc.text('R$ '+valor.toFixed(2), colUnit, y+4, {width:wUnit-3, align:'right'});
+    doc.font('Helvetica-Bold').text('R$ '+(qtd*valor).toFixed(2), colTotal, y+4, {width:wTotal-3, align:'right'});
+    y += rowH;
+  });
+  return y + 6;
+}
+function desenharTotalPdf(doc, y, label, valor, cor, ML, CONTENT_W) {
+  const boxW = 170, boxH = 22;
+  if (y > 750) { doc.addPage(); y = 40; }
+  doc.roundedRect(ML+CONTENT_W-boxW, y, boxW, boxH, 3).fill(cor);
+  doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(11)
+    .text(label+': R$ '+valor.toFixed(2), ML+CONTENT_W-boxW, y+6, {width:boxW, align:'center'});
+  return y + boxH + 10;
+}
+
+function gerarPdfOrcamentoBuffer(orc) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const chunks = [];
+      doc.on('data', c => chunks.push(c));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const ML = 40, PAGE_W = 595.28, CONTENT_W = PAGE_W - ML - 40;
+      const TEAL='#00a0a0', DARK='#1e2832', MED='#465569', LIGHT='#8294a0', ORANGE='#d48c32';
+
+      doc.rect(0, 0, PAGE_W, 70).fill('#f5f7f9');
+      doc.fillColor(TEAL).font('Helvetica-Bold').fontSize(20).text('QUALLYX', ML, 22);
+      doc.fillColor(DARK).font('Helvetica-Bold').fontSize(14).text('ORÇAMENTO', ML, 20, { width: CONTENT_W, align: 'right' });
+      doc.fillColor(MED).font('Helvetica').fontSize(10).text(orc.numero || '', ML, 38, { width: CONTENT_W, align: 'right' });
+      doc.fillColor(LIGHT).fontSize(8).text(orc.data || '', ML, 52, { width: CONTENT_W, align: 'right' });
+
+      let y = 90;
+      const infoLine = (label, value) => {
+        doc.fillColor(LIGHT).font('Helvetica-Bold').fontSize(8).text(label.toUpperCase() + ':', ML, y);
+        doc.fillColor(DARK).font('Helvetica').fontSize(9).text(value || '—', ML + 90, y, { width: CONTENT_W-90 });
+        y += 16;
+      };
+      infoLine('Cliente', (orc.cliente || '—') + (orc.cnpj ? '  -  CNPJ: ' + orc.cnpj : ''));
+      const equipList = (orc.equipamentos && orc.equipamentos.length) ? orc.equipamentos
+        : ((orc.equip_serie || orc.equip_nome) ? [{ serie: orc.equip_serie, nome: orc.equip_nome }] : []);
+      infoLine('Equipamento', equipList.map(e => [e.serie, e.nome].filter(Boolean).join(' - ')).join(' | '));
+      infoLine('OS', orc.os);
+      y += 8;
+
+      const itens = orc.itens || [];
+      y = desenharTabelaItensPdf(doc, itens, y, ML, CONTENT_W, TEAL, DARK);
+      const totalPrincipal = itens.reduce((s,it)=>s+(parseFloat(it.qtd)||0)*(parseFloat(it.valor)||0),0);
+      y = desenharTotalPdf(doc, y, 'TOTAL', totalPrincipal, TEAL, ML, CONTENT_W);
+
+      if (orc.itens_opcionais && orc.itens_opcionais.length) {
+        if (y > 700) { doc.addPage(); y = 40; }
+        y += 6;
+        doc.fillColor(ORANGE).font('Helvetica-Bold').fontSize(9).text('ITENS OPCIONAIS', ML, y);
+        y += 14;
+        doc.fillColor(MED).font('Helvetica-Oblique').fontSize(8)
+          .text('Itens recomendados trocar numa preventiva, segundo o fabricante.', ML, y, { width: CONTENT_W });
+        y += 16;
+        y = desenharTabelaItensPdf(doc, orc.itens_opcionais, y, ML, CONTENT_W, ORANGE, DARK);
+        const totalOpc = orc.itens_opcionais.reduce((s,it)=>s+(parseFloat(it.qtd)||0)*(parseFloat(it.valor)||0),0);
+        y = desenharTotalPdf(doc, y, 'OPCIONAIS', totalOpc, ORANGE, ML, CONTENT_W);
+      }
+
+      if (y > 720) { doc.addPage(); y = 40; }
+      y += 10;
+      if (orc.obs) {
+        doc.fillColor(MED).font('Helvetica-Oblique').fontSize(8).text('Obs.: ' + orc.obs, ML, y, { width: CONTENT_W });
+        y += 20;
+      }
+      doc.fillColor(DARK).font('Helvetica-Bold').fontSize(9).text('CONDIÇÕES GERAIS', ML, y);
+      y += 14;
+      doc.fillColor(MED).font('Helvetica').fontSize(8.5);
+      const condLinhas = [
+        'Validade da proposta: ' + (orc.validade || '—') + '.',
+        'Prazo de pagamento: ' + (orc.pagamento || '—') + '.',
+        'Prazo de entrega: ' + (orc.entrega || '—') + '.',
+        'Frete: ' + (orc.frete || '—') + '.',
+      ];
+      if (orc.tipo_nf) {
+        const tipoNfLabel = { NFE: 'NFe', NFS: 'NFS', AMBAS: 'NFe + NFS' }[orc.tipo_nf] || orc.tipo_nf;
+        condLinhas.push('Tipo de nota fiscal: ' + tipoNfLabel + '.');
+      }
+      condLinhas.forEach(l => { doc.text(l, ML, y, { width: CONTENT_W }); y += 13; });
+
+      doc.end();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 // Notifica por e-mail quando um orçamento MUDA de status para A Faturar ou
-// Faturado (não dispara em resalvamentos que não mudam o status). Falha
-// silenciosamente (só loga) se as credenciais de e-mail não estiverem
-// configuradas, pra nunca travar a operação principal por causa disso.
-async function notificarStatusOrcamento(orc, statusNovo) {
+// Faturado (não dispara em resalvamentos que não mudam o status), com o
+// PDF do orçamento anexado. Falha silenciosamente (só loga) se as
+// credenciais de e-mail não estiverem configuradas ou o PDF não gerar, pra
+// nunca travar a operação principal por causa disso.
+async function notificarStatusOrcamento(orcId, statusNovo) {
   const destinos = {
     A_FATURAR: { email: 'chaiane@quallyx.com.br', assunto: 'Orçamento pronto para faturamento', mensagem: 'está pronto para faturamento' },
     FATURADO:  { email: 'andressa@quallyx.com.br', assunto: 'Orçamento faturado', mensagem: 'foi marcado como faturado' },
@@ -26,6 +140,10 @@ async function notificarStatusOrcamento(orc, statusNovo) {
     return;
   }
   try {
+    const row = db.get('SELECT * FROM orcamentos WHERE id=?', [orcId]);
+    if (!row) return;
+    const orc = { ...row, itens: P(row.itens), itens_opcionais: P(row.itens_opcionais)||[], equipamentos: P(row.equipamentos)||[] };
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
@@ -34,12 +152,22 @@ async function notificarStatusOrcamento(orc, statusNovo) {
       <p>O orçamento <strong>Nº ${orc.numero || '—'}</strong> ${destino.mensagem}.</p>
       <p><strong>Cliente:</strong> ${orc.cliente || '—'}<br>
       <strong>Total:</strong> R$ ${parseFloat(orc.total || 0).toFixed(2)}</p>
-      <p style="color:#888;font-size:12px">Mensagem automática do PartForge.</p>`;
+      <p style="color:#888;font-size:12px">Mensagem automática do PartForge. O PDF do orçamento está anexado.</p>`;
+
+    const attachments = [];
+    try {
+      const pdfBuffer = await gerarPdfOrcamentoBuffer(orc);
+      attachments.push({ filename: 'Orcamento_' + (orc.numero || 'sem_numero') + '.pdf', content: pdfBuffer });
+    } catch (pdfErr) {
+      console.error('Erro ao gerar PDF do orcamento para anexar no e-mail:', pdfErr.message);
+    }
+
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
       to: destino.email,
       subject: 'PartForge - ' + destino.assunto + ' (Nº ' + (orc.numero || '') + ')',
-      html
+      html,
+      attachments
     });
     console.log('Notificacao de status enviada para', destino.email, '- orcamento', orc.numero);
   } catch (err) {
@@ -457,15 +585,15 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
      o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',J(o.equipamentos||[]),now(),req.params.id]);
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
-  if (statusMudou) notificarStatusOrcamento({ numero: o.numero, cliente: o.cliente, total }, o.status);
+  if (statusMudou) notificarStatusOrcamento(req.params.id, o.status);
   res.json({ok:true});
 });
 
 router.put('/orcamentos/:id/status', autenticar, isAdmin, (req, res) => {
-  const existente = db.get('SELECT status, numero, cliente, total FROM orcamentos WHERE id=?', [req.params.id]);
+  const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== req.body.status;
   db.run('UPDATE orcamentos SET status=?,status_changed_at=?,updated_at=? WHERE id=?',[req.body.status,now(),now(),req.params.id]);
-  if (statusMudou && existente) notificarStatusOrcamento(existente, req.body.status);
+  if (statusMudou && existente) notificarStatusOrcamento(req.params.id, req.body.status);
   res.json({ok:true});
 });
 
