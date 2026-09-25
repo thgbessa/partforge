@@ -175,6 +175,59 @@ async function notificarStatusOrcamento(orcId, statusNovo) {
   }
 }
 
+// Notifica thiago@quallyx.com.br quando um orçamento passa a ter os DOIS
+// anexos (boleto + nota fiscal) ao mesmo tempo — só na transição (não tinha
+// os dois antes, agora tem), pra não repetir a cada edição depois disso.
+function dataUrlParaBuffer(dataUrl) {
+  const m = /^data:.*?;base64,(.*)$/s.exec(dataUrl || '');
+  return m ? Buffer.from(m[1], 'base64') : null;
+}
+async function notificarAnexosCompletos(orcId) {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.log('Notificacao de anexos completos: GMAIL_USER/GMAIL_APP_PASSWORD nao configurados, pulando envio.');
+    return;
+  }
+  try {
+    const row = db.get('SELECT * FROM orcamentos WHERE id=?', [orcId]);
+    if (!row) return;
+    const orc = { ...row, itens: P(row.itens), itens_opcionais: P(row.itens_opcionais)||[], equipamentos: P(row.equipamentos)||[] };
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+    });
+    const html = `
+      <p>O orçamento <strong>Nº ${orc.numero || '—'}</strong> já tem boleto e nota fiscal anexados.</p>
+      <p><strong>Cliente:</strong> ${orc.cliente || '—'}<br>
+      <strong>Total:</strong> R$ ${parseFloat(orc.total || 0).toFixed(2)}</p>
+      <p style="color:#888;font-size:12px">Mensagem automática do PartForge. Orçamento, boleto e nota fiscal estão anexados.</p>`;
+
+    const attachments = [];
+    try {
+      const pdfBuffer = await gerarPdfOrcamentoBuffer(orc);
+      attachments.push({ filename: 'Orcamento_' + (orc.numero || 'sem_numero') + '.pdf', content: pdfBuffer });
+    } catch (pdfErr) {
+      console.error('Erro ao gerar PDF do orcamento para anexar no e-mail:', pdfErr.message);
+    }
+    const boletoBuf = dataUrlParaBuffer(orc.boleto_arquivo);
+    if (boletoBuf) attachments.push({ filename: orc.boleto_nome || 'boleto', content: boletoBuf });
+    const notaBuf = dataUrlParaBuffer(orc.nota_arquivo);
+    if (notaBuf) attachments.push({ filename: orc.nota_nome || 'nota_fiscal', content: notaBuf });
+
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to: 'thiago@quallyx.com.br',
+      subject: 'PartForge - Orçamento com boleto e nota anexados (Nº ' + (orc.numero || '') + ')',
+      html,
+      attachments
+    });
+    console.log('Notificacao de anexos completos enviada para thiago@quallyx.com.br - orcamento', orc.numero);
+  } catch (err) {
+    console.error('Erro ao enviar notificacao de anexos completos:', err.message);
+  }
+}
+
+
 // ── AUTH ────────────────────────────────────────────────────
 router.post('/auth/login', (req, res) => {
   const { email, senha } = req.body;
@@ -574,8 +627,11 @@ router.post('/orcamentos', autenticar, (req, res) => {
 router.put('/orcamentos/:id', autenticar, (req, res) => {
   const o=req.body;
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
-  const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
+  const existente = db.get('SELECT status, boleto_arquivo, nota_arquivo FROM orcamentos WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== (o.status||'ABERTO');
+  const tinhaAmbosAnexosAntes = !!(existente && existente.boleto_arquivo && existente.nota_arquivo);
+  const temAmbosAnexosAgora = !!(o.boleto_arquivo && o.nota_arquivo);
+  const anexosCompletaramAgora = !tinhaAmbosAnexosAntes && temAmbosAnexosAgora;
   db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,cnpj=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
     validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=?,itens_opcionais=?,tipo_nf=?,
     boleto_arquivo=?,boleto_nome=?,nota_arquivo=?,nota_nome=?,equipamentos=?,updated_at=? WHERE id=?`,
@@ -586,6 +642,7 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
   if (statusMudou) notificarStatusOrcamento(req.params.id, o.status);
+  if (anexosCompletaramAgora) notificarAnexosCompletos(req.params.id);
   res.json({ok:true});
 });
 
