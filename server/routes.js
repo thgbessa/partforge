@@ -3,11 +3,49 @@ const router  = express.Router();
 const db      = require('./database');
 const bcrypt  = require('bcryptjs');
 const { gerarToken, autenticar, isAdmin } = require('./auth');
+const nodemailer = require('nodemailer');
 
 function uid() { return db.uid(); }
 function now() { return db.now(); }
 function J(v)  { return JSON.stringify(v); }
 function P(v)  { try { return JSON.parse(v||'null') || []; } catch(e) { return []; } }
+
+// Notifica por e-mail quando um orçamento MUDA de status para A Faturar ou
+// Faturado (não dispara em resalvamentos que não mudam o status). Falha
+// silenciosamente (só loga) se as credenciais de e-mail não estiverem
+// configuradas, pra nunca travar a operação principal por causa disso.
+async function notificarStatusOrcamento(orc, statusNovo) {
+  const destinos = {
+    A_FATURAR: { email: 'chaiane@quallyx.com.br', assunto: 'Orçamento pronto para faturamento', mensagem: 'está pronto para faturamento' },
+    FATURADO:  { email: 'andressa@quallyx.com.br', assunto: 'Orçamento faturado', mensagem: 'foi marcado como faturado' },
+  };
+  const destino = destinos[statusNovo];
+  if (!destino) return;
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.log('Notificacao de status de orcamento: GMAIL_USER/GMAIL_APP_PASSWORD nao configurados, pulando envio.');
+    return;
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+    });
+    const html = `
+      <p>O orçamento <strong>Nº ${orc.numero || '—'}</strong> ${destino.mensagem}.</p>
+      <p><strong>Cliente:</strong> ${orc.cliente || '—'}<br>
+      <strong>Total:</strong> R$ ${parseFloat(orc.total || 0).toFixed(2)}</p>
+      <p style="color:#888;font-size:12px">Mensagem automática do PartForge.</p>`;
+    await transporter.sendMail({
+      from: process.env.GMAIL_USER,
+      to: destino.email,
+      subject: 'PartForge - ' + destino.assunto + ' (Nº ' + (orc.numero || '') + ')',
+      html
+    });
+    console.log('Notificacao de status enviada para', destino.email, '- orcamento', orc.numero);
+  } catch (err) {
+    console.error('Erro ao enviar notificacao de status de orcamento:', err.message);
+  }
+}
 
 // ── AUTH ────────────────────────────────────────────────────
 router.post('/auth/login', (req, res) => {
@@ -419,11 +457,16 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
      o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',J(o.equipamentos||[]),now(),req.params.id]);
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
+  if (statusMudou) notificarStatusOrcamento({ numero: o.numero, cliente: o.cliente, total }, o.status);
   res.json({ok:true});
 });
 
 router.put('/orcamentos/:id/status', autenticar, isAdmin, (req, res) => {
-  db.run('UPDATE orcamentos SET status=?,status_changed_at=?,updated_at=? WHERE id=?',[req.body.status,now(),now(),req.params.id]); res.json({ok:true});
+  const existente = db.get('SELECT status, numero, cliente, total FROM orcamentos WHERE id=?', [req.params.id]);
+  const statusMudou = existente && existente.status !== req.body.status;
+  db.run('UPDATE orcamentos SET status=?,status_changed_at=?,updated_at=? WHERE id=?',[req.body.status,now(),now(),req.params.id]);
+  if (statusMudou && existente) notificarStatusOrcamento(existente, req.body.status);
+  res.json({ok:true});
 });
 
 router.delete('/orcamentos/:id', autenticar, isAdmin, (req, res) => {
