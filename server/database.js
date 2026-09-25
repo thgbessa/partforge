@@ -173,6 +173,10 @@ async function init() {
   try { _db.run("ALTER TABLE orcamentos ADD COLUMN cnpj TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE orcamentos ADD COLUMN itens_opcionais TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE orcamentos ADD COLUMN tipo_nf TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN boleto_arquivo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN boleto_nome TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN nota_arquivo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE orcamentos ADD COLUMN nota_nome TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run(`CREATE TABLE IF NOT EXISTS clientes (
     nome_norm TEXT PRIMARY KEY, nome TEXT, cnpj TEXT, updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando clientes', e.message); }

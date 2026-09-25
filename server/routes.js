@@ -374,19 +374,33 @@ router.get('/orcamentos', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM orcamentos WHERE 1=1'; const p=[];
   if (status) { sql+=' AND status=?'; p.push(status); }
   if (q) { sql+=' AND (numero LIKE ? OR cliente LIKE ? OR equip_serie LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`); }
-  res.json(db.query(sql+' ORDER BY created_at DESC',p).map(o=>({...o,itens:P(o.itens),itens_opcionais:P(o.itens_opcionais)||[],equipamentos:P(o.equipamentos)||[]})));
+  // boleto_arquivo/nota_arquivo (base64) ficam de fora da listagem — podem
+  // ser pesados e a lista precisa carregar rápido. Só o nome do arquivo vai
+  // junto, pra UI mostrar que tem anexo; o conteúdo é buscado sob demanda
+  // em /orcamentos/:id/anexos, na hora de baixar.
+  res.json(db.query(sql+' ORDER BY created_at DESC',p).map(o=>{
+    const {boleto_arquivo, nota_arquivo, ...resto} = o;
+    return {...resto,itens:P(o.itens),itens_opcionais:P(o.itens_opcionais)||[],equipamentos:P(o.equipamentos)||[]};
+  }));
+});
+
+router.get('/orcamentos/:id/anexos', autenticar, (req, res) => {
+  const o = db.get('SELECT boleto_arquivo, boleto_nome, nota_arquivo, nota_nome FROM orcamentos WHERE id=?', [req.params.id]);
+  if (!o) return res.status(404).json({erro:'Não encontrado'});
+  res.json(o);
 });
 
 router.post('/orcamentos', autenticar, (req, res) => {
   const o=req.body; if (!o.numero) return res.status(400).json({erro:'Número obrigatório'});
   const id=uid();
   const total=(o.itens||[]).reduce((s,it)=>s+(it.qtd||0)*(parseFloat(it.valor)||0),0);
-  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,solicitacao_id,created_at,created_by,status_changed_at,equipamentos,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  db.run(`INSERT INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,obs_condicoes,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,boleto_arquivo,boleto_nome,nota_arquivo,nota_nome,solicitacao_id,created_at,created_by,status_changed_at,equipamentos,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,o.numero,o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||'',o.equip_nome||'',o.os||'',
      o.data||'',o.obs||'',o.validade||'7 dias',o.pagamento||'30 dias',o.entrega||'A combinar',
      o.frete||'FOB',o.obs_condicoes||'',o.condicoes||'',o.assinatura||req.user.nome,
-     total,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',o.solicitacao_id||'',now(),req.user.id,now(),J(o.equipamentos||[]),now()]);
+     total,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',
+     o.solicitacao_id||'',now(),req.user.id,now(),J(o.equipamentos||[]),now()]);
   if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
   res.status(201).json({id});
 });
@@ -397,10 +411,12 @@ router.put('/orcamentos/:id', autenticar, (req, res) => {
   const existente = db.get('SELECT status FROM orcamentos WHERE id=?', [req.params.id]);
   const statusMudou = existente && existente.status !== (o.status||'ABERTO');
   db.run(`UPDATE orcamentos SET numero=?,status=?,cliente=?,cnpj=?,equip_serie=?,equip_nome=?,os=?,data=?,obs=?,
-    validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=?,itens_opcionais=?,tipo_nf=?,equipamentos=?,updated_at=? WHERE id=?`,
+    validade=?,pagamento=?,entrega=?,frete=?,obs_condicoes=?,condicoes=?,assinatura=?,total=?,itens=?,itens_opcionais=?,tipo_nf=?,
+    boleto_arquivo=?,boleto_nome=?,nota_arquivo=?,nota_nome=?,equipamentos=?,updated_at=? WHERE id=?`,
     [o.numero,o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||'',o.equip_nome||'',o.os||'',o.data||'',
      o.obs||'',o.validade||'7 dias',o.pagamento||'30 dias',o.entrega||'A combinar',o.frete||'FOB',
-     o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',J(o.equipamentos||[]),now(),req.params.id]);
+     o.obs_condicoes||'',o.condicoes||'',o.assinatura||'',total,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',
+     o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',J(o.equipamentos||[]),now(),req.params.id]);
   if (statusMudou) db.run('UPDATE orcamentos SET status_changed_at=? WHERE id=?', [now(), req.params.id]);
   if (o.cliente && o.cnpj) salvarCnpjCliente(o.cliente, o.cnpj);
   res.json({ok:true});
@@ -800,8 +816,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',J(m.eventos||[]),m.created_at||m.createdAt||now(),'restore']);
 
     if (s.orcamentos?.length) for (const o of s.orcamentos)
-      db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,itens_opcionais,equipamentos,created_at,updated_at,status_changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [o.id||uid(),o.numero||'',o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||o.equipSerie||'',o.equip_nome||o.equipNome||'',o.os||'',o.data||'',o.obs||'',o.validade||'7 dias',o.pagamento||o.formaPagamento||'30 dias',o.entrega||o.prazoEntrega||'A combinar',o.frete||'FOB',o.condicoes||'',o.assinatura||'',o.total||0,J(o.itens||[]),J(o.itens_opcionais||[]),J(o.equipamentos||[]),o.created_at||now(),o.updated_at||now(),o.status_changed_at||now()]);
+      db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,boleto_arquivo,boleto_nome,nota_arquivo,nota_nome,equipamentos,created_at,updated_at,status_changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [o.id||uid(),o.numero||'',o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||o.equipSerie||'',o.equip_nome||o.equipNome||'',o.os||'',o.data||'',o.obs||'',o.validade||'7 dias',o.pagamento||o.formaPagamento||'30 dias',o.entrega||o.prazoEntrega||'A combinar',o.frete||'FOB',o.condicoes||'',o.assinatura||'',o.total||0,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',J(o.equipamentos||[]),o.created_at||now(),o.updated_at||now(),o.status_changed_at||now()]);
 
     if (s.pedidos?.length) for (const p of s.pedidos)
       db.runBatch(`INSERT OR REPLACE INTO pedidos(id,numero,status,obs,itens,created_at) VALUES(?,?,?,?,?,?)`,

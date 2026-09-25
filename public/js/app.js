@@ -2840,6 +2840,8 @@ function renderOrcamentos(q='') {
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${parseFloat(o.total||0).toFixed(2)}</td>
         <td class="mono">${o.data||'—'}</td>
         <td style="text-align:right;white-space:nowrap">
+          ${o.boleto_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','boleto')" title="Baixar boleto: ${o.boleto_nome}">🧾</button>` : ''}
+          ${o.nota_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','nota')" title="Baixar nota: ${o.nota_nome}">📄</button>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')" title="Editar">✎</button>
           <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')" title="Status">▾</button>
           <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento('${o.id}')" title="Gerar PDF">⬇</button>
@@ -3756,8 +3758,103 @@ function criarOrcamentoDeKit(kitId) {
 
 function atualizarVisibilidadeTipoNF() {
   const status = document.getElementById('orc-status')?.value;
+  const mostrar = (status === 'A_FATURAR' || status === 'FATURADO') ? '' : 'none';
   const wrap = document.getElementById('orc-tipo-nf-wrap');
-  if (wrap) wrap.style.display = (status === 'A_FATURAR' || status === 'FATURADO') ? '' : 'none';
+  if (wrap) wrap.style.display = mostrar;
+  const wrapAnexos = document.getElementById('orc-anexos-wrap');
+  if (wrapAnexos) wrapAnexos.style.display = mostrar;
+}
+
+// ── ANEXOS DO ORÇAMENTO (boleto / nota fiscal) ──
+let orcBoletoArquivo = '', orcBoletoNome = '', orcNotaArquivo = '', orcNotaNome = '';
+
+function resetarAnexosOrc() {
+  orcBoletoArquivo = ''; orcBoletoNome = '';
+  orcNotaArquivo   = ''; orcNotaNome   = '';
+  renderAnexoOrc('boleto');
+  renderAnexoOrc('nota');
+}
+
+function carregarAnexosOrc(id) {
+  API.get('/orcamentos/' + id + '/anexos').then(r => {
+    orcBoletoArquivo = r.boleto_arquivo || ''; orcBoletoNome = r.boleto_nome || '';
+    orcNotaArquivo   = r.nota_arquivo   || ''; orcNotaNome   = r.nota_nome   || '';
+    renderAnexoOrc('boleto');
+    renderAnexoOrc('nota');
+  }).catch(() => {});
+}
+
+function renderAnexoOrc(tipo) {
+  const nome = tipo === 'boleto' ? orcBoletoNome : orcNotaNome;
+  const atualEl = document.getElementById('orc-' + tipo + '-atual');
+  const inputEl = document.getElementById('orc-' + tipo + '-input');
+  const txtEl   = document.getElementById('orc-' + tipo + '-nome-txt');
+  if (!atualEl) return;
+  if (nome) {
+    atualEl.style.display = 'flex';
+    if (txtEl) txtEl.textContent = nome;
+    if (inputEl) inputEl.style.display = 'none';
+  } else {
+    atualEl.style.display = 'none';
+    if (inputEl) { inputEl.style.display = ''; inputEl.value = ''; }
+  }
+}
+
+function selecionarAnexoOrc(tipo, inputEl) {
+  const file = inputEl.files?.[0];
+  if (!file) return;
+  if (file.size > 4 * 1024 * 1024) { toast('Arquivo maior que 4 MB — escolha um menor', 'error'); inputEl.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (tipo === 'boleto') { orcBoletoArquivo = reader.result; orcBoletoNome = file.name; }
+    else { orcNotaArquivo = reader.result; orcNotaNome = file.name; }
+    renderAnexoOrc(tipo);
+  };
+  reader.onerror = () => toast('Erro ao ler o arquivo', 'error');
+  reader.readAsDataURL(file);
+}
+
+function removerAnexoOrc(tipo) {
+  if (tipo === 'boleto') { orcBoletoArquivo = ''; orcBoletoNome = ''; }
+  else { orcNotaArquivo = ''; orcNotaNome = ''; }
+  renderAnexoOrc(tipo);
+}
+
+function baixarAnexoOrc(tipo) {
+  const arquivo = tipo === 'boleto' ? orcBoletoArquivo : orcNotaArquivo;
+  const nome    = tipo === 'boleto' ? orcBoletoNome   : orcNotaNome;
+  if (!arquivo) {
+    // Ainda não carregado em memória (ex: modal recém-aberto) — busca agora.
+    if (!editOrcId) return;
+    API.get('/orcamentos/' + editOrcId + '/anexos').then(r => {
+      const a = tipo === 'boleto' ? r.boleto_arquivo : r.nota_arquivo;
+      const n = tipo === 'boleto' ? r.boleto_nome   : r.nota_nome;
+      if (a) disparaDownload(a, n);
+    });
+    return;
+  }
+  disparaDownload(arquivo, nome);
+}
+
+function disparaDownload(dataUrl, nomeArquivo) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = nomeArquivo || 'arquivo';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Baixa um anexo direto da listagem (linha da tabela de Orçamentos), sem
+// precisar abrir o modal — busca o conteúdo na hora, já que a lista não
+// carrega o base64 por padrão (evita pesar o carregamento da tela).
+function baixarAnexoOrcLista(id, tipo) {
+  API.get('/orcamentos/' + id + '/anexos').then(r => {
+    const a = tipo === 'boleto' ? r.boleto_arquivo : r.nota_arquivo;
+    const n = tipo === 'boleto' ? r.boleto_nome   : r.nota_nome;
+    if (a) disparaDownload(a, n);
+    else toast('Arquivo não encontrado', 'error');
+  }).catch(err => toast(err.message, 'error'));
 }
 
 function abrirModalOrcamento(id) {
@@ -3766,6 +3863,12 @@ function abrirModalOrcamento(id) {
   const cfg = db.configOrcamento || {};
   orcItens  = o ? JSON.parse(JSON.stringify(o.itens||[])) : [];
   orcItensOpcionais = o ? JSON.parse(JSON.stringify(o.itens_opcionais||[])) : [];
+  // Nome do anexo já vem na lista (leve); o conteúdo (base64, pesado) é
+  // buscado em segundo plano só quando necessário.
+  orcBoletoArquivo = ''; orcBoletoNome = o?.boleto_nome || '';
+  orcNotaArquivo   = ''; orcNotaNome   = o?.nota_nome   || '';
+  renderAnexoOrc('boleto'); renderAnexoOrc('nota');
+  if (o?.boleto_nome || o?.nota_nome) carregarAnexosOrc(id);
 
   document.getElementById('modal-orcamento-title').textContent = o ? 'Editar Orçamento' : 'Novo Orçamento';
   if(!o){const nums=db.orcamentos.map(x=>parseInt(x.numero)||0).filter(n=>n>900);const next=nums.length?Math.max(...nums)+1:979;document.getElementById('orc-numero').value=String(next);}else{document.getElementById('orc-numero').value=o.numero;}
@@ -4095,6 +4198,13 @@ function editarItemOrc(idx) {
 function salvarOrcamento() {
   const numero = document.getElementById('orc-numero').value.trim();
   if (!numero) { toast('Informe o número do orçamento', 'error'); return; }
+  // Se já existe um anexo (tem nome) mas o conteúdo ainda não terminou de
+  // carregar em segundo plano, não deixa salvar — salvar agora apagaria o
+  // anexo, já que o conteúdo dele ainda não chegou.
+  if ((orcBoletoNome && !orcBoletoArquivo) || (orcNotaNome && !orcNotaArquivo)) {
+    toast('Aguarde o carregamento dos anexos e tente salvar novamente', 'error');
+    return;
+  }
   const total = orcItens.reduce((s,it) => s + it.qtd*(parseFloat(it.valor)||0), 0);
   const data = {
     numero, total,
@@ -4117,6 +4227,8 @@ function salvarOrcamento() {
     itens:      [...orcItens],
     itens_opcionais: [...orcItensOpcionais],
     tipo_nf: document.getElementById('orc-tipo-nf')?.value || '',
+    boleto_arquivo: orcBoletoArquivo, boleto_nome: orcBoletoNome,
+    nota_arquivo: orcNotaArquivo, nota_nome: orcNotaNome,
   };
 
   const fn = editOrcId ? API.put('/orcamentos/' + editOrcId, data) : API.post('/orcamentos', data);
