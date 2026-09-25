@@ -175,7 +175,7 @@ async function notificarStatusOrcamento(orcId, statusNovo) {
   }
 }
 
-// Notifica thiago@quallyx.com.br quando um orçamento passa a ter os DOIS
+// Notifica thiago.bessa@quallyx.com.br quando um orçamento passa a ter os DOIS
 // anexos (boleto + nota fiscal) ao mesmo tempo — só na transição (não tinha
 // os dois antes, agora tem), pra não repetir a cada edição depois disso.
 function dataUrlParaBuffer(dataUrl) {
@@ -216,12 +216,12 @@ async function notificarAnexosCompletos(orcId) {
 
     await transporter.sendMail({
       from: process.env.GMAIL_USER,
-      to: 'thiago@quallyx.com.br',
+      to: 'thiago.bessa@quallyx.com.br',
       subject: 'PartForge - Orçamento com boleto e nota anexados (Nº ' + (orc.numero || '') + ')',
       html,
       attachments
     });
-    console.log('Notificacao de anexos completos enviada para thiago@quallyx.com.br - orcamento', orc.numero);
+    console.log('Notificacao de anexos completos enviada para thiago.bessa@quallyx.com.br - orcamento', orc.numero);
   } catch (err) {
     console.error('Erro ao enviar notificacao de anexos completos:', err.message);
   }
