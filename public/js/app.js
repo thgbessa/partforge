@@ -7029,6 +7029,41 @@ function exportarExcel(aba) {
 
     XLSX.writeFile(wb, 'partforge_solicitacoes_compra.xlsx');
     toast('Solicitações de compra exportadas: ' + db.solicitacoesCompra.length);
+
+  } else if (aba === 'garantia') {
+    // Exporta o que está sendo visualizado (respeita busca + filtro de status)
+    const configMapG = {};
+    (db.garantiaConfig || []).forEach(function(g) { configMapG[(g.marca || '').toUpperCase()] = g; });
+    const qG = (document.querySelector('#page-garantia .search-input')?.value || '').toLowerCase().trim();
+    const stG = document.getElementById('garantia-filter-status')?.value || '';
+    let listaG = (db.equipamentos || [])
+      .filter(function(e) { return (e.proprietario || '').trim() === 'Empresa'; })
+      .map(function(e) { return { ...e, _g: calcularStatusGarantia(e, configMapG) }; });
+    if (stG) listaG = listaG.filter(function(e) { return e._g.status === stG; });
+    if (qG) listaG = listaG.filter(function(e) {
+      return String(e.serie || '').toLowerCase().includes(qG) || String(e.modelo || '').toLowerCase().includes(qG) || String(e.marca || '').toLowerCase().includes(qG);
+    });
+    listaG.sort(function(a, b) {
+      return a._g.marca.localeCompare(b._g.marca) || String(a.modelo || '').localeCompare(String(b.modelo || '')) || String(a.serie || '').localeCompare(String(b.serie || ''));
+    });
+    const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
+    const heads = ['Marca', 'Série', 'Modelo', 'Data de Compra', 'Prazo Equip. (anos)', 'Fim da Garantia', 'Status'];
+    const rows = [heads, ...listaG.map(function(e) {
+      const cfg = configMapG[e._g.marca] || {};
+      return [
+        e._g.marca,
+        String(e.serie || ''),
+        e.modelo || '',
+        fmtBR(e.data_compra),
+        parseFloat(cfg.anos_equipamento) || '',
+        e._g.dataFim ? e._g.dataFim.toLocaleDateString('pt-BR') : '',
+        GARANTIA_STATUS_LABEL[e._g.status].label
+      ];
+    })];
+    const ws = buildSheet(rows, heads);
+    XLSX.utils.book_append_sheet(wb, ws, 'Garantia');
+    XLSX.writeFile(wb, 'partforge_garantia' + (stG ? '_' + stG.toLowerCase() : '') + '.xlsx');
+    toast('Garantia exportada: ' + listaG.length + ' equipamentos');
   }
 }
 
@@ -7104,6 +7139,14 @@ function importarExcel(aba) {
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
           importarSolicitacoesCompra(rows, sheetName);
+        } else if (aba === 'garantia') {
+          // raw:true pra as datas chegarem como Date/número/texto originais
+          // (sem o Excel reformatar em padrão americano)
+          sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('garantia')) || wb.SheetNames[0];
+          ws = wb.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+          if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
+          importarGarantia(rows);
         }
 
       } catch(err) {
@@ -7114,6 +7157,77 @@ function importarExcel(aba) {
   };
   input.click();
 }
+
+// Converte o valor de uma célula de data (Date, número serial do Excel, ou
+// texto em AAAA-MM-DD / DD/MM/AAAA) para AAAA-MM-DD. Retorna '' se vazio e
+// null se preenchido mas inválido.
+function parseDataGarantia(v) {
+  const pad = n => String(n).padStart(2, '0');
+  if (v === null || v === undefined || v === '') return '';
+  const doDate = d => { const x = new Date(d.getTime() + 12 * 3600 * 1000); return x.getUTCFullYear() + '-' + pad(x.getUTCMonth() + 1) + '-' + pad(x.getUTCDate()); };
+  if (v instanceof Date) return isNaN(v) ? null : doDate(v);
+  if (typeof v === 'number') return (v > 20000 && v < 80000) ? doDate(new Date(Math.round((v - 25569) * 86400 * 1000))) : null;
+  const s = String(v).trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2] + '-' + m[3];
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) {
+    const dia = parseInt(m[1]), mes = parseInt(m[2]);
+    const ano = m[3].length === 2 ? '20' + m[3] : m[3];
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+    return ano + '-' + pad(mes) + '-' + pad(dia);
+  }
+  return null;
+}
+
+function importarGarantia(rows) {
+  const norm = s => String(s == null ? '' : s).trim().toLowerCase();
+  const idx = {};
+  rows[0].forEach(function(h, i) {
+    const hn = norm(h);
+    if (['série', 'serie', 'nº série', 'nº serie', 'n° série', 's/n'].includes(hn)) idx.serie = i;
+    else if (hn === 'data de compra' || hn === 'data compra') idx.data = i;
+    else if (hn === 'marca') idx.marca = i;
+    else if (hn === 'modelo') idx.modelo = i;
+  });
+  if (idx.serie === undefined) { toast('Coluna "Série" não encontrada', 'error'); return; }
+  if (idx.data === undefined && idx.marca === undefined) { toast('Nenhuma coluna pra importar (Data de Compra ou Marca)', 'error'); return; }
+
+  let invalidas = 0;
+  const itens = [];
+  rows.slice(1).forEach(function(r) {
+    const serie = String(r[idx.serie] == null ? '' : r[idx.serie]).trim();
+    if (!serie) return;
+    let data = '';
+    if (idx.data !== undefined) {
+      data = parseDataGarantia(r[idx.data]);
+      if (data === null) { invalidas++; data = ''; }
+    }
+    itens.push({
+      serie: serie,
+      modelo: idx.modelo !== undefined ? String(r[idx.modelo] || '').trim() : '',
+      data_compra: data,
+      marca: idx.marca !== undefined ? String(r[idx.marca] || '').trim() : '',
+    });
+  });
+  if (!itens.length) { toast('Nenhuma linha com Série encontrada', 'error'); return; }
+
+  setSyncing(true);
+  API.post('/garantia/importar', { itens: itens })
+    .then(function(res) {
+      let msg = 'Garantia importada: ' + res.atualizados + ' atualizados';
+      if (res.semAlteracao) msg += ', ' + res.semAlteracao + ' sem mudança';
+      if (res.naoEncontrados) msg += ', ' + res.naoEncontrados + ' não encontrados';
+      if (res.ambiguos) msg += ', ' + res.ambiguos + ' ambíguos (série repetida)';
+      if (invalidas) msg += ', ' + invalidas + ' datas inválidas ignoradas';
+      toast(msg, 'success');
+      loadAndRenderGarantia();
+    })
+    .catch(function(err) { toast(err.message, 'error'); })
+    .finally(function() { setSyncing(false); });
+}
+
 
 function importarOrcamentos(rows, sheetName) {
   const norm = function(str) { return String(str||'').trim().toLowerCase(); };
@@ -7798,7 +7912,9 @@ function navigate(page, el) {
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalKitPreventiva()">⊕ Novo Kit</button>`;
     loadAndRenderKitsPreventivas();
   } else if (page === 'garantia') {
-    if (actionsEl) actionsEl.innerHTML = '';
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-import" onclick="importarExcel('garantia')">⬆ Importar Excel</button>
+      <button class="btn btn-excel" onclick="exportarExcel('garantia')">⬇ Exportar Excel</button>`;
     loadAndRenderGarantia();
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }

@@ -722,6 +722,46 @@ router.delete('/garantia-config/:marca', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM garantia_config WHERE marca=?', [req.params.marca]); res.json({ok:true});
 });
 
+// Importação em lote (planilha exportada da aba Garantia, editada): atualiza
+// Data de Compra e/ou Marca dos equipamentos da Empresa casando por Série
+// (+ Modelo quando a série se repete). Não apaga dados: célula vazia = não
+// mexe. Um único persist() no final (nunca persistir a cada linha).
+router.post('/garantia/importar', autenticar, isAdmin, (req, res) => {
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  const norm = s => String(s == null ? '' : s).trim().toUpperCase();
+  const porSerie = {};
+  db.query('SELECT id, modelo, serie, marca, campos FROM equipamentos').forEach(e => {
+    let campos = {}; try { campos = JSON.parse(e.campos || '{}'); } catch (x) { campos = {}; }
+    if ((campos.proprietario || '').trim() !== 'Empresa') return;
+    const k = norm(e.serie); if (!k) return;
+    (porSerie[k] = porSerie[k] || []).push({ ...e, campos });
+  });
+  let atualizados = 0, semAlteracao = 0, naoEncontrados = 0, ambiguos = 0;
+  for (const it of itens) {
+    let alvo = porSerie[norm(it.serie)] || [];
+    if (alvo.length > 1 && it.modelo) {
+      const porModelo = alvo.filter(c => norm(c.modelo) === norm(it.modelo));
+      if (porModelo.length) alvo = porModelo;
+    }
+    if (!alvo.length) { naoEncontrados++; continue; }
+    if (alvo.length > 1) { ambiguos++; continue; }
+    const eq = alvo[0];
+    const novaData = String(it.data_compra || '').trim();
+    let novaMarca = norm(it.marca);
+    if (novaMarca === 'NÃO IDENTIFICADO') novaMarca = '';
+    const campos = { ...eq.campos };
+    let mudou = false;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(novaData) && campos.data_compra !== novaData) { campos.data_compra = novaData; mudou = true; }
+    let marcaFinal = eq.marca;
+    if (novaMarca && norm(eq.marca) !== novaMarca) { marcaFinal = novaMarca; mudou = true; }
+    if (!mudou) { semAlteracao++; continue; }
+    db.runBatch('UPDATE equipamentos SET marca=?, campos=? WHERE id=?', [marcaFinal, JSON.stringify(campos), eq.id]);
+    atualizados++;
+  }
+  db.persist();
+  res.json({ ok: true, atualizados, semAlteracao, naoEncontrados, ambiguos });
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
