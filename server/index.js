@@ -13,7 +13,14 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, '../public'), { maxAge: '1d' }));
+app.use(express.static(path.join(__dirname, '../public'), {
+  maxAge: '1d',
+  setHeaders: (res, filePath) => {
+    // O index.html carrega os ?v= de cache-busting dos scripts: se ele ficar
+    // em cache, o navegador continua com o JS antigo após cada atualização.
+    if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+  }
+}));
 
 // Healthcheck responde IMEDIATAMENTE antes de qualquer coisa
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
