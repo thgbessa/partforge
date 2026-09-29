@@ -204,6 +204,14 @@ async function init() {
     }
   } catch(e) { /* ignora */ }
 
+  try { _db.run(`CREATE TABLE IF NOT EXISTS validacoes_equipamento (
+    id TEXT PRIMARY KEY, seq_num INTEGER,
+    equip_id TEXT DEFAULT '', equip_serie TEXT DEFAULT '', equip_modelo TEXT DEFAULT '', equip_cliente TEXT DEFAULT '',
+    status TEXT DEFAULT 'REPAIR',
+    obs TEXT DEFAULT '', eventos TEXT DEFAULT '[]',
+    created_at INTEGER DEFAULT 0, created_by TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
+  )`); } catch(e) { console.log('erro criando validacoes_equipamento', e.message); }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;

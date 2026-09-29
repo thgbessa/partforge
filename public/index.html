@@ -84,6 +84,14 @@
           <span class="icon">⊘</span> Máq. Doadoras
           <span class="nav-badge" id="badge-doadoras">0</span>
         </div>
+        <div class="nav-item" onclick="navigate('validacao-repair', this)">
+          <span class="icon">🔧</span> Validação Repair
+          <span class="nav-badge" id="badge-validacao-repair">0</span>
+        </div>
+        <div class="nav-item" onclick="navigate('validacao-assessoria', this)">
+          <span class="icon">✅</span> Validação Assessoria
+          <span class="nav-badge" id="badge-validacao-assessoria">0</span>
+        </div>
         <div class="nav-item" onclick="navigate('orcamento', this)">
           <span class="icon">📋</span> Orçamentos
           <span class="nav-badge" id="badge-orcamento">0</span>
@@ -503,6 +511,36 @@
         </div>
         <div id="garantia-resumo" style="margin-bottom:16px"></div>
         <div id="garantia-content"></div>
+      </div>
+
+      <!-- VALIDAÇÃO REPAIR -->
+      <div class="page" id="page-validacao-repair">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por série, modelo ou cliente..."
+              oninput="renderValidacao('repair', this.value)">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap">
+            <input type="checkbox" id="validacao-repair-mostrar-concluidos" onchange="renderValidacao('repair')"> Mostrar também os já concluídos
+          </label>
+        </div>
+        <div class="table-wrap" id="validacao-repair-table"></div>
+      </div>
+
+      <!-- VALIDAÇÃO ASSESSORIA -->
+      <div class="page" id="page-validacao-assessoria">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por série, modelo ou cliente..."
+              oninput="renderValidacao('assessoria', this.value)">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap">
+            <input type="checkbox" id="validacao-assessoria-mostrar-concluidos" onchange="renderValidacao('assessoria')"> Mostrar também os já concluídos
+          </label>
+        </div>
+        <div class="table-wrap" id="validacao-assessoria-table"></div>
       </div>
 
       <!-- MODAL KIT PREVENTIVA -->

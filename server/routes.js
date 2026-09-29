@@ -762,6 +762,68 @@ router.post('/garantia/importar', autenticar, isAdmin, (req, res) => {
   res.json({ ok: true, atualizados, semAlteracao, naoEncontrados, ambiguos });
 });
 
+// -- VALIDAÇÃO DE EQUIPAMENTO (pipeline Repair -> Assessoria -> Concluído) --
+router.get('/validacoes', autenticar, (req, res) => {
+  const { status, q } = req.query;
+  let sql = 'SELECT * FROM validacoes_equipamento WHERE 1=1'; const p = [];
+  if (status) { sql += ' AND status=?'; p.push(status); }
+  if (q) { sql += ' AND (equip_serie LIKE ? OR equip_modelo LIKE ? OR equip_cliente LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(v => ({ ...v, eventos: P(v.eventos) })));
+});
+
+router.post('/validacoes', autenticar, (req, res) => {
+  const v = req.body;
+  if (!v.equip_serie && !v.equip_modelo) return res.status(400).json({ erro: 'Informe ao menos a série ou o modelo do equipamento' });
+  const cfg = db.get("SELECT valor FROM configuracoes WHERE chave='validacao_seq_counter'");
+  const seq = parseInt(cfg?.valor || '0') + 1;
+  if (cfg) db.run("UPDATE configuracoes SET valor=? WHERE chave='validacao_seq_counter'", [String(seq)]);
+  else db.run("INSERT INTO configuracoes(chave,valor) VALUES('validacao_seq_counter',?)", [String(seq)]);
+  const id = uid();
+  const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome }]);
+  db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos, now(), req.user.nome, now()]);
+  res.status(201).json({ id, seq_num: seq });
+});
+
+router.put('/validacoes/:id', autenticar, (req, res) => {
+  const v = req.body;
+  db.run('UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,updated_at=? WHERE id=?',
+    [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '', now(), req.params.id]);
+  res.json({ ok: true });
+});
+
+// Avança para a próxima etapa do pipeline: REPAIR -> ASSESSORIA -> CONCLUIDO.
+// Grava o evento (com observação da etapa que está sendo concluída) no
+// histórico, pra manter rastreabilidade completa do processo.
+router.put('/validacoes/:id/avancar', autenticar, (req, res) => {
+  const existente = db.get('SELECT status, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!existente) return res.status(404).json({ erro: 'Não encontrado' });
+  const proximo = { REPAIR: 'ASSESSORIA', ASSESSORIA: 'CONCLUIDO' }[existente.status];
+  if (!proximo) return res.status(400).json({ erro: 'Este item já está concluído' });
+  let eventos = []; try { eventos = JSON.parse(existente.eventos || '[]'); } catch (e) { eventos = []; }
+  eventos.push({ status: proximo, data: now(), obs: req.body.obs || '', user: req.user.nome });
+  db.run('UPDATE validacoes_equipamento SET status=?,eventos=?,updated_at=? WHERE id=?',
+    [proximo, J(eventos), now(), req.params.id]);
+  res.json({ ok: true, status: proximo });
+});
+
+router.put('/validacoes/:id/voltar', autenticar, (req, res) => {
+  const existente = db.get('SELECT status, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!existente) return res.status(404).json({ erro: 'Não encontrado' });
+  const anterior = { ASSESSORIA: 'REPAIR', CONCLUIDO: 'ASSESSORIA' }[existente.status];
+  if (!anterior) return res.status(400).json({ erro: 'Este item já está na primeira etapa' });
+  let eventos = []; try { eventos = JSON.parse(existente.eventos || '[]'); } catch (e) { eventos = []; }
+  eventos.push({ status: anterior, data: now(), obs: 'Retornado: ' + (req.body.obs || ''), user: req.user.nome });
+  db.run('UPDATE validacoes_equipamento SET status=?,eventos=?,updated_at=? WHERE id=?',
+    [anterior, J(eventos), now(), req.params.id]);
+  res.json({ ok: true, status: anterior });
+});
+
+router.delete('/validacoes/:id', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM validacoes_equipamento WHERE id=?', [req.params.id]); res.json({ ok: true });
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
@@ -980,6 +1042,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
     kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens),itens_opcionais:P(k.itens_opcionais)})),
     garantia_config: db.query('SELECT * FROM garantia_config'),
+    validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos)})),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -1110,6 +1173,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.garantia_config?.length) for (const g of s.garantia_config)
       db.runBatch(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)`,
         [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', g.updated_at||now()]);
+
+    if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
+      db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]), v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

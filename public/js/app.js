@@ -3617,6 +3617,279 @@ function excluirGarantiaConfig(marca) {
     .catch(err => toast(err.message, 'error'));
 }
 
+// ============================================================
+//  VALIDAÇÃO DE EQUIPAMENTO — pipeline Repair -> Assessoria -> Concluído
+// ============================================================
+const VALIDACAO_ETAPA_LABEL = {
+  REPAIR:     { label: 'Repair',     badge: 'badge-orange' },
+  ASSESSORIA: { label: 'Assessoria', badge: 'badge-blue'   },
+  CONCLUIDO:  { label: 'Concluído',  badge: 'badge-green'  },
+};
+const VALIDACAO_STATUS_MAP = { repair: 'REPAIR', assessoria: 'ASSESSORIA' };
+
+async function loadAndRenderValidacao(etapa, q = '') {
+  setSyncing(true);
+  try {
+    const qs = q ? '?q=' + encodeURIComponent(q) : '';
+    db.validacoes = await API.get('/validacoes' + qs);
+    renderValidacao(etapa, q);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setSyncing(false);
+  }
+}
+
+function renderValidacao(etapa, q) {
+  const el = document.getElementById('validacao-' + etapa + '-table');
+  if (!el) return;
+  if (q === undefined) q = document.querySelector('#page-validacao-' + etapa + ' .search-input')?.value || '';
+  const statusPrincipal = VALIDACAO_STATUS_MAP[etapa];
+  const mostrarConcluidos = document.getElementById('validacao-' + etapa + '-mostrar-concluidos')?.checked;
+
+  const todas = db.validacoes || [];
+  // Badges: sempre a partir da lista completa (só é precisa quando não há
+  // busca ativa, igual ao padrão já usado em Kit's Preventivas).
+  if (!q) {
+    const badgeRepair = document.getElementById('badge-validacao-repair');
+    const badgeAssessoria = document.getElementById('badge-validacao-assessoria');
+    if (badgeRepair) badgeRepair.textContent = todas.filter(v => v.status === 'REPAIR').length || '';
+    if (badgeAssessoria) badgeAssessoria.textContent = todas.filter(v => v.status === 'ASSESSORIA').length || '';
+  }
+
+  let lista = todas.filter(v => v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'));
+  lista = [...lista].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
+  if (!lista.length) {
+    const msgEtapa = etapa === 'repair' ? 'Nenhum equipamento em validação no Repair' : 'Nenhum equipamento em validação na Assessoria';
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔧</div>
+      <div class="empty-title">${msgEtapa}</div>
+      <div class="empty-sub">${etapa === 'repair' ? 'Adicione um equipamento pra começar o processo' : 'Equipamentos aparecem aqui quando saem do Repair'}</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="data-table">
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Obs.</th><th></th></tr></thead>
+    <tbody>
+      ${lista.map(v => {
+        const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
+        const dataEntrada = v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—';
+        const concluido = v.status === 'CONCLUIDO';
+        let acoes = `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
+        if (!concluido) {
+          acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalValidacao('${v.id}')" title="Editar">✎</button>`;
+          if (v.status === 'ASSESSORIA') {
+            acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAvancarValidacao('${v.id}','voltar')" title="Voltar pro Repair">↩</button>`;
+            acoes += `<button class="btn btn-sm" style="background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
+          } else {
+            acoes += `<button class="btn btn-sm" style="background:rgba(52,152,219,0.15);color:#3498db;border:1px solid rgba(52,152,219,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Concluir Repair - Enviar pra Assessoria">✓ Enviar p/ Assessoria</button>`;
+          }
+          acoes += `<button class="btn btn-danger btn-sm" onclick="excluirValidacao('${v.id}')" title="Excluir">✕</button>`;
+        }
+        return `<tr>
+          <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
+          <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
+          <td style="font-size:12px">${v.equip_modelo || '—'}</td>
+          <td style="font-size:12px">${v.equip_cliente || '—'}</td>
+          <td class="mono">${dataEntrada}</td>
+          <td><span class="badge ${st.badge}">${st.label}</span></td>
+          <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.obs || ''}</td>
+          <td style="text-align:right;white-space:nowrap">${acoes}</td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>`;
+}
+
+// ── Modal Novo/Editar equipamento em validação ──
+let _validacaoEquipSel = null;
+function abrirModalValidacao(id) {
+  const v = id ? (db.validacoes || []).find(x => x.id === id) : null;
+  _validacaoEquipSel = v ? { id: v.equip_id || '', serie: v.equip_serie || '', modelo: v.equip_modelo || '', cliente: v.equip_cliente || '' } : null;
+
+  let overlay = document.getElementById('modal-validacao-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-validacao-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">${v ? 'Editar' : 'Novo'} Equipamento em Validação</span>
+        <button onclick="document.getElementById('modal-validacao-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div class="form-group" style="position:relative">
+          <label class="form-label">Equipamento (Nº de Série)</label>
+          <input class="form-input" id="validacao-equip-search" placeholder="Buscar por série, modelo ou cliente..." autocomplete="off"
+            value="${v?.equip_serie || ''}"
+            oninput="sugerirEquipValidacao(this.value)" onfocus="sugerirEquipValidacao(this.value)"
+            onblur="setTimeout(()=>{const dd=document.getElementById('validacao-equip-dropdown'); if(dd) dd.style.display='none';},200)">
+          <div id="validacao-equip-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
+            background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);
+            max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);margin-top:2px"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Modelo</label>
+          <input class="form-input" id="validacao-modelo" value="${v?.equip_modelo || ''}" placeholder="Preenche sozinho ao selecionar, ou digite">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <input class="form-input" id="validacao-cliente" value="${v?.equip_cliente || ''}" placeholder="Preenche sozinho ao selecionar, ou digite">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${v?.obs || ''}</textarea>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-validacao-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarValidacao('${id || ''}')">✓ Salvar</button>
+      </div>
+    </div>`;
+}
+
+function sugerirEquipValidacao(q) {
+  const dd = document.getElementById('validacao-equip-dropdown');
+  if (!dd) return;
+  const ql = (q || '').toLowerCase().trim();
+  if (!ql || ql.length < 2) { dd.style.display = 'none'; return; }
+  API.get('/equipamentos?q=' + encodeURIComponent(ql)).then(equips => {
+    const list = (equips || []).slice(0, 15);
+    dd.style.display = list.length ? 'block' : 'none';
+    dd.innerHTML = list.map(e => {
+      const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
+      return `<div onmousedown="selecionarEquipValidacao('${e.id||''}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${cliente.replace(/'/g,"\\'")}')"
+        style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
+        onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}</div>
+        <div style="font-size:12px;color:var(--text2)">${e.modelo || ''}</div>
+        ${cliente ? `<div style="font-size:10px;color:var(--text3)">${cliente}</div>` : ''}
+      </div>`;
+    }).join('');
+  }).catch(() => { dd.style.display = 'none'; });
+}
+function selecionarEquipValidacao(id, serie, modelo, cliente) {
+  _validacaoEquipSel = { id, serie, modelo, cliente };
+  document.getElementById('validacao-equip-search').value = serie;
+  document.getElementById('validacao-modelo').value = modelo;
+  document.getElementById('validacao-cliente').value = cliente;
+  document.getElementById('validacao-equip-dropdown').style.display = 'none';
+}
+
+function salvarValidacao(id) {
+  const serie = document.getElementById('validacao-equip-search')?.value.trim() || '';
+  const modelo = document.getElementById('validacao-modelo')?.value.trim() || '';
+  const cliente = document.getElementById('validacao-cliente')?.value.trim() || '';
+  const obs = document.getElementById('validacao-obs')?.value.trim() || '';
+  if (!serie && !modelo) { toast('Informe ao menos a série ou o modelo', 'error'); return; }
+  const payload = {
+    equip_id: (_validacaoEquipSel?.serie === serie) ? (_validacaoEquipSel?.id || '') : '',
+    equip_serie: serie, equip_modelo: modelo, equip_cliente: cliente, obs,
+  };
+  const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
+  prom.then(() => {
+    toast(id ? 'Atualizado' : 'Equipamento adicionado ao Repair', 'success');
+    document.getElementById('modal-validacao-overlay')?.remove();
+    loadAndRenderValidacao('repair');
+  }).catch(err => toast(err.message, 'error'));
+}
+
+// ── Avançar / Voltar etapa ──
+function abrirModalAvancarValidacao(id, acao) {
+  const v = (db.validacoes || []).find(x => x.id === id);
+  if (!v) return;
+  const proximos = { REPAIR: 'Assessoria', ASSESSORIA: 'Pronto para Envio (Concluído)' };
+  const anteriores = { ASSESSORIA: 'Repair', CONCLUIDO: 'Assessoria' };
+  const destino = acao === 'voltar' ? anteriores[v.status] : proximos[v.status];
+
+  let overlay = document.getElementById('modal-validacao-avancar-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-validacao-avancar-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:400px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">${acao === 'voltar' ? 'Voltar' : 'Mover'} para ${destino}</span>
+        <button onclick="document.getElementById('modal-validacao-avancar-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${v.equip_modelo || ''} · S/N: ${v.equip_serie || '—'}</div>
+        <div class="form-group">
+          <label class="form-label">Observação ${acao === 'voltar' ? '(motivo do retorno)' : '(opcional)'}</label>
+          <textarea class="form-textarea" id="validacao-avancar-obs" style="min-height:60px"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-validacao-avancar-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarAvancarValidacao('${id}','${acao}')">✓ Confirmar</button>
+      </div>
+    </div>`;
+}
+
+function confirmarAvancarValidacao(id, acao) {
+  const obs = document.getElementById('validacao-avancar-obs')?.value.trim() || '';
+  API.put('/validacoes/' + id + '/' + acao, { obs })
+    .then(res => {
+      toast('Movido para ' + (VALIDACAO_ETAPA_LABEL[res.status]?.label || res.status));
+      document.getElementById('modal-validacao-avancar-overlay')?.remove();
+      loadAndRenderValidacao('repair');
+      loadAndRenderValidacao('assessoria');
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
+function excluirValidacao(id) {
+  if (!confirm('Excluir este item do processo de validação?')) return;
+  API.delete('/validacoes/' + id)
+    .then(() => { toast('Excluído', 'info'); loadAndRenderValidacao('repair'); loadAndRenderValidacao('assessoria'); })
+    .catch(err => toast(err.message, 'error'));
+}
+
+function verEventosValidacao(id) {
+  const v = (db.validacoes || []).find(x => x.id === id);
+  if (!v) return;
+  const eventos = v.eventos || [];
+  let overlay = document.getElementById('modal-validacao-eventos-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-validacao-eventos-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:100%;max-height:80vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">Histórico — ${v.equip_modelo || v.equip_serie || ''}</span>
+        <button onclick="document.getElementById('modal-validacao-eventos-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        ${eventos.length ? eventos.map(ev => {
+          const st = VALIDACAO_ETAPA_LABEL[ev.status] || {};
+          return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="badge ${st.badge || 'badge-gray'}">${st.label || ev.status}</span>
+              <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">${new Date(ev.data).toLocaleString('pt-BR')}</span>
+            </div>
+            ${ev.obs ? `<div style="font-size:12px;color:var(--text2);margin-top:6px;font-style:italic">"${ev.obs}"</div>` : ''}
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${ev.user || ''}</div>
+          </div>`;
+        }).join('') : '<div style="color:var(--text3);font-size:12px">Nenhum evento registrado</div>'}
+      </div>
+    </div>`;
+}
+
 async function loadAndRenderKitsPreventivas(q = '') {
   setSyncing(true);
   try {
@@ -7833,6 +8106,8 @@ function navigate(page, el) {
     equipamentos: ['Equipamentos', '/ cadastro'],
     'kits-preventivas': ["Kit's Preventivas", '/ itens, valores e fornecedor'],
     garantia:     ['Garantia',     '/ equipamentos próprios, por fabricante'],
+    'validacao-repair':     ['Validação Repair',     '/ equipamentos em processo no Repair'],
+    'validacao-assessoria': ['Validação Assessoria', '/ equipamentos em validação final, prontos pra envio'],
     estoque:      ['Estoque',      '/ posição atual'],
     movimentacao: ['Movimentação', '/ nova solicitação'],
     historico:    ['Histórico',    '/ solicitações'],
@@ -7916,6 +8191,12 @@ function navigate(page, el) {
       <button class="btn btn-import" onclick="importarExcel('garantia')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('garantia')">⬇ Exportar Excel</button>`;
     loadAndRenderGarantia();
+  } else if (page === 'validacao-repair') {
+    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalValidacao()">⊕ Novo Equipamento no Repair</button>`;
+    loadAndRenderValidacao('repair');
+  } else if (page === 'validacao-assessoria') {
+    if (actionsEl) actionsEl.innerHTML = '';
+    loadAndRenderValidacao('assessoria');
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalUsuario()">⊕ Novo Usuário</button>`;
