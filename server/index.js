@@ -110,10 +110,21 @@ app.listen(PORT, '0.0.0.0', () => {
           FINALIZADO: 'Finalizado'
         };
         const range = rangeOverride || getYesterdayRangeBRT();
-        const pecasEnviadas = db.query(
-          "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status='DESPACHADA' AND m.created_at BETWEEN ? AND ?",
-          [range.startMs, range.endMs]
+        // "Peças Enviadas" precisa refletir QUANDO o despacho realmente
+        // aconteceu (o evento DESPACHADA gravado no histórico), não quando a
+        // solicitação foi criada (created_at pode ser retroativo — ver
+        // "Data da Solicitação" em Nova Movimentação) nem exigir que o status
+        // ainda esteja em DESPACHADA hoje (a peça pode já ter avançado para
+        // Recebida/Alocada/Finalizado depois do despacho).
+        const candidatasDespacho = db.query(
+          "SELECT m.*, p.preco_usd as peca_preco_usd FROM movimentacoes m LEFT JOIN pecas p ON p.id = m.peca_id WHERE m.status IN ('DESPACHADA','RECEBIDA','ALOCADA','NF_EMITIDA','FINALIZADO')"
         );
+        const pecasEnviadas = candidatasDespacho.map(m => {
+          let eventos = [];
+          try { eventos = JSON.parse(m.eventos || '[]'); } catch (e) { eventos = []; }
+          const evDespacho = eventos.find(e => e.status === 'DESPACHADA');
+          return evDespacho ? { ...m, _dataDespacho: evDespacho.data } : null;
+        }).filter(m => m && m._dataDespacho >= range.startMs && m._dataDespacho <= range.endMs);
         const orcamentos = db.query(
           "SELECT * FROM orcamentos WHERE updated_at BETWEEN ? AND ?",
           [range.startMs, range.endMs]
@@ -135,7 +146,7 @@ app.listen(PORT, '0.0.0.0', () => {
         if (pecasEnviadas.length) {
           html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Peca</th><th>Qtd</th><th>Custo R$</th><th>Valor Frete</th><th>Tecnico</th><th>Cliente</th><th>Equipamento</th><th>No Serie</th><th>Forma de Envio</th></tr>';
           pecasEnviadas.forEach(function(m) {
-            var dataM = new Date(m.created_at).toLocaleDateString('pt-BR'); html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + dataM + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.peca_custo || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_cliente || '') + '</td><td>' + (m.equip_modelo || '') + '</td><td>' + (m.equip_serie || '') + '</td><td>' + (m.transportadora || '') + '</td></tr>';
+            var dataM = new Date(m._dataDespacho || m.created_at).toLocaleDateString('pt-BR'); html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + dataM + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.peca_custo || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_cliente || '') + '</td><td>' + (m.equip_modelo || '') + '</td><td>' + (m.equip_serie || '') + '</td><td>' + (m.transportadora || '') + '</td></tr>';
           });
           html += '</table>';
         } else {
