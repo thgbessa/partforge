@@ -7393,6 +7393,32 @@ function exportarExcel(aba) {
     XLSX.utils.book_append_sheet(wb, ws, 'Garantia');
     XLSX.writeFile(wb, 'partforge_garantia' + (stG ? '_' + stG.toLowerCase() : '') + '.xlsx');
     toast('Garantia exportada: ' + listaG.length + ' equipamentos');
+
+  } else if (aba === 'validacao-repair' || aba === 'validacao-assessoria') {
+    const etapa = aba === 'validacao-repair' ? 'repair' : 'assessoria';
+    const statusPrincipal = VALIDACAO_STATUS_MAP[etapa];
+    const q = (document.querySelector('#page-' + aba + ' .search-input')?.value || '').toLowerCase().trim();
+    const mostrarConcluidos = document.getElementById('validacao-' + etapa + '-mostrar-concluidos')?.checked;
+    let lista = (db.validacoes || []).filter(function(v) { return v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'); });
+    if (q) lista = lista.filter(function(v) {
+      return String(v.equip_serie || '').toLowerCase().includes(q) || String(v.equip_modelo || '').toLowerCase().includes(q) || String(v.equip_cliente || '').toLowerCase().includes(q);
+    });
+    const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
+    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Status', 'Data Entrada', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
+    const rows = [heads, ...lista.map(function(v) {
+      return [
+        v.seq_num || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '',
+        (VALIDACAO_ETAPA_LABEL[v.status] || {}).label || v.status,
+        v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '',
+        v.peca_solicitada || '', fmtBR(v.data_solicitacao_peca), fmtBR(v.data_entrega_peca),
+        v.produto_solicitado || '', fmtBR(v.data_solicitacao_produto), fmtBR(v.data_entrega_produto),
+        v.obs || ''
+      ];
+    })];
+    const ws = buildSheet(rows, heads);
+    XLSX.utils.book_append_sheet(wb, ws, etapa === 'repair' ? 'Validação Repair' : 'Validação Assessoria');
+    XLSX.writeFile(wb, 'partforge_validacao_' + etapa + '.xlsx');
+    toast('Validação exportada: ' + lista.length + ' equipamentos');
   }
 }
 
@@ -7476,6 +7502,12 @@ function importarExcel(aba) {
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
           importarGarantia(rows);
+        } else if (aba === 'validacao') {
+          sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('valida')) || wb.SheetNames[0];
+          ws = wb.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+          if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
+          importarValidacao(rows);
         }
 
       } catch(err) {
@@ -7552,6 +7584,63 @@ function importarGarantia(rows) {
       if (invalidas) msg += ', ' + invalidas + ' datas inválidas ignoradas';
       toast(msg, 'success');
       loadAndRenderGarantia();
+    })
+    .catch(function(err) { toast(err.message, 'error'); })
+    .finally(function() { setSyncing(false); });
+}
+
+function importarValidacao(rows) {
+  const norm = function(s) { return String(s == null ? '' : s).trim().toLowerCase(); };
+  const idx = {};
+  rows[0].forEach(function(h, i) {
+    const hn = norm(h);
+    if (hn === 'nº' || hn === 'n°' || hn === 'no' || hn === 'numero' || hn === 'número') idx.seq = i;
+    else if (['série', 'serie'].includes(hn)) idx.serie = i;
+    else if (hn === 'modelo') idx.modelo = i;
+    else if (hn === 'cliente') idx.cliente = i;
+    else if (hn === 'observação' || hn === 'observacao') idx.obs = i;
+    else if (hn === 'peça solicitada' || hn === 'peca solicitada') idx.pecaSol = i;
+    else if (hn === 'data solic. peça' || hn === 'data solic. peca') idx.dataSolicPeca = i;
+    else if (hn === 'data entrega peça' || hn === 'data entrega peca') idx.dataEntregaPeca = i;
+    else if (hn === 'produto solicitado') idx.produtoSol = i;
+    else if (hn === 'data solic. produto') idx.dataSolicProduto = i;
+    else if (hn === 'data entrega produto') idx.dataEntregaProduto = i;
+  });
+  if (idx.serie === undefined && idx.modelo === undefined) { toast('Colunas "Série"/"Modelo" não encontradas', 'error'); return; }
+
+  let invalidas = 0;
+  const lerData = function(v) {
+    const r = parseDataGarantia(v); // função já existente, reaproveitada (Date/serial Excel/texto -> AAAA-MM-DD)
+    if (r === null) { invalidas++; return ''; }
+    return r;
+  };
+  const itens = rows.slice(1).map(function(r) {
+    return {
+      seq_num: idx.seq !== undefined ? r[idx.seq] : '',
+      equip_serie: idx.serie !== undefined ? String(r[idx.serie] || '').trim() : '',
+      equip_modelo: idx.modelo !== undefined ? String(r[idx.modelo] || '').trim() : '',
+      equip_cliente: idx.cliente !== undefined ? String(r[idx.cliente] || '').trim() : '',
+      obs: idx.obs !== undefined ? String(r[idx.obs] || '').trim() : '',
+      peca_solicitada: idx.pecaSol !== undefined ? String(r[idx.pecaSol] || '').trim() : '',
+      data_solicitacao_peca: idx.dataSolicPeca !== undefined ? lerData(r[idx.dataSolicPeca]) : '',
+      data_entrega_peca: idx.dataEntregaPeca !== undefined ? lerData(r[idx.dataEntregaPeca]) : '',
+      produto_solicitado: idx.produtoSol !== undefined ? String(r[idx.produtoSol] || '').trim() : '',
+      data_solicitacao_produto: idx.dataSolicProduto !== undefined ? lerData(r[idx.dataSolicProduto]) : '',
+      data_entrega_produto: idx.dataEntregaProduto !== undefined ? lerData(r[idx.dataEntregaProduto]) : '',
+    };
+  }).filter(function(it) { return it.seq_num || it.equip_serie || it.equip_modelo; });
+  if (!itens.length) { toast('Nenhuma linha com Nº, Série ou Modelo encontrada', 'error'); return; }
+
+  setSyncing(true);
+  API.post('/validacoes/importar', { itens: itens })
+    .then(function(res) {
+      let msg = 'Validação importada: ' + res.atualizados + ' atualizados';
+      if (res.criados) msg += ', ' + res.criados + ' criados';
+      if (res.naoEncontrados) msg += ', ' + res.naoEncontrados + ' não encontrados';
+      if (invalidas) msg += ', ' + invalidas + ' datas inválidas ignoradas';
+      toast(msg, 'success');
+      loadAndRenderValidacao('repair');
+      loadAndRenderValidacao('assessoria');
     })
     .catch(function(err) { toast(err.message, 'error'); })
     .finally(function() { setSyncing(false); });
@@ -8248,10 +8337,15 @@ function navigate(page, el) {
       <button class="btn btn-excel" onclick="exportarExcel('garantia')">⬇ Exportar Excel</button>`;
     loadAndRenderGarantia();
   } else if (page === 'validacao-repair') {
-    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalValidacao()">⊕ Novo Equipamento no Repair</button>`;
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
+      <button class="btn btn-excel" onclick="exportarExcel('validacao-repair')">⬇ Exportar Excel</button>
+      <button class="btn btn-primary" onclick="abrirModalValidacao()">⊕ Novo Equipamento no Repair</button>`;
     loadAndRenderValidacao('repair');
   } else if (page === 'validacao-assessoria') {
-    if (actionsEl) actionsEl.innerHTML = '';
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
+      <button class="btn btn-excel" onclick="exportarExcel('validacao-assessoria')">⬇ Exportar Excel</button>`;
     loadAndRenderValidacao('assessoria');
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }

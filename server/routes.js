@@ -835,6 +835,61 @@ router.delete('/validacoes/:id', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM validacoes_equipamento WHERE id=?', [req.params.id]); res.json({ ok: true });
 });
 
+// Importação em lote (planilha exportada de Validação Repair/Assessoria,
+// editada): casa por Nº — se achar, atualiza os campos de peça/produto/obs
+// (nunca mexe no status/etapa, isso só muda pelos botões de avançar/voltar);
+// se não achar e a linha não tiver Nº mas tiver Série ou Modelo, cria um
+// item novo já na etapa Repair. Célula vazia = não mexe. Um só persist().
+router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  const porSeq = {};
+  db.query('SELECT * FROM validacoes_equipamento').forEach(v => { if (v.seq_num) porSeq[v.seq_num] = v; });
+  const cfg0 = db.get("SELECT valor FROM configuracoes WHERE chave='validacao_seq_counter'");
+  let seqCounter = parseInt(cfg0?.valor || '0');
+
+  let atualizados = 0, criados = 0, naoEncontrados = 0;
+  for (const it of itens) {
+    const seqNum = parseInt(it.seq_num) || 0;
+    const existente = seqNum ? porSeq[seqNum] : null;
+
+    if (existente) {
+      const equip_serie = it.equip_serie !== undefined && it.equip_serie !== '' ? it.equip_serie : existente.equip_serie;
+      const equip_modelo = it.equip_modelo !== undefined && it.equip_modelo !== '' ? it.equip_modelo : existente.equip_modelo;
+      const equip_cliente = it.equip_cliente !== undefined && it.equip_cliente !== '' ? it.equip_cliente : existente.equip_cliente;
+      const obs = it.obs !== undefined && it.obs !== '' ? it.obs : existente.obs;
+      const peca_solicitada = it.peca_solicitada !== undefined && it.peca_solicitada !== '' ? it.peca_solicitada : existente.peca_solicitada;
+      const data_solicitacao_peca = it.data_solicitacao_peca || existente.data_solicitacao_peca;
+      const data_entrega_peca = it.data_entrega_peca || existente.data_entrega_peca;
+      const produto_solicitado = it.produto_solicitado !== undefined && it.produto_solicitado !== '' ? it.produto_solicitado : existente.produto_solicitado;
+      const data_solicitacao_produto = it.data_solicitacao_produto || existente.data_solicitacao_produto;
+      const data_entrega_produto = it.data_entrega_produto || existente.data_entrega_produto;
+      db.runBatch(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
+        peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
+        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,updated_at=? WHERE id=?`,
+        [equip_serie, equip_modelo, equip_cliente, obs, peca_solicitada, data_solicitacao_peca, data_entrega_peca,
+         produto_solicitado, data_solicitacao_produto, data_entrega_produto, now(), existente.id]);
+      atualizados++;
+    } else if (!seqNum && (it.equip_serie || it.equip_modelo)) {
+      seqCounter++;
+      const id = uid();
+      const eventos = J([{ status: 'REPAIR', data: now(), obs: it.obs || '', user: req.user.nome }]);
+      db.runBatch(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
+        peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
+        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, seqCounter, '', it.equip_serie || '', it.equip_modelo || '', it.equip_cliente || '', 'REPAIR', it.obs || '', eventos,
+         it.peca_solicitada || '', it.data_solicitacao_peca || '', it.data_entrega_peca || '',
+         it.produto_solicitado || '', it.data_solicitacao_produto || '', it.data_entrega_produto || '',
+         now(), req.user.nome, now()]);
+      criados++;
+    } else {
+      naoEncontrados++;
+    }
+  }
+  if (criados) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('validacao_seq_counter',?)", [String(seqCounter)]);
+  db.persist();
+  res.json({ ok: true, atualizados, criados, naoEncontrados });
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
