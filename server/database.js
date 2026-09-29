@@ -211,6 +211,14 @@ async function init() {
     obs TEXT DEFAULT '', eventos TEXT DEFAULT '[]',
     created_at INTEGER DEFAULT 0, created_by TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando validacoes_equipamento', e.message); }
+  // Solicitação de peça (etapa Repair) e de produto (etapa Assessoria) —
+  // mesmo padrão de campos nas duas etapas.
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN peca_solicitada TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_solicitacao_peca TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_entrega_peca TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN produto_solicitado TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_solicitacao_produto TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_entrega_produto TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');

@@ -3669,7 +3669,7 @@ function renderValidacao(etapa, q) {
   }
 
   el.innerHTML = `<table class="data-table">
-    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Obs.</th><th></th></tr></thead>
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
     <tbody>
       ${lista.map(v => {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
@@ -3686,6 +3686,18 @@ function renderValidacao(etapa, q) {
           }
           acoes += `<button class="btn btn-danger btn-sm" onclick="excluirValidacao('${v.id}')" title="Excluir">✕</button>`;
         }
+        // Indicador de peça (Repair) ou produto (Assessoria/Concluído) pendente,
+        // com aviso visual se o prazo de entrega já passou.
+        const usaProduto = v.status === 'ASSESSORIA' || v.status === 'CONCLUIDO';
+        const nomeItem = usaProduto ? v.produto_solicitado : v.peca_solicitada;
+        const dataEntregaItem = usaProduto ? v.data_entrega_produto : v.data_entrega_peca;
+        let colPecaProduto = '<span style="color:var(--text3)">—</span>';
+        if (nomeItem) {
+          const hojeStr = new Date().toISOString().slice(0, 10);
+          const atrasado = dataEntregaItem && dataEntregaItem < hojeStr;
+          colPecaProduto = `<div style="font-size:11px">${nomeItem}</div>` +
+            (dataEntregaItem ? `<div style="font-size:10px;color:${atrasado ? 'var(--red)' : 'var(--text3)'}">${atrasado ? '⚠ ' : ''}entrega: ${new Date(dataEntregaItem + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '');
+        }
         return `<tr>
           <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
           <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
@@ -3693,6 +3705,7 @@ function renderValidacao(etapa, q) {
           <td style="font-size:12px">${v.equip_cliente || '—'}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
+          <td>${colPecaProduto}</td>
           <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.obs || ''}</td>
           <td style="text-align:right;white-space:nowrap">${acoes}</td>
         </tr>`;
@@ -3745,6 +3758,42 @@ function abrirModalValidacao(id) {
           <label class="form-label">Observação</label>
           <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${v?.obs || ''}</textarea>
         </div>
+
+        <div style="margin:16px 0 12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">SOLICITAÇÃO DE PEÇA (Repair)</div>
+          <div class="form-group">
+            <label class="form-label">Peça Solicitada</label>
+            <input class="form-input" id="validacao-peca-solicitada" value="${v?.peca_solicitada || ''}" placeholder="Deixe em branco se não precisou de peça">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group">
+              <label class="form-label">Data da Solicitação</label>
+              <input class="form-input" type="date" id="validacao-data-solic-peca" value="${v?.data_solicitacao_peca || ''}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Data de Entrega (prazo)</label>
+              <input class="form-input" type="date" id="validacao-data-entrega-peca" value="${v?.data_entrega_peca || ''}">
+            </div>
+          </div>
+        </div>
+
+        <div id="validacao-produto-wrap" style="margin:16px 0 12px;padding-top:12px;border-top:1px solid var(--border);display:${(v && (v.status === 'ASSESSORIA' || v.status === 'CONCLUIDO')) ? '' : 'none'}">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">SOLICITAÇÃO DE PRODUTO (Assessoria)</div>
+          <div class="form-group">
+            <label class="form-label">Produto Solicitado</label>
+            <input class="form-input" id="validacao-produto-solicitado" value="${v?.produto_solicitado || ''}" placeholder="Deixe em branco se não precisou de produto">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-group">
+              <label class="form-label">Data da Solicitação</label>
+              <input class="form-input" type="date" id="validacao-data-solic-produto" value="${v?.data_solicitacao_produto || ''}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Data de Entrega (prazo)</label>
+              <input class="form-input" type="date" id="validacao-data-entrega-produto" value="${v?.data_entrega_produto || ''}">
+            </div>
+          </div>
+        </div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
         <button class="btn btn-ghost" onclick="document.getElementById('modal-validacao-overlay').remove()">Cancelar</button>
@@ -3790,12 +3839,19 @@ function salvarValidacao(id) {
   const payload = {
     equip_id: (_validacaoEquipSel?.serie === serie) ? (_validacaoEquipSel?.id || '') : '',
     equip_serie: serie, equip_modelo: modelo, equip_cliente: cliente, obs,
+    peca_solicitada: document.getElementById('validacao-peca-solicitada')?.value.trim() || '',
+    data_solicitacao_peca: document.getElementById('validacao-data-solic-peca')?.value || '',
+    data_entrega_peca: document.getElementById('validacao-data-entrega-peca')?.value || '',
+    produto_solicitado: document.getElementById('validacao-produto-solicitado')?.value.trim() || '',
+    data_solicitacao_produto: document.getElementById('validacao-data-solic-produto')?.value || '',
+    data_entrega_produto: document.getElementById('validacao-data-entrega-produto')?.value || '',
   };
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
   prom.then(() => {
     toast(id ? 'Atualizado' : 'Equipamento adicionado ao Repair', 'success');
     document.getElementById('modal-validacao-overlay')?.remove();
     loadAndRenderValidacao('repair');
+    loadAndRenderValidacao('assessoria');
   }).catch(err => toast(err.message, 'error'));
 }
 

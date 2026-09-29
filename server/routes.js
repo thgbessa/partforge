@@ -780,16 +780,27 @@ router.post('/validacoes', autenticar, (req, res) => {
   else db.run("INSERT INTO configuracoes(chave,valor) VALUES('validacao_seq_counter',?)", [String(seq)]);
   const id = uid();
   const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome }]);
-  db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos, now(), req.user.nome, now()]);
+  db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
+    peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
+    created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
+     v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
+     v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
+     now(), req.user.nome, now()]);
   res.status(201).json({ id, seq_num: seq });
 });
 
 router.put('/validacoes/:id', autenticar, (req, res) => {
   const v = req.body;
-  db.run('UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,updated_at=? WHERE id=?',
-    [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '', now(), req.params.id]);
+  db.run(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
+    peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
+    produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,
+    updated_at=? WHERE id=?`,
+    [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '',
+     v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
+     v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
+     now(), req.params.id]);
   res.json({ ok: true });
 });
 
@@ -1175,8 +1186,13 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', g.updated_at||now()]);
 
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
-      db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]), v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
+      db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
+        peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
+        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
+         v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
+         v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
+         v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
