@@ -146,7 +146,11 @@ app.listen(PORT, '0.0.0.0', () => {
         if (pecasEnviadas.length) {
           html += '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Nr de Orcamento</th><th>Data</th><th>Peca</th><th>Qtd</th><th>Custo R$</th><th>Valor Frete</th><th>Tecnico</th><th>Cliente</th><th>Equipamento</th><th>No Serie</th><th>Forma de Envio</th></tr>';
           pecasEnviadas.forEach(function(m) {
-            var dataM = new Date(m._dataDespacho || m.created_at).toLocaleDateString('pt-BR'); html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + dataM + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.peca_custo || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_cliente || '') + '</td><td>' + (m.equip_modelo || '') + '</td><td>' + (m.equip_serie || '') + '</td><td>' + (m.transportadora || '') + '</td></tr>';
+            // Filtra pela data em que o despacho foi REGISTRADO no sistema
+            // (m._dataDespacho, usado acima), mas exibe a data da EXPEDIÇÃO
+            // (created_at / "Data da Solicitação", que o usuário pode ajustar
+            // pra refletir o dia real do envio, mesmo lançando depois).
+            var dataM = new Date(m.created_at).toLocaleDateString('pt-BR'); html += '<tr><td>' + (m.seq_num || '') + '</td><td>' + dataM + '</td><td>' + (m.peca_nome || '') + '</td><td>' + (m.qtd || '') + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.peca_custo || 0).toFixed(2) + '</td><td>R' + CIFRAO + ' ' + parseFloat(m.valor_frete || 0).toFixed(2) + '</td><td>' + (m.tecnico || '') + '</td><td>' + (m.equip_cliente || '') + '</td><td>' + (m.equip_modelo || '') + '</td><td>' + (m.equip_serie || '') + '</td><td>' + (m.transportadora || '') + '</td></tr>';
           });
           html += '</table>';
         } else {
