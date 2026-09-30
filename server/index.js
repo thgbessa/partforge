@@ -13,6 +13,26 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+
+// Cache-busting automático: a cada boot do servidor (= a cada deploy), os
+// ?v= de app.js/api.js no index.html são substituídos por um número novo
+// (timestamp do boot), sem precisar lembrar de editar isso manualmente a
+// cada mudança no JS. O index.html em si já não é cacheado (no-cache
+// abaixo), então essa substituição sempre chega fresca no navegador.
+const BOOT_VERSION = Date.now();
+function servirHtmlComVersaoAtual(caminhoArquivo) {
+  return (req, res) => {
+    fs.readFile(caminhoArquivo, 'utf8', (err, html) => {
+      if (err) return res.status(500).send('Erro ao carregar a página');
+      const atualizado = html.replace(/(\/(?:js\/app|mobile\/app|js\/api)\.js\?v=)\d+/g, '$1' + BOOT_VERSION);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.send(atualizado);
+    });
+  };
+}
+app.get(['/', '/index.html'], servirHtmlComVersaoAtual(path.join(__dirname, '../public/index.html')));
+app.get(['/mobile', '/mobile/', '/mobile/index.html'], servirHtmlComVersaoAtual(path.join(__dirname, '../public/mobile/index.html')));
+
 app.use(express.static(path.join(__dirname, '../public'), {
   maxAge: '1d',
   setHeaders: (res, filePath) => {
