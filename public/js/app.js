@@ -3636,6 +3636,11 @@ const VALIDACAO_ETAPA_LABEL = {
   CONCLUIDO:  { label: 'Concluído',  badge: 'badge-green'  },
 };
 const VALIDACAO_STATUS_MAP = { repair: 'REPAIR', assessoria: 'ASSESSORIA' };
+const VALIDACAO_TECNICOS = [
+  { valor: 'ICARO', label: 'Icaro', cor: '#3498db' },
+  { valor: 'MORENTE', label: 'Morente', cor: '#e67e22' },
+  { valor: 'TEC_EXTERNO', label: 'Téc. Externo', cor: '#9b59b6' },
+];
 
 // Calcula a urgência de um prazo (data_limite, formato AAAA-MM-DD) em
 // relação a hoje. Não mostra nada pra itens já concluídos (o prazo deles já
@@ -3693,7 +3698,7 @@ function renderValidacao(etapa, q) {
   }
 
   el.innerHTML = `<table class="data-table">
-    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Técnico</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
     <tbody>
       ${lista.map(v => {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
@@ -3724,11 +3729,13 @@ function renderValidacao(etapa, q) {
             (dataEntregaItem ? `<div style="font-size:10px;color:${atrasado ? 'var(--red)' : 'var(--text3)'}">${atrasado ? '⚠ ' : ''}entrega: ${new Date(dataEntregaItem + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '');
         }
         const urg = calcularUrgenciaPrazo(v.data_limite, v.status);
+        const tecInfo = VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel);
         return `<tr>
           <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
           <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
           <td style="font-size:12px">${v.equip_modelo || '—'}</td>
           <td style="font-size:12px">${v.equip_cliente || '—'}</td>
+          <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${tecInfo.label}` : '<span style="color:var(--text3)">—</span>'}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
           <td>${urg ? `<div style="font-size:11px;font-weight:600;color:${urg.cor}">${urg.icone} ${urg.label}</div><div style="font-size:10px;color:var(--text3)">${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '<span style="color:var(--text3)">—</span>'}</td>
@@ -3741,7 +3748,15 @@ function renderValidacao(etapa, q) {
 }
 
 // ── Agenda: equipamentos na bancada do Repair, priorizados por prazo ──
+// ── Agenda: calendário mensal com data-limite de cada equipamento e o
+// técnico responsável, navegável mês a mês ──
+let _agendaAno, _agendaMes; // mês 0-11
+const AGENDA_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
 function abrirAgendaRepair() {
+  const hoje = new Date();
+  _agendaAno = hoje.getFullYear();
+  _agendaMes = hoje.getMonth();
   let overlay = document.getElementById('modal-agenda-repair-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -3750,57 +3765,89 @@ function abrirAgendaRepair() {
     overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   }
+  renderAgendaCalendario();
+}
 
-  const naBancada = (db.validacoes || []).filter(v => v.status === 'REPAIR');
-  const grupos = {
-    atrasado:  { titulo: '⚠ ATRASADOS',            cor: 'var(--red)',    itens: [] },
-    hoje:      { titulo: '⚠ VENCE HOJE',            cor: 'var(--red)',    itens: [] },
-    proximo:   { titulo: '⏰ PRÓXIMOS 2 DIAS',       cor: 'var(--accent)', itens: [] },
-    noPrazo:   { titulo: '✓ NO PRAZO',              cor: 'var(--green)',  itens: [] },
-    semPrazo:  { titulo: '— SEM PRAZO CONFIGURADO', cor: 'var(--text3)',  itens: [] },
-  };
-  naBancada.forEach(v => {
-    const urg = calcularUrgenciaPrazo(v.data_limite, v.status);
-    if (!urg) { grupos.semPrazo.itens.push(v); return; }
-    if (urg.diffDias < 0) grupos.atrasado.itens.push({ ...v, _urg: urg });
-    else if (urg.diffDias === 0) grupos.hoje.itens.push({ ...v, _urg: urg });
-    else if (urg.diffDias <= 2) grupos.proximo.itens.push({ ...v, _urg: urg });
-    else grupos.noPrazo.itens.push({ ...v, _urg: urg });
+function mudarMesAgenda(delta) {
+  _agendaMes += delta;
+  if (_agendaMes < 0) { _agendaMes = 11; _agendaAno--; }
+  if (_agendaMes > 11) { _agendaMes = 0; _agendaAno++; }
+  renderAgendaCalendario();
+}
+
+function renderAgendaCalendario() {
+  const overlay = document.getElementById('modal-agenda-repair-overlay');
+  if (!overlay) return;
+
+  const primeiroDia = new Date(_agendaAno, _agendaMes, 1);
+  const diasNoMes = new Date(_agendaAno, _agendaMes + 1, 0).getDate();
+  const offsetInicio = primeiroDia.getDay(); // 0 = domingo
+
+  // Agrupa por dia do mês exibido — considera qualquer equipamento com
+  // data-limite caindo nesse mês, independente da etapa atual (itens já
+  // concluídos aparecem riscados, pra manter o histórico visível).
+  const porDia = {};
+  (db.validacoes || []).forEach(v => {
+    if (!v.data_limite) return;
+    const [ano, mes] = v.data_limite.split('-').map(Number);
+    if (ano === _agendaAno && (mes - 1) === _agendaMes) {
+      const dia = parseInt(v.data_limite.split('-')[2], 10);
+      (porDia[dia] = porDia[dia] || []).push(v);
+    }
   });
-  // Ordena cada grupo pelo prazo mais urgente primeiro
-  ['atrasado', 'hoje', 'proximo', 'noPrazo'].forEach(k => grupos[k].itens.sort((a, b) => a._urg.diffDias - b._urg.diffDias));
 
-  const renderItem = v => `
-    <div style="padding:10px 12px;border-left:3px solid ${v._urg?.cor || 'var(--border2)'};background:var(--surface2);border-radius:6px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">#${v.seq_num||'—'} · ${v.equip_serie||'—'}</span>
-          <div style="font-size:12px;margin-top:2px">${v.equip_modelo||'—'}${v.equip_cliente?' · <span style="color:var(--text3)">'+v.equip_cliente+'</span>':''}</div>
-        </div>
-        ${v._urg ? `<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;font-weight:700;color:${v._urg.cor}">${v._urg.icone} ${v._urg.label}</div><div style="font-size:9px;color:var(--text3)">limite: ${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}</div></div>` : ''}
-      </div>
-      <div style="margin-top:6px;display:flex;gap:6px">
-        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')">✎ Editar</button>
-        <button class="btn btn-sm" style="font-size:10px;background:rgba(52,152,219,0.15);color:#3498db;border:1px solid rgba(52,152,219,0.3)" onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalAvancarValidacao('${v.id}','avancar')">✓ Enviar p/ Assessoria</button>
-      </div>
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  const cardEquip = v => {
+    const tecInfo = VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel);
+    const concluido = v.status === 'CONCLUIDO';
+    const cor = tecInfo ? tecInfo.cor : '#8294a0';
+    return `<div onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')"
+      title="${(v.equip_modelo || '').replace(/"/g, '')} · ${tecInfo ? tecInfo.label : 'sem técnico'}"
+      style="font-size:9px;padding:2px 4px;margin-bottom:2px;border-radius:3px;cursor:pointer;background:${cor}22;
+      border-left:2px solid ${cor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      ${concluido ? 'opacity:0.5;text-decoration:line-through' : ''}">
+      ${v.equip_serie || v.equip_modelo || '?'}
     </div>`;
+  };
 
-  const gruposComItens = Object.values(grupos).filter(g => g.itens.length);
+  let celulas = '';
+  for (let i = 0; i < offsetInicio; i++) {
+    celulas += `<div style="min-height:72px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);opacity:0.3"></div>`;
+  }
+  for (let dia = 1; dia <= diasNoMes; dia++) {
+    const dataStr = _agendaAno + '-' + String(_agendaMes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+    const itens = porDia[dia] || [];
+    const ehHoje = dataStr === hojeStr;
+    celulas += `<div style="min-height:72px;max-height:110px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:4px;
+      ${ehHoje ? 'background:rgba(255,165,2,0.08);border-color:var(--accent)' : ''}">
+      <div style="font-size:11px;font-weight:700;color:${ehHoje ? 'var(--accent)' : 'var(--text3)'};margin-bottom:3px">${dia}</div>
+      ${itens.map(cardEquip).join('')}
+    </div>`;
+  }
+
+  const totalNoMes = Object.values(porDia).reduce((s, arr) => s + arr.length, 0);
 
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:520px;width:100%;max-height:85vh;overflow-y:auto">
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:820px;width:100%;max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <span style="font-weight:700;font-size:15px">📅 Agenda — Equipamentos na Bancada (${naBancada.length})</span>
+        <span style="font-weight:700;font-size:15px">📅 Agenda — Validação Repair (${totalNoMes} neste mês)</span>
         <button onclick="document.getElementById('modal-agenda-repair-overlay').remove()"
           style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
-      <div style="padding:20px">
-        ${!naBancada.length ? '<div style="text-align:center;color:var(--text3);font-size:13px">Nenhum equipamento no Repair no momento</div>' :
-          gruposComItens.map(g => `
-            <div style="margin-bottom:18px">
-              <div style="font-size:11px;font-weight:700;color:${g.cor};margin-bottom:8px">${g.titulo} (${g.itens.length})</div>
-              ${g.itens.map(renderItem).join('')}
-            </div>`).join('')}
+      <div style="padding:16px 20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <button class="btn btn-ghost btn-sm" onclick="mudarMesAgenda(-1)">◀</button>
+          <span style="font-weight:700;font-size:14px">${AGENDA_MESES[_agendaMes]} ${_agendaAno}</span>
+          <button class="btn btn-ghost btn-sm" onclick="mudarMesAgenda(1)">▶</button>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:10px;flex-wrap:wrap">
+          ${VALIDACAO_TECNICOS.map(t => `<span><span style="color:${t.cor}">●</span> ${t.label}</span>`).join('')}
+          <span style="color:var(--text3)"><span style="color:#8294a0">●</span> Sem técnico</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:10px;color:var(--text3);text-align:center;margin-bottom:4px">
+          <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celulas}</div>
       </div>
     </div>`;
 }
@@ -4001,6 +4048,13 @@ function abrirModalValidacao(id) {
           <input class="form-input" id="validacao-cliente" value="${v?.equip_cliente || ''}" placeholder="Preenche sozinho ao selecionar, ou digite">
         </div>
         <div class="form-group">
+          <label class="form-label">Técnico Responsável</label>
+          <select class="form-select" id="validacao-tecnico">
+            <option value="">— Não definido —</option>
+            ${VALIDACAO_TECNICOS.map(t => `<option value="${t.valor}" ${v?.tecnico_responsavel === t.valor ? 'selected' : ''}>${t.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label">Observação</label>
           <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${v?.obs || ''}</textarea>
         </div>
@@ -4119,6 +4173,7 @@ function salvarValidacao(id) {
     produto_solicitado: document.getElementById('validacao-produto-solicitado')?.value.trim() || '',
     data_solicitacao_produto: document.getElementById('validacao-data-solic-produto')?.value || '',
     data_entrega_produto: document.getElementById('validacao-data-entrega-produto')?.value || '',
+    tecnico_responsavel: document.getElementById('validacao-tecnico')?.value || '',
     fotos: _validacaoFotos,
   };
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
@@ -7719,10 +7774,11 @@ function exportarExcel(aba) {
       return String(v.equip_serie || '').toLowerCase().includes(q) || String(v.equip_modelo || '').toLowerCase().includes(q) || String(v.equip_cliente || '').toLowerCase().includes(q);
     });
     const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
-    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
+    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Técnico', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
     const rows = [heads, ...lista.map(function(v) {
       return [
         v.seq_num || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '',
+        (VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel) || {}).label || '',
         (VALIDACAO_ETAPA_LABEL[v.status] || {}).label || v.status,
         v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '',
         v.prazo_complexidade || '', v.prazo_dias || '', fmtBR(v.data_limite),
@@ -7914,6 +7970,7 @@ function importarValidacao(rows) {
     else if (['série', 'serie'].includes(hn)) idx.serie = i;
     else if (hn === 'modelo') idx.modelo = i;
     else if (hn === 'cliente') idx.cliente = i;
+    else if (hn === 'técnico' || hn === 'tecnico') idx.tecnico = i;
     else if (hn === 'observação' || hn === 'observacao') idx.obs = i;
     else if (hn === 'peça solicitada' || hn === 'peca solicitada') idx.pecaSol = i;
     else if (hn === 'data solic. peça' || hn === 'data solic. peca') idx.dataSolicPeca = i;
@@ -7936,6 +7993,12 @@ function importarValidacao(rows) {
       equip_serie: idx.serie !== undefined ? String(r[idx.serie] || '').trim() : '',
       equip_modelo: idx.modelo !== undefined ? String(r[idx.modelo] || '').trim() : '',
       equip_cliente: idx.cliente !== undefined ? String(r[idx.cliente] || '').trim() : '',
+      tecnico_responsavel: (function() {
+        if (idx.tecnico === undefined) return '';
+        const txt = String(r[idx.tecnico] || '').trim().toUpperCase();
+        const t = VALIDACAO_TECNICOS.find(x => x.valor === txt || x.label.toUpperCase() === txt);
+        return t ? t.valor : '';
+      })(),
       obs: idx.obs !== undefined ? String(r[idx.obs] || '').trim() : '',
       peca_solicitada: idx.pecaSol !== undefined ? String(r[idx.pecaSol] || '').trim() : '',
       data_solicitacao_peca: idx.dataSolicPeca !== undefined ? lerData(r[idx.dataSolicPeca]) : '',

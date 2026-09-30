@@ -131,7 +131,6 @@ function gerarPdfOrcamentoBuffer(orc) {
 async function notificarStatusOrcamento(orcId, statusNovo) {
   const destinos = {
     A_FATURAR: { email: 'chaiane@quallyx.com.br', assunto: 'Orçamento pronto para faturamento', mensagem: 'está pronto para faturamento' },
-    FATURADO:  { email: 'andressa@quallyx.com.br', assunto: 'Orçamento faturado', mensagem: 'foi marcado como faturado' },
   };
   const destino = destinos[statusNovo];
   if (!destino) return;
@@ -887,12 +886,12 @@ router.post('/validacoes', autenticar, (req, res) => {
 
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, now(), req.user.nome, now()]);
+     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, v.tecnico_responsavel || '', now(), req.user.nome, now()]);
   res.status(201).json({ id, seq_num: seq, prazo: prazo ? { modelo: prazo.modelo, dias: prazoDias, complexidade: prazoComplexidade, dataLimite } : null });
 });
 
@@ -901,11 +900,11 @@ router.put('/validacoes/:id', autenticar, (req, res) => {
   db.run(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
     peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
     produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,
-    fotos=?,updated_at=? WHERE id=?`,
+    fotos=?,tecnico_responsavel=?,updated_at=? WHERE id=?`,
     [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '',
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), now(), req.params.id]);
+     J(v.fotos || []), v.tecnico_responsavel || '', now(), req.params.id]);
   res.json({ ok: true });
 });
 
@@ -968,22 +967,28 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       const produto_solicitado = it.produto_solicitado !== undefined && it.produto_solicitado !== '' ? it.produto_solicitado : existente.produto_solicitado;
       const data_solicitacao_produto = it.data_solicitacao_produto || existente.data_solicitacao_produto;
       const data_entrega_produto = it.data_entrega_produto || existente.data_entrega_produto;
+      const tecnico_responsavel = it.tecnico_responsavel !== undefined && it.tecnico_responsavel !== '' ? it.tecnico_responsavel : existente.tecnico_responsavel;
       db.runBatch(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
         peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
-        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,updated_at=? WHERE id=?`,
+        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,tecnico_responsavel=?,updated_at=? WHERE id=?`,
         [equip_serie, equip_modelo, equip_cliente, obs, peca_solicitada, data_solicitacao_peca, data_entrega_peca,
-         produto_solicitado, data_solicitacao_produto, data_entrega_produto, now(), existente.id]);
+         produto_solicitado, data_solicitacao_produto, data_entrega_produto, tecnico_responsavel, now(), existente.id]);
       atualizados++;
     } else if (!seqNum && (it.equip_serie || it.equip_modelo)) {
       seqCounter++;
       const id = uid();
       const eventos = J([{ status: 'REPAIR', data: now(), obs: it.obs || '', user: req.user.nome }]);
+      const prazoImp = buscarPrazoPorModelo(it.equip_modelo);
+      const prazoDiasImp = prazoImp?.prazo_final || 0;
+      const dataLimiteImp = prazoDiasImp > 0 ? somarDias(now(), prazoDiasImp) : '';
       db.runBatch(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,
+        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, seqCounter, '', it.equip_serie || '', it.equip_modelo || '', it.equip_cliente || '', 'REPAIR', it.obs || '', eventos,
          it.peca_solicitada || '', it.data_solicitacao_peca || '', it.data_entrega_peca || '',
          it.produto_solicitado || '', it.data_solicitacao_produto || '', it.data_entrega_produto || '',
+         prazoDiasImp, prazoImp?.tolerancia || 0, prazoImp?.complexidade || '', dataLimiteImp, it.tecnico_responsavel || '',
          now(), req.user.nome, now()]);
       criados++;
     } else {
@@ -1349,11 +1354,11 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
          v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
          v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
-         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'',
+         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'', v.tecnico_responsavel||'',
          v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)

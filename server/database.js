@@ -240,6 +240,7 @@ async function init() {
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_tolerancia REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_complexidade TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_limite TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN tecnico_responsavel TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
   // Registro fotográfico das peças: no despacho (desktop), no recebimento e
   // na devolução (mobile, pelo técnico) — cada coluna guarda um array JSON
