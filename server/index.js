@@ -684,6 +684,49 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim diag prazos ──
 
+    // ── Corrige validacoes ja lancadas com prazo zerado (entraram antes da
+    //    planilha de prazos ser importada) — recalcula usando os prazos
+    //    agora configurados. So mexe em quem esta com prazo_dias=0. ──
+    app.get('/api/admin/recalcular-prazos-lancados', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const normalizar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const prazos = db.query('SELECT * FROM prazos_validacao');
+        const buscar = modeloEquip => {
+          const norm = normalizar(modeloEquip);
+          if (!norm) return null;
+          let m = prazos.find(p => p.modelo_norm === norm);
+          if (m) return m;
+          const cand = prazos.filter(p => p.modelo_norm && p.modelo_norm.length >= 4 && (norm.includes(p.modelo_norm) || p.modelo_norm.includes(norm)));
+          if (!cand.length) return null;
+          cand.sort((a, b) => b.modelo_norm.length - a.modelo_norm.length);
+          return cand[0];
+        };
+        const pendentes = db.query("SELECT id, equip_modelo, created_at FROM validacoes_equipamento WHERE prazo_dias=0 OR prazo_dias IS NULL");
+        let corrigidos = 0, semMatch = 0;
+        const detalhes = [];
+        for (const v of pendentes) {
+          const p = buscar(v.equip_modelo);
+          if (!p) { semMatch++; continue; }
+          const d = new Date(v.created_at);
+          d.setDate(d.getDate() + Math.round(p.prazo_final));
+          const dataLimite = d.toISOString().slice(0, 10);
+          db.runBatch('UPDATE validacoes_equipamento SET prazo_dias=?, prazo_tolerancia=?, prazo_complexidade=?, data_limite=? WHERE id=?',
+            [p.prazo_final, p.tolerancia, p.complexidade, dataLimite, v.id]);
+          detalhes.push({ modelo: v.equip_modelo, prazoEncontrado: p.modelo, dias: p.prazo_final, dataLimite });
+          corrigidos++;
+        }
+        db.persist();
+        res.json({ ok: true, totalPendentes: pendentes.length, corrigidos, semMatch, detalhes });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim recalcular prazos lancados ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
