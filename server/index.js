@@ -661,6 +661,29 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim importar prazos validacao ──
 
+    // ── Diagnostico temporario: investigar por que uma validacao nao
+    //    calculou prazo/nao aparece na agenda. Rodar, ver, depois remover. ──
+    app.get('/api/admin/diag-prazos', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const totalPrazos = db.get('SELECT COUNT(*) as n FROM prazos_validacao')?.n || 0;
+        const amostraPrazos = db.query('SELECT marca, modelo, prazo_final FROM prazos_validacao ORDER BY modelo LIMIT 10');
+        const ultimasValidacoes = db.query('SELECT seq_num, equip_serie, equip_modelo, status, prazo_dias, prazo_complexidade, data_limite, tecnico_responsavel, created_at FROM validacoes_equipamento ORDER BY created_at DESC LIMIT 10');
+        res.json({
+          ok: true,
+          totalPrazosConfigurados: totalPrazos,
+          amostraDePrazos: amostraPrazos,
+          ultimasValidacoesLancadas: ultimasValidacoes.map(v => ({ ...v, data_limite_formatada: v.data_limite ? new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR') : '(vazio)' }))
+        });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim diag prazos ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
