@@ -253,6 +253,15 @@ async function init() {
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN fotos_recebimento TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE movimentacoes ADD COLUMN fotos_devolucao TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
 
+  // Equip. Quallyx SP — controle dos equipamentos da filial de SP (cadastro
+  // próprio, separado do catálogo principal de Equipamentos/Garantia),
+  // migrado do programa EquipQuallyx pra dentro do PartForge.
+  try { _db.run(`CREATE TABLE IF NOT EXISTS equip_quallyx_sp (
+    id TEXT PRIMARY KEY, nome TEXT NOT NULL, marca TEXT DEFAULT '', serie TEXT DEFAULT '',
+    status TEXT DEFAULT 'NOVO', obs TEXT DEFAULT '', imagem TEXT DEFAULT '',
+    created_at INTEGER DEFAULT 0, created_by TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
+  )`); } catch(e) { console.log('erro criando equip_quallyx_sp', e.message); }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;

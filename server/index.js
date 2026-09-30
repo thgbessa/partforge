@@ -337,6 +337,7 @@ app.listen(PORT, '0.0.0.0', () => {
           garantia_config:     db.query('SELECT * FROM garantia_config'),
           validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento'),
           prazos_validacao:    db.query('SELECT * FROM prazos_validacao'),
+          equip_quallyx_sp:    db.query('SELECT * FROM equip_quallyx_sp'),
           clientes:            db.query('SELECT * FROM clientes'),
           doadoras:            db.query('SELECT * FROM doadoras'),
           retiradas:           db.query('SELECT * FROM retiradas'),

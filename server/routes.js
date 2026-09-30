@@ -1021,6 +1021,80 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
   res.json({ ok: true, atualizados, criados, naoEncontrados });
 });
 
+// -- EQUIP. QUALLYX SP --
+const EQSP_STATUS = ['NOVO', 'USADO_FUNCIONANDO', 'USADO_AVALIAR', 'EM_REFORMA', 'DOADORA'];
+router.get('/equip-quallyx-sp', autenticar, (req, res) => {
+  const { status, q } = req.query;
+  let sql = 'SELECT * FROM equip_quallyx_sp WHERE 1=1'; const p = [];
+  if (status) { sql += ' AND status=?'; p.push(status); }
+  if (q) { sql += ' AND (nome LIKE ? OR marca LIKE ? OR serie LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  // A imagem (base64) fica de fora da listagem, só um booleano — o
+  // conteúdo é buscado sob demanda em /equip-quallyx-sp/:id/imagem.
+  res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(e => {
+    const { imagem, ...resto } = e;
+    return { ...resto, tem_imagem: !!imagem };
+  }));
+});
+router.get('/equip-quallyx-sp/:id/imagem', autenticar, (req, res) => {
+  const e = db.get('SELECT imagem FROM equip_quallyx_sp WHERE id=?', [req.params.id]);
+  if (!e) return res.status(404).json({ erro: 'Não encontrado' });
+  res.json({ imagem: e.imagem || '' });
+});
+router.post('/equip-quallyx-sp', autenticar, (req, res) => {
+  const e = req.body;
+  if (!e.nome) return res.status(400).json({ erro: 'Nome do equipamento obrigatório' });
+  const id = uid();
+  const status = EQSP_STATUS.includes(e.status) ? e.status : 'NOVO';
+  db.run(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    [id, e.nome, e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', now(), req.user.nome, now()]);
+  res.status(201).json({ id });
+});
+router.put('/equip-quallyx-sp/:id', autenticar, (req, res) => {
+  const e = req.body;
+  const status = EQSP_STATUS.includes(e.status) ? e.status : 'NOVO';
+  db.run(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,imagem=?,updated_at=? WHERE id=?`,
+    [e.nome || '', e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', now(), req.params.id]);
+  res.json({ ok: true });
+});
+router.delete('/equip-quallyx-sp/:id', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM equip_quallyx_sp WHERE id=?', [req.params.id]); res.json({ ok: true });
+});
+
+// Importação em lote (planilha). Casa por nome+série (se ambos baterem,
+// atualiza; senão cria novo). Célula vazia não apaga dado existente.
+const EQSP_STATUS_LABELS_IMPORT = {
+  'NOVO': 'NOVO',
+  'USADO FUNCIONANDO': 'USADO_FUNCIONANDO', 'USADO_FUNCIONANDO': 'USADO_FUNCIONANDO',
+  'USADO A AVALIAR': 'USADO_AVALIAR', 'USADO_AVALIAR': 'USADO_AVALIAR',
+  'EM REFORMA': 'EM_REFORMA', 'EM_REFORMA': 'EM_REFORMA',
+  'DOADORA DE PEÇAS': 'DOADORA', 'DOADORA DE PECAS': 'DOADORA', 'DOADORA': 'DOADORA',
+};
+router.post('/equip-quallyx-sp/importar', autenticar, isAdmin, (req, res) => {
+  const itens = Array.isArray(req.body.itens) ? req.body.itens : [];
+  const norm = s => String(s || '').trim().toUpperCase();
+  const existentes = db.query('SELECT * FROM equip_quallyx_sp');
+  let criados = 0, atualizados = 0;
+  for (const it of itens) {
+    if (!it.nome) continue;
+    const match = existentes.find(e => norm(e.nome) === norm(it.nome) && norm(e.serie) === norm(it.serie || ''));
+    const status = EQSP_STATUS_LABELS_IMPORT[norm(it.status)] || null;
+    if (match) {
+      db.runBatch(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,updated_at=? WHERE id=?`,
+        [it.nome, it.marca || match.marca, it.serie || match.serie, status || match.status, it.obs || match.obs, now(), match.id]);
+      atualizados++;
+    } else {
+      const id = uid();
+      db.runBatch(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        [id, it.nome, it.marca || '', it.serie || '', status || 'NOVO', it.obs || '', '', now(), req.user.nome, now()]);
+      criados++;
+      existentes.push({ id, nome: it.nome, serie: it.serie || '', marca: it.marca || '', status: status || 'NOVO', obs: it.obs || '' });
+    }
+  }
+  db.persist();
+  res.json({ ok: true, criados, atualizados });
+});
+
 // -- SOLICITACOES DE COMPRA --
 router.get('/solicitacoes-compra', autenticar, (req, res) => {
   const {status,q}=req.query; let sql='SELECT * FROM solicitacoes_compra WHERE 1=1'; const p=[];
@@ -1241,6 +1315,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     garantia_config: db.query('SELECT * FROM garantia_config'),
     validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos),fotos:P(v.fotos)})),
     prazos_validacao: db.query('SELECT * FROM prazos_validacao'),
+    equip_quallyx_sp: db.query('SELECT * FROM equip_quallyx_sp'),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -1385,6 +1460,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)
       db.runBatch(`INSERT OR REPLACE INTO prazos_validacao(id,marca,modelo,modelo_norm,complexidade,dias_reforma,dias_teste,dias_embalagem,prazo_final,tolerancia,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         [p.id||uid(), p.marca||'', p.modelo||'', normalizarModeloPrazo(p.modelo), p.complexidade||'', p.dias_reforma||0, p.dias_teste||0, p.dias_embalagem||0, p.prazo_final||0, p.tolerancia||0, p.updated_at||now()]);
+
+    if (s.equip_quallyx_sp?.length) for (const e of s.equip_quallyx_sp)
+      db.runBatch(`INSERT OR REPLACE INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        [e.id||uid(), e.nome||'', e.marca||'', e.serie||'', e.status||'NOVO', e.obs||'', e.imagem||'', e.created_at||now(), e.created_by||'restore', e.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

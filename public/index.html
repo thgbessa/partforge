@@ -49,6 +49,10 @@
           <span class="icon">⚙</span> Equipamentos
           <span class="nav-badge" id="badge-equip">0</span>
         </div>
+        <div class="nav-item" onclick="navigate('equip-quallyx-sp', this)">
+          <span class="icon">🏢</span> Equip. Quallyx SP
+          <span class="nav-badge" id="badge-equip-quallyx-sp">0</span>
+        </div>
         <div class="nav-item" onclick="navigate('kits-preventivas', this)">
           <span class="icon">🛠</span> Kit's Preventivas
           <span class="nav-badge" id="badge-kits-preventivas">0</span>
@@ -541,6 +545,19 @@
           </label>
         </div>
         <div class="table-wrap" id="validacao-assessoria-table"></div>
+      </div>
+
+      <!-- EQUIP. QUALLYX SP -->
+      <div class="page" id="page-equip-quallyx-sp">
+        <div class="search-bar">
+          <div class="search-input-wrap">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por nome, marca ou série..."
+              oninput="renderEquipQuallyxSP(this.value)">
+          </div>
+        </div>
+        <div id="eqsp-filtros" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>
+        <div id="eqsp-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px"></div>
       </div>
 
       <!-- MODAL KIT PREVENTIVA -->

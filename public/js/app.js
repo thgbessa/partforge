@@ -4403,6 +4403,209 @@ function verEventosValidacao(id) {
     </div>`;
 }
 
+// ============================================================
+//  EQUIP. QUALLYX SP — controle dos equipamentos da filial de SP
+// ============================================================
+const EQSP_STATUS_LABEL = {
+  NOVO:               { label: 'Novo',                badge: 'badge-green',  dot: 'var(--green)' },
+  USADO_FUNCIONANDO:  { label: 'Usado funcionando',    badge: 'badge-orange', dot: 'var(--accent)' },
+  USADO_AVALIAR:      { label: 'Usado a avaliar',      badge: 'badge-purple', dot: 'var(--purple)' },
+  EM_REFORMA:         { label: 'Em reforma',           badge: 'badge-blue',   dot: 'var(--blue)' },
+  DOADORA:            { label: 'Doadora de peças',     badge: 'badge-red',    dot: 'var(--red)' },
+};
+let _eqspFiltroStatus = '';
+
+async function loadAndRenderEquipQuallyxSP(q = '') {
+  setSyncing(true);
+  try {
+    db.equipQuallyxSP = await API.get('/equip-quallyx-sp' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    renderEquipQuallyxSP(q);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    setSyncing(false);
+  }
+}
+
+function renderEquipQuallyxSP(q) {
+  if (q === undefined) q = document.querySelector('#page-equip-quallyx-sp .search-input')?.value || '';
+  const todos = db.equipQuallyxSP || [];
+  const badgeNav = document.getElementById('badge-equip-quallyx-sp');
+  if (badgeNav) badgeNav.textContent = todos.length || '';
+
+  // Filtros por status, com contagem (sempre a partir da lista completa,
+  // só é precisa quando não há busca ativa — mesmo padrão usado em outras
+  // telas com contagem no filtro).
+  const filtrosEl = document.getElementById('eqsp-filtros');
+  if (filtrosEl) {
+    const contagens = {};
+    Object.keys(EQSP_STATUS_LABEL).forEach(k => contagens[k] = 0);
+    todos.forEach(e => { if (contagens[e.status] !== undefined) contagens[e.status]++; });
+    const pill = (valor, label, dot, count) => `
+      <button onclick="_eqspFiltroStatus='${valor}';renderEquipQuallyxSP()"
+        style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;font-size:12px;cursor:pointer;
+        background:${_eqspFiltroStatus === valor ? 'var(--surface2)' : 'transparent'};
+        border:1px solid ${_eqspFiltroStatus === valor ? 'var(--accent)' : 'var(--border2)'};
+        color:${_eqspFiltroStatus === valor ? 'var(--text)' : 'var(--text2)'};font-weight:${_eqspFiltroStatus === valor ? '700' : '400'}">
+        ${dot ? `<span style="color:${dot}">●</span>` : ''} ${label} <span style="color:var(--text3)">(${count})</span>
+      </button>`;
+    filtrosEl.innerHTML = pill('', 'Todos', null, todos.length) +
+      Object.entries(EQSP_STATUS_LABEL).map(([k, v]) => pill(k, v.label, v.dot, contagens[k])).join('');
+  }
+
+  let lista = todos;
+  if (_eqspFiltroStatus) lista = lista.filter(e => e.status === _eqspFiltroStatus);
+  lista = [...lista].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+
+  const grid = document.getElementById('eqsp-grid');
+  if (!grid) return;
+  if (!lista.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🏢</div>
+      <div class="empty-title">Nenhum equipamento encontrado</div>
+      <div class="empty-sub">Clique em "+ Adicionar" pra cadastrar o primeiro</div></div>`;
+    return;
+  }
+  grid.innerHTML = lista.map(e => {
+    const st = EQSP_STATUS_LABEL[e.status] || {};
+    return `<div onclick="abrirModalEquipQuallyxSP('${e.id}')"
+      style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+      <div style="width:100%;height:90px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;overflow:hidden">
+        ${e.tem_imagem ? `<img id="eqsp-thumb-${e.id}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:32px;opacity:0.3">🔬</span>'}
+      </div>
+      <div style="font-weight:700;font-size:13px;line-height:1.3;margin-bottom:4px">${e.nome}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${[e.marca, e.serie].filter(Boolean).join(' · ') || '—'}</div>
+      <span class="badge ${st.badge || 'badge-gray'}" style="font-size:10px">${st.label || e.status}</span>
+    </div>`;
+  }).join('');
+
+  // Carrega as miniaturas sob demanda (só quem tem imagem), sem travar a
+  // renderização do grid.
+  lista.filter(e => e.tem_imagem).forEach(e => {
+    API.get('/equip-quallyx-sp/' + e.id + '/imagem').then(r => {
+      const img = document.getElementById('eqsp-thumb-' + e.id);
+      if (img && r.imagem) img.src = r.imagem;
+    }).catch(() => {});
+  });
+}
+
+let _eqspImagemAtual = '';
+function abrirModalEquipQuallyxSP(id) {
+  const e = id ? (db.equipQuallyxSP || []).find(x => x.id === id) : null;
+  _eqspImagemAtual = '';
+
+  let overlay = document.getElementById('modal-eqsp-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-eqsp-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">${e ? 'Editar' : 'Novo'} Equipamento</span>
+        <button onclick="document.getElementById('modal-eqsp-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div class="form-group">
+          <label class="form-label">Nome do Equipamento</label>
+          <input class="form-input" id="eqsp-nome" value="${e?.nome || ''}" placeholder="Ex.: ANALISADOR GASOMETRIA RAPID POINT 500E">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label class="form-label">Marca</label>
+            <input class="form-input" id="eqsp-marca" value="${e?.marca || ''}">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Série</label>
+            <input class="form-input" id="eqsp-serie" value="${e?.serie || ''}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-select" id="eqsp-status">
+            ${Object.entries(EQSP_STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${e?.status === k ? 'selected' : ''}>${v.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observação</label>
+          <textarea class="form-textarea" id="eqsp-obs" style="min-height:60px">${e?.obs || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Foto</label>
+          <div id="eqsp-imagem-preview" style="margin-bottom:8px"></div>
+          <input type="file" accept="image/*" id="eqsp-imagem-input" onchange="selecionarImagemEqsp(this)">
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px">
+        ${e ? `<button class="btn btn-danger" onclick="excluirEquipQuallyxSP('${id}')">✕ Excluir</button>` : '<span></span>'}
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="document.getElementById('modal-eqsp-overlay').remove()">Cancelar</button>
+          <button class="btn btn-primary" onclick="salvarEquipQuallyxSP('${id || ''}')">✓ Salvar</button>
+        </div>
+      </div>
+    </div>`;
+
+  if (e?.tem_imagem) {
+    API.get('/equip-quallyx-sp/' + id + '/imagem').then(r => {
+      _eqspImagemAtual = r.imagem || '';
+      renderPreviewImagemEqsp();
+    }).catch(() => {});
+  }
+}
+
+function renderPreviewImagemEqsp() {
+  const el = document.getElementById('eqsp-imagem-preview');
+  if (!el) return;
+  el.innerHTML = _eqspImagemAtual
+    ? `<div style="position:relative;display:inline-block"><img src="${_eqspImagemAtual}" style="width:100px;height:100px;object-fit:cover;border-radius:6px;border:1px solid var(--border2)">
+       <button onclick="_eqspImagemAtual='';renderPreviewImagemEqsp()" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px">✕</button></div>`
+    : '';
+}
+
+function selecionarImagemEqsp(inputEl) {
+  const file = inputEl.files?.[0];
+  if (!file) return;
+  comprimirImagem(file, 800, 0.75).then(dataUrl => {
+    _eqspImagemAtual = dataUrl;
+    renderPreviewImagemEqsp();
+  }).catch(() => toast('Erro ao processar imagem', 'error'));
+  inputEl.value = '';
+}
+
+function salvarEquipQuallyxSP(id) {
+  const nome = document.getElementById('eqsp-nome')?.value.trim() || '';
+  if (!nome) { toast('Informe o nome do equipamento', 'error'); return; }
+  const payload = {
+    nome,
+    marca: document.getElementById('eqsp-marca')?.value.trim() || '',
+    serie: document.getElementById('eqsp-serie')?.value.trim() || '',
+    status: document.getElementById('eqsp-status')?.value || 'NOVO',
+    obs: document.getElementById('eqsp-obs')?.value.trim() || '',
+    imagem: _eqspImagemAtual,
+  };
+  const prom = id ? API.put('/equip-quallyx-sp/' + id, payload) : API.post('/equip-quallyx-sp', payload);
+  prom.then(() => {
+    toast(id ? 'Atualizado' : 'Equipamento cadastrado', 'success');
+    document.getElementById('modal-eqsp-overlay')?.remove();
+    loadAndRenderEquipQuallyxSP();
+  }).catch(err => toast(err.message, 'error'));
+}
+
+function excluirEquipQuallyxSP(id) {
+  if (!confirm('Excluir este equipamento?')) return;
+  API.delete('/equip-quallyx-sp/' + id)
+    .then(() => {
+      toast('Excluído', 'info');
+      document.getElementById('modal-eqsp-overlay')?.remove();
+      loadAndRenderEquipQuallyxSP();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 async function loadAndRenderKitsPreventivas(q = '') {
   setSyncing(true);
   try {
@@ -7885,6 +8088,27 @@ function exportarExcel(aba) {
     XLSX.utils.book_append_sheet(wb, ws, etapa === 'repair' ? 'Validação Repair' : 'Validação Assessoria');
     XLSX.writeFile(wb, 'partforge_validacao_' + etapa + '.xlsx');
     toast('Validação exportada: ' + lista.length + ' equipamentos');
+
+  } else if (aba === 'equip-quallyx-sp') {
+    const q = (document.querySelector('#page-equip-quallyx-sp .search-input')?.value || '').toLowerCase().trim();
+    let lista = db.equipQuallyxSP || [];
+    if (_eqspFiltroStatus) lista = lista.filter(function(e) { return e.status === _eqspFiltroStatus; });
+    if (q) lista = lista.filter(function(e) {
+      return String(e.nome || '').toLowerCase().includes(q) || String(e.marca || '').toLowerCase().includes(q) || String(e.serie || '').toLowerCase().includes(q);
+    });
+    const heads = ['Nome', 'Marca', 'Série', 'Status', 'Observação', 'Cadastrado em'];
+    const rows = [heads, ...lista.map(function(e) {
+      return [
+        e.nome || '', e.marca || '', e.serie || '',
+        (EQSP_STATUS_LABEL[e.status] || {}).label || e.status,
+        e.obs || '',
+        e.created_at ? new Date(e.created_at).toLocaleDateString('pt-BR') : ''
+      ];
+    })];
+    const ws = buildSheet(rows, heads);
+    XLSX.utils.book_append_sheet(wb, ws, 'Equip. Quallyx SP');
+    XLSX.writeFile(wb, 'partforge_equip_quallyx_sp.xlsx');
+    toast('Equipamentos exportados: ' + lista.length);
   }
 }
 
@@ -7974,6 +8198,12 @@ function importarExcel(aba) {
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
           if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
           importarValidacao(rows);
+        } else if (aba === 'equip-quallyx-sp') {
+          sheetName = wb.SheetNames.find(n => n.toLowerCase().includes('quallyx') || n.toLowerCase().includes('equip')) || wb.SheetNames[0];
+          ws = wb.Sheets[sheetName];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+          if (rows.length < 2) { toast('Arquivo sem dados', 'error'); return; }
+          importarEquipQuallyxSP(rows);
         }
 
       } catch(err) {
@@ -8114,6 +8344,40 @@ function importarValidacao(rows) {
       toast(msg, 'success');
       loadAndRenderValidacao('repair');
       loadAndRenderValidacao('assessoria');
+    })
+    .catch(function(err) { toast(err.message, 'error'); })
+    .finally(function() { setSyncing(false); });
+}
+
+function importarEquipQuallyxSP(rows) {
+  const norm = function(s) { return String(s == null ? '' : s).trim().toLowerCase(); };
+  const idx = {};
+  rows[0].forEach(function(h, i) {
+    const hn = norm(h);
+    if (hn === 'nome') idx.nome = i;
+    else if (hn === 'marca') idx.marca = i;
+    else if (['série', 'serie'].includes(hn)) idx.serie = i;
+    else if (hn === 'status') idx.status = i;
+    else if (hn === 'observação' || hn === 'observacao') idx.obs = i;
+  });
+  if (idx.nome === undefined) { toast('Coluna "Nome" não encontrada', 'error'); return; }
+
+  const itens = rows.slice(1).map(function(r) {
+    return {
+      nome: String(r[idx.nome] || '').trim(),
+      marca: idx.marca !== undefined ? String(r[idx.marca] || '').trim() : '',
+      serie: idx.serie !== undefined ? String(r[idx.serie] || '').trim() : '',
+      status: idx.status !== undefined ? String(r[idx.status] || '').trim() : '',
+      obs: idx.obs !== undefined ? String(r[idx.obs] || '').trim() : '',
+    };
+  }).filter(function(it) { return it.nome; });
+  if (!itens.length) { toast('Nenhuma linha com Nome encontrada', 'error'); return; }
+
+  setSyncing(true);
+  API.post('/equip-quallyx-sp/importar', { itens: itens })
+    .then(function(res) {
+      toast('Importado: ' + res.criados + ' criados, ' + res.atualizados + ' atualizados', 'success');
+      loadAndRenderEquipQuallyxSP();
     })
     .catch(function(err) { toast(err.message, 'error'); })
     .finally(function() { setSyncing(false); });
@@ -8722,6 +8986,7 @@ function navigate(page, el) {
     dashboard:    ['Dashboard',    '/ visão geral'],
     pecas:        ['Peças',        '/ cadastro'],
     equipamentos: ['Equipamentos', '/ cadastro'],
+    'equip-quallyx-sp': ['Equip. Quallyx SP', '/ equipamentos da filial de São Paulo'],
     'kits-preventivas': ["Kit's Preventivas", '/ itens, valores e fornecedor'],
     garantia:     ['Garantia',     '/ equipamentos próprios, por fabricante'],
     'validacao-repair':     ['Validação Repair',     '/ equipamentos em processo no Repair'],
@@ -8821,6 +9086,13 @@ function navigate(page, el) {
       <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('validacao-assessoria')">⬇ Exportar Excel</button>`;
     loadAndRenderValidacao('assessoria');
+  } else if (page === 'equip-quallyx-sp') {
+    _eqspFiltroStatus = '';
+    if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-import" onclick="importarExcel('equip-quallyx-sp')">⬆ Importar Excel</button>
+      <button class="btn btn-excel" onclick="exportarExcel('equip-quallyx-sp')">⬇ Exportar Excel</button>
+      <button class="btn btn-primary" onclick="abrirModalEquipQuallyxSP()">⊕ Adicionar</button>`;
+    loadAndRenderEquipQuallyxSP();
   } else if (page === 'usuarios') {
     if (!podeAcessar('admin')) { toast('Acesso restrito', 'error'); return; }
     if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-primary" onclick="abrirModalUsuario()">⊕ Novo Usuário</button>`;
