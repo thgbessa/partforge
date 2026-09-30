@@ -1333,6 +1333,7 @@ function abrirActionModal(id, acao) {
   const sol = itensLote[0];
   if (!sol) return;
   actionModalTarget = itensLote.length > 1 ? ids : id;
+  _despachoFotos = [];
 
   const el     = document.getElementById('action-modal');
   const title  = document.getElementById('action-modal-title');
@@ -1421,6 +1422,12 @@ function abrirActionModal(id, acao) {
         <div class="form-group">
           <label class="form-label">Observação</label>
           <input class="form-input" id="am-obs" placeholder="Informações adicionais">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">📷 Fotos do que está sendo enviado</label>
+          <div id="despacho-fotos-lista" style="margin-bottom:8px"><div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma foto anexada</div></div>
+          <input type="file" accept="image/*" multiple id="despacho-fotos-input" onchange="selecionarFotosDespacho(this)">
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Até 5 fotos, redimensionadas automaticamente${ids.length > 1 ? ' · valem para todos os itens deste lote' : ''}</div>
         </div>
       </div>`;
     footer.innerHTML = `
@@ -1696,6 +1703,7 @@ function executarAcao(acao) {
     body.rastreio          = document.getElementById('am-rastreio')?.value.trim() || '';
     body.previsao_entrega  = document.getElementById('am-previsao')?.value || '';
     body.valor_frete       = parseFloat(document.getElementById('am-frete')?.value) || 0;
+    body.fotos_despacho    = _despachoFotos;
     if (!body.transporte) { toast('Informe o meio de transporte', 'error'); return; }
   }
   if (acao === 'RECEBER') {
@@ -2589,6 +2597,7 @@ function montarCardMov(m) {
       </div>` : ''}
       ${m.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${m.tecnico}${m.emailTecnico?` · <span style="font-family:var(--mono)">${m.emailTecnico}</span>`:''}</div>` : ''}
       ${despachoInfo}${recInfo}${nfInfo}
+      ${((m.fotosDespachoQtd||0)+(m.fotosRecebimentoQtd||0)+(m.fotosDevolucaoQtd||0)) > 0 ? `<div style="margin-top:4px"><button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px" onclick="verFotosMovimentacao('${m.id}')">📷 ${(m.fotosDespachoQtd||0)+(m.fotosRecebimentoQtd||0)+(m.fotosDevolucaoQtd||0)} foto${((m.fotosDespachoQtd||0)+(m.fotosRecebimentoQtd||0)+(m.fotosDevolucaoQtd||0))>1?'s':''}</button></div>` : ''}
       ${m.tipoAlocacao && m.tipoAlocacao !== 'RETORNO' ? `<div style="font-size:11px;color:var(--green);margin-top:3px">✓ ${m.tipoAlocacao}${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
       ${m.tipoAlocacao === 'RETORNO' ? `<div style="font-size:11px;color:var(--red);margin-top:3px">↩ Retorno de peça defeituosa${m.osNum ? ` · OS: <span style="font-family:var(--mono)">${m.osNum}</span>` : ''}</div>` : ''}
       ${m.numSeqRetorno ? `<div style="font-size:11px;color:var(--red);margin-top:2px">Retorno gerado: <strong style="font-family:var(--mono)">${m.numSeqRetorno}</strong></div>` : ''}
@@ -2699,6 +2708,7 @@ function montarCardGrupo(itensDoGrupo) {
           ${equipCol}
           <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
           <td style="text-align:right;white-space:nowrap">
+            ${((it.fotosDespachoQtd||0)+(it.fotosRecebimentoQtd||0)+(it.fotosDevolucaoQtd||0)) > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosMovimentacao('${it.id}')" style="font-size:9px" title="Ver fotos">📷</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarSolicitacao('${it.id}')" style="font-size:9px" title="Editar este item">✎</button>
             <button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button>
           </td>
@@ -3675,7 +3685,8 @@ function renderValidacao(etapa, q) {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
         const dataEntrada = v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—';
         const concluido = v.status === 'CONCLUIDO';
-        let acoes = `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
+        let acoes = (v.fotos_qtd > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosValidacao('${v.id}')" title="Ver fotos (${v.fotos_qtd})">📷</button>` : '') +
+          `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
         if (!concluido) {
           acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalValidacao('${v.id}')" title="Editar">✎</button>`;
           if (v.status === 'ASSESSORIA') {
@@ -3715,9 +3726,158 @@ function renderValidacao(etapa, q) {
 
 // ── Modal Novo/Editar equipamento em validação ──
 let _validacaoEquipSel = null;
+// ── Helpers genéricos de foto (compressão client-side + thumbnails + lightbox) ──
+// Usados em Validação, Despacho, e reaproveitados nas ideias do mobile.
+// Redimensiona pra no máximo maxDim px no maior lado e comprime em JPEG,
+// pra não pesar o banco (que guarda tudo em base64).
+function comprimirImagem(file, maxDim = 1280, qualidade = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', qualidade));
+      };
+      img.onerror = () => reject(new Error('Não foi possível ler a imagem'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function adicionarFotosEm(fileInput, arr, aoTerminar, maxFotos = 5) {
+  const files = Array.from(fileInput.files || []);
+  let algumErro = false;
+  for (const file of files) {
+    if (arr.length >= maxFotos) { toast('Máximo de ' + maxFotos + ' fotos', 'error'); break; }
+    if (!file.type.startsWith('image/')) continue;
+    try {
+      const dataUrl = await comprimirImagem(file);
+      arr.push({ nome: file.name, dados: dataUrl });
+    } catch (e) { algumErro = true; }
+  }
+  if (algumErro) toast('Não foi possível processar uma das imagens', 'error');
+  fileInput.value = '';
+  aoTerminar();
+}
+
+function renderFotosThumbs(containerId, arr, nomeFuncaoRemover) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!arr.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma foto anexada</div>'; return; }
+  el.innerHTML = arr.map((f, i) =>
+    `<div style="position:relative;display:inline-block;margin:0 6px 6px 0">
+      <img src="${f.dados}" onclick="abrirLightboxFoto('${(f.dados || '').replace(/'/g, "\\'")}')"
+        style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border2);cursor:pointer">
+      <button onclick="${nomeFuncaoRemover}(${i})"
+        style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:1">✕</button>
+    </div>`
+  ).join('');
+}
+
+function renderFotosThumbsReadOnly(fotos) {
+  if (!fotos || !fotos.length) return '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma foto</div>';
+  return fotos.map(f =>
+    `<img src="${f.dados}" onclick="abrirLightboxFoto('${(f.dados || '').replace(/'/g, "\\'")}')"
+      style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border2);cursor:pointer;margin:0 6px 6px 0">`
+  ).join('');
+}
+
+function verFotosMovimentacao(id) {
+  let overlay = document.getElementById('modal-fotos-mov-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-fotos-mov-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:520px;width:100%;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">📷 Registro Fotográfico</span>
+        <button onclick="document.getElementById('modal-fotos-mov-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px" id="modal-fotos-mov-body">
+        <div style="text-align:center;color:var(--text3);font-size:12px">Carregando...</div>
+      </div>
+    </div>`;
+
+  API.get('/movimentacoes/' + id + '/fotos').then(r => {
+    const body = document.getElementById('modal-fotos-mov-body');
+    if (!body) return;
+    const secoes = [
+      ['Despacho', r.fotos_despacho],
+      ['Recebimento', r.fotos_recebimento],
+      ['Devolução', r.fotos_devolucao],
+    ].filter(([, fotos]) => fotos && fotos.length);
+    if (!secoes.length) { body.innerHTML = '<div style="color:var(--text3);font-size:12px">Nenhuma foto registrada</div>'; return; }
+    body.innerHTML = secoes.map(([titulo, fotos]) => `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px">${titulo.toUpperCase()} (${fotos.length})</div>
+        <div>${renderFotosThumbsReadOnly(fotos)}</div>
+      </div>`).join('');
+  }).catch(err => {
+    const body = document.getElementById('modal-fotos-mov-body');
+    if (body) body.innerHTML = '<div style="color:var(--red);font-size:12px">Erro ao carregar fotos</div>';
+  });
+}
+
+function abrirLightboxFoto(dataUrl) {
+  let overlay = document.getElementById('lightbox-foto-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'lightbox-foto-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<img src="${dataUrl}" style="max-width:100%;max-height:90vh;border-radius:8px">`;
+}
+
+// ── Fotos do despacho (modal de ação Despachar) ──
+let _despachoFotos = [];
+function selecionarFotosDespacho(inputEl) {
+  adicionarFotosEm(inputEl, _despachoFotos, () => renderFotosThumbs('despacho-fotos-lista', _despachoFotos, 'removerFotoDespacho'));
+}
+function removerFotoDespacho(i) {
+  _despachoFotos.splice(i, 1);
+  renderFotosThumbs('despacho-fotos-lista', _despachoFotos, 'removerFotoDespacho');
+}
+
+// ── Fotos do equipamento em Validação (Repair/Assessoria) ──
+let _validacaoFotos = [];
+let _validacaoFotosCarregadas = true;
+function selecionarFotosValidacao(inputEl) {
+  adicionarFotosEm(inputEl, _validacaoFotos, () => renderFotosThumbs('validacao-fotos-lista', _validacaoFotos, 'removerFotoValidacao'));
+}
+function removerFotoValidacao(i) {
+  _validacaoFotos.splice(i, 1);
+  renderFotosThumbs('validacao-fotos-lista', _validacaoFotos, 'removerFotoValidacao');
+}
+
 function abrirModalValidacao(id) {
   const v = id ? (db.validacoes || []).find(x => x.id === id) : null;
   _validacaoEquipSel = v ? { id: v.equip_id || '', serie: v.equip_serie || '', modelo: v.equip_modelo || '', cliente: v.equip_cliente || '' } : null;
+  _validacaoFotos = [];
+  _validacaoFotosCarregadas = !(v && v.fotos_qtd > 0);
+  if (v && v.fotos_qtd > 0) {
+    API.get('/validacoes/' + id + '/fotos').then(r => {
+      _validacaoFotos = r.fotos || [];
+      _validacaoFotosCarregadas = true;
+      renderFotosThumbs('validacao-fotos-lista', _validacaoFotos, 'removerFotoValidacao');
+    }).catch(() => { _validacaoFotosCarregadas = true; });
+  }
 
   let overlay = document.getElementById('modal-validacao-overlay');
   if (!overlay) {
@@ -3794,6 +3954,13 @@ function abrirModalValidacao(id) {
             </div>
           </div>
         </div>
+
+        <div style="margin:16px 0 4px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">📷 FOTOS DO EQUIPAMENTO</div>
+          <div id="validacao-fotos-lista" style="margin-bottom:8px">${_validacaoFotos.length ? '' : '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma foto anexada</div>'}</div>
+          <input type="file" accept="image/*" multiple id="validacao-fotos-input" onchange="selecionarFotosValidacao(this)">
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Até 5 fotos, redimensionadas automaticamente</div>
+        </div>
       </div>
       <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
         <button class="btn btn-ghost" onclick="document.getElementById('modal-validacao-overlay').remove()">Cancelar</button>
@@ -3831,6 +3998,7 @@ function selecionarEquipValidacao(id, serie, modelo, cliente) {
 }
 
 function salvarValidacao(id) {
+  if (!_validacaoFotosCarregadas) { toast('Aguarde o carregamento das fotos e tente salvar novamente', 'error'); return; }
   const serie = document.getElementById('validacao-equip-search')?.value.trim() || '';
   const modelo = document.getElementById('validacao-modelo')?.value.trim() || '';
   const cliente = document.getElementById('validacao-cliente')?.value.trim() || '';
@@ -3845,6 +4013,7 @@ function salvarValidacao(id) {
     produto_solicitado: document.getElementById('validacao-produto-solicitado')?.value.trim() || '',
     data_solicitacao_produto: document.getElementById('validacao-data-solic-produto')?.value || '',
     data_entrega_produto: document.getElementById('validacao-data-entrega-produto')?.value || '',
+    fotos: _validacaoFotos,
   };
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
   prom.then(() => {
@@ -3909,6 +4078,35 @@ function excluirValidacao(id) {
   API.delete('/validacoes/' + id)
     .then(() => { toast('Excluído', 'info'); loadAndRenderValidacao('repair'); loadAndRenderValidacao('assessoria'); })
     .catch(err => toast(err.message, 'error'));
+}
+
+function verFotosValidacao(id) {
+  let overlay = document.getElementById('modal-fotos-mov-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-fotos-mov-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:520px;width:100%;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">📷 Fotos do Equipamento</span>
+        <button onclick="document.getElementById('modal-fotos-mov-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px" id="modal-fotos-mov-body">
+        <div style="text-align:center;color:var(--text3);font-size:12px">Carregando...</div>
+      </div>
+    </div>`;
+  API.get('/validacoes/' + id + '/fotos').then(r => {
+    const body = document.getElementById('modal-fotos-mov-body');
+    if (body) body.innerHTML = renderFotosThumbsReadOnly(r.fotos);
+  }).catch(() => {
+    const body = document.getElementById('modal-fotos-mov-body');
+    if (body) body.innerHTML = '<div style="color:var(--red);font-size:12px">Erro ao carregar fotos</div>';
+  });
 }
 
 function verEventosValidacao(id) {
@@ -7246,15 +7444,19 @@ function exportarExcel(aba) {
 
   } else if (aba === 'historico') {
     const heads = [
-      'Data','Peça Cód','Peça Desc','Valor Peça','Qtd',
+      'Data','Tipo','Status','Peça Cód','Peça Desc','Valor Peça','Qtd',
       'Equipamento','Nº Série','Cliente','Técnico','OS',
-      'Transporte','Valor','Rastreio','Obs'
+      'Transporte','Valor','Rastreio','Obs',
+      'Fotos Despacho','Fotos Recebimento','Fotos Devolução'
     ];
 
     const rows = [heads, ...db.movimentacoes.map(m => {
       const dataEvt = m.eventos?.[0]?.data ? new Date(m.eventos[0].data).toLocaleString('pt-BR') : '';
+      const statusLbl = (PIPELINE_STATUS[m.status] || {}).label || m.status || '';
       return [
         dataEvt,
+        m.tipoAlocacao === 'RETORNO' ? 'Devolução' : 'Envio',
+        statusLbl,
         m.pecaCodigo || '',
         m.pecaNome   || '',
         parseFloat(m.peca_custo || 0),
@@ -7268,6 +7470,9 @@ function exportarExcel(aba) {
         parseFloat(m.valor_frete || 0),
         m.rastreio   || '',
         m.obs        || '',
+        m.fotosDespachoQtd || 0,
+        m.fotosRecebimentoQtd || 0,
+        m.fotosDevolucaoQtd || 0,
       ];
     })];
 

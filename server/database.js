@@ -219,6 +219,14 @@ async function init() {
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN produto_solicitado TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_solicitacao_produto TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_entrega_produto TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN fotos TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
+
+  // Registro fotográfico das peças: no despacho (desktop), no recebimento e
+  // na devolução (mobile, pelo técnico) — cada coluna guarda um array JSON
+  // de {nome, dados (base64)}.
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN fotos_despacho TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN fotos_recebimento TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN fotos_devolucao TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');

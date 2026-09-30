@@ -80,13 +80,50 @@
         </label>
       </div>
     </div>
+    <div class="form-section">
+      <div class="form-section-title">📷 Foto da Peça Recebida (opcional)</div>
+      <div id="receb-fotos-lista" style="margin-bottom:8px"></div>
+      <input type="file" accept="image/*" capture="environment" multiple id="receb-fotos-input" onchange="selecionarFotosRecebimento(this)" style="font-size:12px">
+      <div style="font-size:10px;color:var(--text-secondary,#888);margin-top:4px">Até 5 fotos</div>
+    </div>
     <div id="conf-devolucao-section" class="form-section" style="display:none">
       <div class="form-section-title" style="color:var(--red)">⚠ Devolução de Peça</div>
       <div class="form-row"><label class="form-label">Motivo da devolução *</label><textarea id="conf-motivo" class="form-input" placeholder="Descreva o defeito ou motivo da devolução..." rows="3"></textarea></div>
+      <div class="form-row">
+        <label class="form-label">📷 Foto do defeito *</label>
+        <div id="devolucao-fotos-lista" style="margin-bottom:8px"></div>
+        <input type="file" accept="image/*" capture="environment" multiple id="devolucao-fotos-input" onchange="selecionarFotosDevolucao(this)" style="font-size:12px">
+        <div style="font-size:10px;color:var(--text-secondary,#888);margin-top:4px">Pelo menos 1 foto, até 5</div>
+      </div>
     </div>
   </div>
   <div class="bottom-bar">
     <button class="btn-primary" id="btn-confirmar-receb" onclick="confirmarRecebimento()" style="background:var(--green)">✓ Confirmar Recebimento</button>
+  </div>
+</div>
+
+<div id="screen-despachar-devolucao" class="screen">
+  <div class="topbar"><button class="btn-back" onclick="goBack()">‹</button><div><div class="topbar-title">Despachar Devolução</div><div class="topbar-sub">PEÇA COM DEFEITO</div></div></div>
+  <div class="scroll-body">
+    <div class="form-section">
+      <div class="form-section-title">Peça a Devolver</div>
+      <div id="devd-peca-info" class="selected-peca" style="display:block">
+        <div class="selected-peca-codigo" id="devd-peca-codigo"></div>
+        <div class="selected-peca-nome" id="devd-peca-nome"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <div class="form-section-title">📷 Foto da Peça / Embalagem *</div>
+      <div id="devd-fotos-lista" style="margin-bottom:8px"></div>
+      <input type="file" accept="image/*" capture="environment" multiple id="devd-fotos-input" onchange="selecionarFotosDespachoDevolucao(this)" style="font-size:12px">
+      <div style="font-size:10px;color:var(--text-secondary,#888);margin-top:4px">Pelo menos 1 foto, até 5 — registra exatamente o que está sendo enviado de volta</div>
+    </div>
+    <div class="form-section">
+      <div class="form-row"><label class="form-label">Observação (opcional)</label><textarea id="devd-obs" class="form-input" placeholder="Informações adicionais sobre o envio..." rows="3"></textarea></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn-primary" id="btn-confirmar-devd" onclick="confirmarDespachoDevolucao()" style="background:var(--red)">↩ Confirmar Despacho da Devolução</button>
   </div>
 </div>
 

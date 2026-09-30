@@ -748,12 +748,83 @@ async function abrirMinhasSolicitacoes() {
           (m.tipo_alocacao==='RETORNO'?'<div style="font-size:11px;color:var(--red);font-weight:600">↩ DEVOLUÇÃO SOLICITADA</div>':'') +(m.transportadora ? '<div style="font-size:11px;color:var(--text3)">📦 ' + m.transportadora + (m.rastreio ? ' · ' + m.rastreio : '') + '</div>' : '') +
           (m.dataRecebimento ? '<div style="font-size:11px;color:#1abc9c">✓ Recebido: ' + m.dataRecebimento + '</div>' : '') +
         '</div>' +
-        (podeConfirmar ? '<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px" onclick="abrirConfirmarRecebimento(\'' + m.id + '\')">✓ Recebi</button></div>' : '') +(m.tipo_alocacao==='RETORNO'&&m.status==='SOLICITADA'?'<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px;background:var(--red)" onclick="despacharRetorno(\'' + m.id + '\')" >↩ Despachar Devolução</button></div>':'')+
+        (podeConfirmar ? '<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px" onclick="abrirConfirmarRecebimento(\'' + m.id + '\')">✓ Recebi</button></div>' : '') +(m.tipo_alocacao==='RETORNO'&&m.status==='SOLICITADA'?'<div style="flex-shrink:0"><button class="btn-primary" style="font-size:12px;padding:8px 12px;background:var(--red)" onclick="abrirDespacharDevolucao(\'' + m.id + '\')" >↩ Despachar Devolução</button></div>':'')+
       '</div>';
     }).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty"><span class="empty-icon">⚠</span>Erro ao carregar</div>';
   }
+}
+
+// ── Fotos (compressão client-side, pra não pesar o banco) ──
+function comprimirImagem(file, maxDim, qualidade) {
+  maxDim = maxDim || 1280; qualidade = qualidade || 0.72;
+  return new Promise(function(resolve, reject) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        let width = img.width, height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', qualidade));
+      };
+      img.onerror = function() { reject(new Error('Não foi possível ler a imagem')); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { reject(new Error('Não foi possível ler o arquivo')); };
+    reader.readAsDataURL(file);
+  });
+}
+async function adicionarFotosMobile(inputEl, arr, aoTerminar, maxFotos) {
+  maxFotos = maxFotos || 5;
+  const files = Array.prototype.slice.call(inputEl.files || []);
+  let algumErro = false;
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (arr.length >= maxFotos) { toast('Máximo de ' + maxFotos + ' fotos', 'error'); break; }
+    if (!file.type || file.type.indexOf('image/') !== 0) continue;
+    try {
+      const dataUrl = await comprimirImagem(file);
+      arr.push({ nome: file.name, dados: dataUrl });
+    } catch (e) { algumErro = true; }
+  }
+  if (algumErro) toast('Não foi possível processar uma das imagens', 'error');
+  inputEl.value = '';
+  aoTerminar();
+}
+function renderFotosMobile(containerId, arr, nomeFuncaoRemover) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!arr.length) { el.innerHTML = ''; return; }
+  el.innerHTML = arr.map(function(f, i) {
+    return '<div style="position:relative;display:inline-block;margin:0 6px 6px 0">' +
+      '<img src="' + f.dados + '" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--border,#333)">' +
+      '<button onclick="' + nomeFuncaoRemover + '(' + i + ')" style="position:absolute;top:-6px;right:-6px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:10px;line-height:1">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+let _recebFotos = [];
+let _devolucaoFotos = [];
+function selecionarFotosRecebimento(inputEl) {
+  adicionarFotosMobile(inputEl, _recebFotos, function() { renderFotosMobile('receb-fotos-lista', _recebFotos, 'removerFotoRecebimento'); });
+}
+function removerFotoRecebimento(i) {
+  _recebFotos.splice(i, 1);
+  renderFotosMobile('receb-fotos-lista', _recebFotos, 'removerFotoRecebimento');
+}
+function selecionarFotosDevolucao(inputEl) {
+  adicionarFotosMobile(inputEl, _devolucaoFotos, function() { renderFotosMobile('devolucao-fotos-lista', _devolucaoFotos, 'removerFotoDevolucao'); });
+}
+function removerFotoDevolucao(i) {
+  _devolucaoFotos.splice(i, 1);
+  renderFotosMobile('devolucao-fotos-lista', _devolucaoFotos, 'removerFotoDevolucao');
 }
 
 function abrirConfirmarRecebimento(id) {
@@ -762,6 +833,9 @@ function abrirConfirmarRecebimento(id) {
   document.getElementById('conf-defeituosa').checked = false;
   document.getElementById('conf-devolucao-section').style.display = 'none';
   document.getElementById('conf-motivo') && (document.getElementById('conf-motivo').value = '');
+  _recebFotos = []; _devolucaoFotos = [];
+  renderFotosMobile('receb-fotos-lista', _recebFotos, 'removerFotoRecebimento');
+  renderFotosMobile('devolucao-fotos-lista', _devolucaoFotos, 'removerFotoDevolucao');
   // Busca dados da solicitacao
   api('GET', '/movimentacoes').then(movs => {
     const m = (movs || []).find(x => x.id === id);
@@ -782,6 +856,7 @@ async function confirmarRecebimento() {
   const defeituosa = document.getElementById('conf-defeituosa').checked;
   const motivo = defeituosa ? (document.getElementById('conf-motivo') ? document.getElementById('conf-motivo').value.trim() : '') : '';
   if (defeituosa && !motivo) { toast('Informe o motivo da devolução', 'error'); return; }
+  if (defeituosa && !_devolucaoFotos.length) { toast('Tire pelo menos uma foto do defeito', 'error'); return; }
   btn.disabled = true; btn.textContent = 'Enviando...';
   try {
     const _now=new Date();
@@ -794,7 +869,9 @@ async function confirmarRecebimento() {
       obs: obs || (defeituosa ? 'Peça recebida com defeito: ' + motivo : 'Peça recebida pelo técnico via mobile'),
       tecnico_confirmou: true,
       devolucao: defeituosa,
-      motivo_devolucao: motivo
+      motivo_devolucao: motivo,
+      fotos_recebimento: _recebFotos,
+      fotos_devolucao: _devolucaoFotos
     });
     toast(defeituosa ? 'Recebimento confirmado. Devolução registrada!' : 'Recebimento confirmado!', 'success');
     btn.disabled = false;
@@ -807,21 +884,54 @@ async function confirmarRecebimento() {
   }
 }
 
-async function despacharRetorno(id) {
-  if (!confirm('Confirmar despacho da peça defeituosa de volta ao almoxarifado?')) return;
+let devdSolAtual = null;
+let _devdFotos = [];
+function selecionarFotosDespachoDevolucao(inputEl) {
+  adicionarFotosMobile(inputEl, _devdFotos, function() { renderFotosMobile('devd-fotos-lista', _devdFotos, 'removerFotoDespachoDevolucao'); });
+}
+function removerFotoDespachoDevolucao(i) {
+  _devdFotos.splice(i, 1);
+  renderFotosMobile('devd-fotos-lista', _devdFotos, 'removerFotoDespachoDevolucao');
+}
+
+function abrirDespacharDevolucao(id) {
+  devdSolAtual = id;
+  _devdFotos = [];
+  document.getElementById('devd-obs').value = '';
+  renderFotosMobile('devd-fotos-lista', _devdFotos, 'removerFotoDespachoDevolucao');
+  api('GET', '/movimentacoes').then(movs => {
+    const m = (movs || []).find(x => x.id === id);
+    if (m) {
+      document.getElementById('devd-peca-codigo').textContent = m.pecaCodigo || '';
+      document.getElementById('devd-peca-nome').textContent = m.pecaNome || '';
+    }
+  });
+  showScreen('screen-despachar-devolucao');
+}
+
+async function confirmarDespachoDevolucao() {
+  if (!_devdFotos.length) { toast('Tire pelo menos uma foto da peça/embalagem antes de despachar', 'error'); return; }
+  const btn = document.getElementById('btn-confirmar-devd');
+  const obs = document.getElementById('devd-obs').value.trim();
+  btn.disabled = true; btn.textContent = 'Enviando...';
   try {
     const now = new Date();
     const data = now.toLocaleDateString('pt-BR');
     const hora = now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    await api('PUT', '/movimentacoes/' + id + '/acao', {
+    await api('PUT', '/movimentacoes/' + devdSolAtual + '/acao', {
       acao: 'DESPACHAR',
       transporte: 'Motoboy',
-      obs: 'Peça devolvida pelo técnico via mobile em ' + data + ' às ' + hora
+      obs: (obs ? obs + ' | ' : '') + 'Peça devolvida pelo técnico via mobile em ' + data + ' às ' + hora,
+      fotos_despacho: _devdFotos
     });
     toast('Devolução despachada com sucesso!', 'success');
-    setTimeout(()=>abrirMinhasSolicitacoes(), 1500);
+    btn.disabled = false;
+    btn.textContent = '↩ Confirmar Despacho da Devolução';
+    setTimeout(() => { goBack(); abrirMinhasSolicitacoes(); }, 1500);
   } catch(e) {
     toast('Erro: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = '↩ Confirmar Despacho da Devolução';
   }
 }
 

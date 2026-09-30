@@ -405,24 +405,34 @@ router.put('/estoque/:pecaId', autenticar, isAdmin, (req, res) => {
 });
 
 // ── MOVIMENTAÇÕES ─────────────────────────────────────────────
-const toMov=m=>({
-  ...m,
-  pecaId:      m.peca_id,
-  pecaCodigo:  m.peca_codigo,
-  pecaNome:    m.peca_nome,
-  pecaUnidade: m.peca_unidade,
-  pecaValorVenda: m.peca_valor_venda,
-  equipSerie:  m.equip_serie,
-  equipCliente:m.equip_cliente,
-  equipModelo: m.equip_modelo,
-  temEstoque:  m.tem_estoque,
-  numSeq:      m.seq_num,
-  tipoAlocacao:m.tipo_alocacao,
-  osNum:       m.os_num,
-  numSeqOrigem:m.obs&&String(m.obs).startsWith('REF:')?parseInt(String(m.obs).split('|')[0].replace('REF:','')):null,
-  grupoId:     m.grupo_id || '',
-  eventos:     typeof m.eventos==='string' ? JSON.parse(m.eventos||'[]') : m.eventos||[]
-});
+// O conteúdo das fotos (base64) fica de fora das listagens — só a
+// quantidade de cada tipo, pra UI mostrar o indicador sem pesar o
+// carregamento. O conteúdo é buscado sob demanda em /movimentacoes/:id/fotos.
+const contarFotos = v => { try { return (JSON.parse(v||'[]')||[]).length; } catch(e) { return 0; } };
+const toMov=m=>{
+  const { fotos_despacho, fotos_recebimento, fotos_devolucao, ...resto } = m;
+  return {
+    ...resto,
+    pecaId:      m.peca_id,
+    pecaCodigo:  m.peca_codigo,
+    pecaNome:    m.peca_nome,
+    pecaUnidade: m.peca_unidade,
+    pecaValorVenda: m.peca_valor_venda,
+    equipSerie:  m.equip_serie,
+    equipCliente:m.equip_cliente,
+    equipModelo: m.equip_modelo,
+    temEstoque:  m.tem_estoque,
+    numSeq:      m.seq_num,
+    tipoAlocacao:m.tipo_alocacao,
+    osNum:       m.os_num,
+    numSeqOrigem:m.obs&&String(m.obs).startsWith('REF:')?parseInt(String(m.obs).split('|')[0].replace('REF:','')):null,
+    grupoId:     m.grupo_id || '',
+    eventos:     typeof m.eventos==='string' ? JSON.parse(m.eventos||'[]') : m.eventos||[],
+    fotosDespachoQtd:    contarFotos(fotos_despacho),
+    fotosRecebimentoQtd: contarFotos(fotos_recebimento),
+    fotosDevolucaoQtd:   contarFotos(fotos_devolucao),
+  };
+};
 
 router.get('/movimentacoes', autenticar, (req, res) => {
   const {status,q}=req.query;
@@ -433,6 +443,16 @@ router.get('/movimentacoes', autenticar, (req, res) => {
   if (q) { sql+=' AND (peca_nome LIKE ? OR peca_codigo LIKE ? OR equip_serie LIKE ? OR tecnico LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`,`%${q}%`); }
   const lista = db.query(sql+' ORDER BY created_at DESC',p).map(toMov);
   res.json(lista);
+});
+
+router.get('/movimentacoes/:id/fotos', autenticar, (req, res) => {
+  const m = db.get('SELECT fotos_despacho, fotos_recebimento, fotos_devolucao FROM movimentacoes WHERE id=?', [req.params.id]);
+  if (!m) return res.status(404).json({ erro: 'Não encontrada' });
+  res.json({
+    fotos_despacho: P(m.fotos_despacho),
+    fotos_recebimento: P(m.fotos_recebimento),
+    fotos_devolucao: P(m.fotos_devolucao),
+  });
 });
 
 router.post('/movimentacoes', autenticar, (req, res) => {
@@ -516,12 +536,24 @@ router.put('/movimentacoes/:id', autenticar, (req, res) => {
 
 router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   try {
-  const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento,valor_frete}=req.body;
+  const {acao,obs,transporte,rastreio,previsao_entrega,data_recebimento,hora_recebimento,valor_frete,fotos_despacho,fotos_recebimento,fotos_devolucao,devolucao,motivo_devolucao}=req.body;
   const sol=db.get('SELECT * FROM movimentacoes WHERE id=?',[req.params.id]);
   if (!sol) return res.status(404).json({erro:'Não encontrada'});
   const eventos=P(sol.eventos);
   const addEv=(st,extra='')=>eventos.push({status:st,data:now(),obs:[obs||'',extra].filter(Boolean).join(' | '),user:req.user.nome});
   const upd={eventos:J(eventos)};
+
+  // Cria a movimentação de devolução (mesma lógica usada em FINALIZAR),
+  // reaproveitada também pelo RECEBER — no mobile a devolução é sinalizada
+  // já na hora de confirmar o recebimento, não só ao finalizar.
+  const criarDevolucao = (origemLabel, fotos) => {
+    const uid2=()=>Math.random().toString(36).slice(2,14);
+    const retId=uid2();
+    const retSeq=(db.get('SELECT MAX(seq_num) as m FROM movimentacoes')?.m||0)+1;
+    const retEvt=JSON.stringify([{status:'SOLICITADA',data:Date.now(),obs:'Devolucao solicitada '+origemLabel+'. Motivo: '+(motivo_devolucao||'Peca defeituosa'),user:req.user.nome}]);
+    db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_custo,peca_valor_venda,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,fotos_devolucao,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.peca_custo||0,sol.peca_valor_venda||0,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,J(fotos||[]),Date.now(),req.user.id]);
+  };
 
   if (acao==='ENVIAR') {
     if (!sol.tem_estoque) { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
@@ -532,11 +564,17 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   } else if (acao==='DESPACHAR') {
     if (!transporte) return res.status(400).json({erro:'Transporte obrigatório'});
     upd.status='DESPACHADA'; upd.transportadora=transporte; upd.rastreio=rastreio||''; upd.previsao_entrega=previsao_entrega||''; upd.valor_frete=parseFloat(valor_frete)||0;
+    if (fotos_despacho !== undefined) upd.fotos_despacho=J(fotos_despacho||[]);
     addEv('DESPACHADA',`Transporte: ${transporte}${rastreio?' · '+rastreio:''}`);
   } else if (acao==='RECEBER') {
     if (!data_recebimento||!hora_recebimento) return res.status(400).json({erro:'Data e hora obrigatórios'});
     upd.status='RECEBIDA'; upd.data_recebimento=data_recebimento; upd.hora_recebimento=hora_recebimento;
+    if (fotos_recebimento !== undefined) upd.fotos_recebimento=J(fotos_recebimento||[]);
     addEv('RECEBIDA',`Recebido em ${data_recebimento} às ${hora_recebimento}`);
+    // Se o técnico já sinalizou defeito/devolução no momento do recebimento
+    // (fluxo do mobile), cria a movimentação de devolução aqui mesmo, com
+    // as fotos que ele tirou da peça com problema.
+    if (devolucao) criarDevolucao('no recebimento (mobile)', fotos_devolucao);
   } else if (acao==='ALOCAR') {
     const {tipo_alocacao,os_num}=req.body;
     upd.status='ALOCADA'; upd.tipo_alocacao=tipo_alocacao||'INSTALACAO';
@@ -546,16 +584,8 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
     upd.status='NF_EMITIDA';
     addEv('NF_EMITIDA','NF: '+(nf_numero||'')+(nf_data?' · '+nf_data:''));
   } else if (acao==='FINALIZAR') {
-    const {devolucao,motivo_devolucao}=req.body;
     upd.status='FINALIZADO'; addEv('FINALIZADO');
-    if(devolucao){
-      const uid2=()=>Math.random().toString(36).slice(2,14);
-      const retId=uid2();
-      const retSeq=(db.get('SELECT MAX(seq_num) as m FROM movimentacoes')?.m||0)+1;
-      const retEvt=JSON.stringify([{status:'SOLICITADA',data:Date.now(),obs:'Devolucao solicitada pelo desktop. Motivo: '+(motivo_devolucao||'Peca defeituosa'),user:req.user.nome}]);
-      db.run('INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_custo,peca_valor_venda,qtd,equip_serie,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        [retId,retSeq,'SOLICITADA',sol.peca_id,sol.peca_codigo,sol.peca_nome,sol.peca_unidade,sol.peca_custo||0,sol.peca_valor_venda||0,sol.qtd,sol.equip_serie,sol.tecnico,0,'RETORNO','REF:'+sol.seq_num+'|'+(motivo_devolucao||'Devolucao de peca defeituosa'),retEvt,Date.now(),req.user.id]);
-    }
+    if (devolucao) criarDevolucao('pelo desktop', fotos_devolucao);
   } else if (acao==='CANCELAR') {
     upd.status='CANCELADA'; addEv('CANCELADA');
     // Se o estoque já tinha sido baixado (a solicitação passou por "Enviada"
@@ -768,7 +798,20 @@ router.get('/validacoes', autenticar, (req, res) => {
   let sql = 'SELECT * FROM validacoes_equipamento WHERE 1=1'; const p = [];
   if (status) { sql += ' AND status=?'; p.push(status); }
   if (q) { sql += ' AND (equip_serie LIKE ? OR equip_modelo LIKE ? OR equip_cliente LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
-  res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(v => ({ ...v, eventos: P(v.eventos) })));
+  // O conteúdo das fotos (base64) fica de fora da listagem — só a
+  // quantidade, pra UI mostrar o indicador sem pesar o carregamento. O
+  // conteúdo é buscado sob demanda em /validacoes/:id/fotos.
+  res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(v => {
+    const fotos = P(v.fotos);
+    const { fotos: _omit, ...resto } = v;
+    return { ...resto, eventos: P(v.eventos), fotos_qtd: fotos.length };
+  }));
+});
+
+router.get('/validacoes/:id/fotos', autenticar, (req, res) => {
+  const v = db.get('SELECT fotos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!v) return res.status(404).json({ erro: 'Não encontrado' });
+  res.json({ fotos: P(v.fotos) });
 });
 
 router.post('/validacoes', autenticar, (req, res) => {
@@ -782,12 +825,12 @@ router.post('/validacoes', autenticar, (req, res) => {
   const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome }]);
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     now(), req.user.nome, now()]);
+     J(v.fotos || []), now(), req.user.nome, now()]);
   res.status(201).json({ id, seq_num: seq });
 });
 
@@ -796,11 +839,11 @@ router.put('/validacoes/:id', autenticar, (req, res) => {
   db.run(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
     peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
     produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,
-    updated_at=? WHERE id=?`,
+    fotos=?,updated_at=? WHERE id=?`,
     [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '',
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     now(), req.params.id]);
+     J(v.fotos || []), now(), req.params.id]);
   res.json({ ok: true });
 });
 
@@ -1108,7 +1151,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
     kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens),itens_opcionais:P(k.itens_opcionais)})),
     garantia_config: db.query('SELECT * FROM garantia_config'),
-    validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos)})),
+    validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos),fotos:P(v.fotos)})),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -1209,8 +1252,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     }
 
     if (s.movimentacoes?.length) for (const m of s.movimentacoes)
-      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',J(m.eventos||[]),m.created_at||m.createdAt||now(),'restore']);
+      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,fotos_despacho,fotos_recebimento,fotos_devolucao,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',typeof m.eventos==='string'?m.eventos:J(m.eventos||[]),typeof m.fotos_despacho==='string'?m.fotos_despacho:J(m.fotos_despacho||[]),typeof m.fotos_recebimento==='string'?m.fotos_recebimento:J(m.fotos_recebimento||[]),typeof m.fotos_devolucao==='string'?m.fotos_devolucao:J(m.fotos_devolucao||[]),m.created_at||m.createdAt||now(),'restore']);
 
     if (s.orcamentos?.length) for (const o of s.orcamentos)
       db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,boleto_arquivo,boleto_nome,nota_arquivo,nota_nome,equipamentos,created_at,updated_at,status_changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -1243,11 +1286,11 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fotos,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
          v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
          v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
-         v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
+         J(v.fotos||[]), v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
