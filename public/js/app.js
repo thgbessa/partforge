@@ -3821,26 +3821,26 @@ function renderAgendaCalendario() {
     const nomeExibicao = v.equip_modelo || v.equip_serie || '?';
     return `<div onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')"
       title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')}${v.equip_cliente ? ' · ' + v.equip_cliente.replace(/"/g, '') : ''} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}"
-      style="font-size:9px;padding:2px 4px;margin-bottom:2px;border-radius:3px;cursor:pointer;background:${cor}22;
+      style="font-size:10.5px;padding:3px 5px;margin-bottom:3px;border-radius:3px;cursor:pointer;background:${cor}22;
       border-left:2px solid ${cor};overflow:hidden;
       ${tipo === 'entrada' ? 'border-style:dashed;opacity:0.85' : ''}
       ${concluido ? 'opacity:0.5;text-decoration:line-through' : ''}">
       <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${nomeExibicao}</div>
-      ${v.equip_cliente ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.75;font-size:8px">${v.equip_cliente}</div>` : ''}
+      ${v.equip_cliente ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.75;font-size:9.5px">${v.equip_cliente}</div>` : ''}
     </div>`;
   };
 
   let celulas = '';
   for (let i = 0; i < offsetInicio; i++) {
-    celulas += `<div style="min-height:72px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);opacity:0.3"></div>`;
+    celulas += `<div style="min-height:130px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);opacity:0.3"></div>`;
   }
   for (let dia = 1; dia <= diasNoMes; dia++) {
     const dataStr = _agendaAno + '-' + String(_agendaMes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
     const itens = porDia[dia] || [];
     const ehHoje = dataStr === hojeStr;
-    celulas += `<div style="min-height:72px;max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:4px;
+    celulas += `<div style="min-height:130px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:6px;
       ${ehHoje ? 'background:rgba(255,165,2,0.08);border-color:var(--accent)' : ''}">
-      <div style="font-size:11px;font-weight:700;color:${ehHoje ? 'var(--accent)' : 'var(--text3)'};margin-bottom:3px">${dia}</div>
+      <div style="font-size:12px;font-weight:700;color:${ehHoje ? 'var(--accent)' : 'var(--text3)'};margin-bottom:4px">${dia}</div>
       ${itens.map(cardEquip).join('')}
     </div>`;
   }
@@ -3848,7 +3848,7 @@ function renderAgendaCalendario() {
   const totalNoMes = idsNoMes.size;
 
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:820px;width:100%;max-height:90vh;overflow-y:auto">
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);width:97vw;max-width:1400px;height:95vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
         <span style="font-weight:700;font-size:15px">📅 Agenda — Validação Repair (${totalNoMes} neste mês)</span>
         <button onclick="document.getElementById('modal-agenda-repair-overlay').remove()"
