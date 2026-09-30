@@ -3818,13 +3818,15 @@ function renderAgendaCalendario() {
     const ajustado = tipo === 'prazo' && v.data_limite_original && v.data_limite !== v.data_limite_original;
     const icone = tipo === 'entrada' ? '🔧' : (ajustado ? '⚠' : '🏁');
     const rotulo = tipo === 'entrada' ? 'Entrada no Repair' : 'Prazo final de validação';
+    const nomeExibicao = v.equip_modelo || v.equip_serie || '?';
     return `<div onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')"
-      title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}"
+      title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')}${v.equip_cliente ? ' · ' + v.equip_cliente.replace(/"/g, '') : ''} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}"
       style="font-size:9px;padding:2px 4px;margin-bottom:2px;border-radius:3px;cursor:pointer;background:${cor}22;
-      border-left:2px solid ${cor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      border-left:2px solid ${cor};overflow:hidden;
       ${tipo === 'entrada' ? 'border-style:dashed;opacity:0.85' : ''}
       ${concluido ? 'opacity:0.5;text-decoration:line-through' : ''}">
-      ${icone} ${v.equip_serie || v.equip_modelo || '?'}
+      <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${nomeExibicao}</div>
+      ${v.equip_cliente ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.75;font-size:8px">${v.equip_cliente}</div>` : ''}
     </div>`;
   };
 
