@@ -1,0 +1,534 @@
+[
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E 58989",
+  "marca": "SIEMENS",
+  "serie": "58989",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E 58956",
+  "marca": "SIEMENS",
+  "serie": "58956",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E 58990",
+  "marca": "SIEMENS",
+  "serie": "58990",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR AUTOMATICO URINA",
+  "marca": "SIEMENS",
+  "serie": "302172",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR AUTOMATICO QUIMICA VITROS250",
+  "marca": "VITROS",
+  "serie": "25015115",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RL-348EX",
+  "marca": "SIEMENS",
+  "serie": "B931",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RL-348EX",
+  "marca": "SIEMENS",
+  "serie": "B930",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR AUTOMATICO QUIMICA BK-200",
+  "marca": "BIOBASE",
+  "serie": "SHY200251114146",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA BC-5380",
+  "marca": "MINDRAY",
+  "serie": "RF-11104488",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO DH36",
+  "marca": "DYMIND",
+  "serie": "DM10012423017",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA BC-5380",
+  "marca": "MINDRAY",
+  "serie": "RF-46100222",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR AUTOMATICO QUIMICA CS-680",
+  "marca": "DIRUI",
+  "serie": "2038195-20240206110026",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR AUTOMATICO QUIMICA BK-310",
+  "marca": "BIOBASE",
+  "serie": "SHY310250413721",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO HMG51 PETS",
+  "marca": "RAYTO",
+  "serie": "0652402004-IEP",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA HMG51 VET",
+  "marca": "RAYTO",
+  "serie": "0652206005-IEP",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR DE HEMATOLOGIA DH76",
+  "marca": "DYMIND",
+  "serie": "DM11052249010",
+  "status": "USADO_AVALIAR",
+  "obs": "1 retirada(s) no sistema antigo"
+ },
+ {
+  "nome": "ANALISADOR DE SEMI-AUT. DE COAGULAÇÃO",
+  "marca": "RAYTO",
+  "serie": "732509044",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "SL-2202 - ANALISADOR COAG 2 CANAIS",
+  "marca": "RAYTO",
+  "serie": "73250940",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA CELLAVISION DM1200",
+  "marca": "SIEMENS",
+  "serie": "33465",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR BIOQUIMICO CHEMRAY 120",
+  "marca": "RAYTO",
+  "serie": "3119010011-ELB",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR BIOQUIMICO RT2204C",
+  "marca": "RAYTO",
+  "serie": "482203011",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR BIOQUIMICO RT1904",
+  "marca": "RAYTO",
+  "serie": "402401119",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO HMG31",
+  "marca": "RAYTO",
+  "serie": "8022602016",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR COAGULACAO 1 CANAL SL2201C",
+  "marca": "RAYTO",
+  "serie": "732704003",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR COAGULACAO 1 CANAL SL2201C",
+  "marca": "RAYTO",
+  "serie": "722405013",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO HMG51 VET AL",
+  "marca": "RAYTO",
+  "serie": "0652509001-IEP",
+  "status": "EM_REFORMA",
+  "obs": "2 retirada(s) no sistema antigo"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO HMG51 HUMAN",
+  "marca": "RAYTO",
+  "serie": "0652206003-IEP",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR IMUNOFLORESCENCIA IVET Q100N",
+  "marca": "DIANOTECH",
+  "serie": "NQY-210518-009",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR IMUNOFLORESCENCIA IVET Q100N",
+  "marca": "DIANOTECH",
+  "serie": "NQY-210518-012",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR IMUNOFLORESCENCIA IVET Q100N",
+  "marca": "DIANOTECH",
+  "serie": "NQY-190912-011",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR IMUNOFLORESCENCIA IVET Q100N",
+  "marca": "DIANOTECH",
+  "serie": "NQY-210518-007",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR BIOQUIMICO DYMIND DP C16",
+  "marca": "DAKEWE",
+  "serie": "DMP4022423002",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR BIOQUIMICO DYMIND DP C16",
+  "marca": "DAKEWE",
+  "serie": "DMP4022423001",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO DP H10",
+  "marca": "DAKEWE",
+  "serie": "101233008",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STAQB-1401",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR DE GASOMETRIA ST-200CS",
+  "marca": "SENSA-CORE",
+  "serie": "STCS-020",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STAQB-635",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STAQB-637",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STABQ-359",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STABQ-682",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STAQB-417",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR DE ELETROLITOS ST-200 AQUA TOUCH",
+  "marca": "SENSA-CORE",
+  "serie": "STAQB-405",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS ST200 AQUA KEYPAD",
+  "marca": "SENSA-CORE",
+  "serie": "STAQW-6539",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS ST200 AQUA KEYPAD",
+  "marca": "SENSA-CORE",
+  "serie": "STAQW-3714",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS ST200 AQUA KEYPAD",
+  "marca": "SENSA-CORE",
+  "serie": "STAQW-5733",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS ST200 AQUA KEYPAD",
+  "marca": "SENSA-CORE",
+  "serie": "STAQW-6532",
+  "status": "DOADORA",
+  "obs": "1 retirada(s) no sistema antigo"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS ST200 AQUA KEYPAD",
+  "marca": "SENSA-CORE",
+  "serie": "STAQW-5277",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "BW 300 VET",
+  "marca": "BIOWAY",
+  "serie": "2130606",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "HMG 31",
+  "marca": "RAYTO",
+  "serie": "8022402026",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO HEMACOUNTER 60",
+  "marca": "RAYTO",
+  "serie": "9316070153",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR ELETROLITOS VIDA ELECTROLYTE",
+  "marca": "VIDA BIOTECNOLOGIA",
+  "serie": "2104132",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "Micros",
+  "marca": "HORIBA",
+  "serie": "5610",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "i-SMART",
+  "marca": "HISENSE",
+  "serie": "50504",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "SDH 3",
+  "marca": "LABTEST",
+  "serie": "689014",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "MINICUBE",
+  "marca": "MINI",
+  "serie": "0420",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "BEHRING FIBRINTIMER",
+  "marca": "SIEMENS",
+  "serie": "52022867",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "BEHRING FIBRINTIMER",
+  "marca": "SIEMENS",
+  "serie": "121810766",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "BEHRING FIBRINTIMER",
+  "marca": "SIEMENS",
+  "serie": "121810464",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "MH LAB",
+  "marca": "MH",
+  "serie": "311902011",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "HUMAN 4180",
+  "marca": "HUMAN",
+  "serie": "1909119",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO CELL DYN RUBY",
+  "marca": "ABBOTT",
+  "serie": "34779BG",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO CELL DYN RUBY",
+  "marca": "ABBOTT",
+  "serie": "36827BG",
+  "status": "EM_REFORMA",
+  "obs": "4 retirada(s) no sistema antigo"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO CELL DYN RUBY",
+  "marca": "ABBOTT",
+  "serie": "35598BG",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO CELL DYN RUBY",
+  "marca": "ABBOTT",
+  "serie": "35820BG",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGICO DM73 VET",
+  "marca": "DYMIND",
+  "serie": "DM7001-022552001",
+  "status": "NOVO"
+ },
+ {
+  "nome": "MICROTOMO MANUAL BK2258",
+  "marca": "BIOBASE",
+  "serie": "BK2258250600045A",
+  "status": "NOVO"
+ },
+ {
+  "nome": "MICROTOMO MANUAL BK2258",
+  "marca": "BIOBASE",
+  "serie": "BK2258250600048A",
+  "status": "NOVO"
+ },
+ {
+  "nome": "MICROTOMO MANUAL BK2258",
+  "marca": "BIOBASE",
+  "serie": "BK2258250600047A",
+  "status": "NOVO"
+ },
+ {
+  "nome": "MICROTOMO MANUAL BK2258",
+  "marca": "BIOBASE",
+  "serie": "BK2258250600046A",
+  "status": "NOVO"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA ADVIA 2120I",
+  "marca": "SIEMENS",
+  "serie": "SN",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA ADVIA 2120I",
+  "marca": "SIEMENS",
+  "serie": "33121344",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA ADVIA 2120I",
+  "marca": "SIEMENS",
+  "serie": "11361101",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA ADVIA 2120I",
+  "marca": "SIEMENS",
+  "serie": "10781048",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR HEMATOLOGIA ADVIA 2120I",
+  "marca": "SIEMENS",
+  "serie": "11701103",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E 58966",
+  "marca": "SIEMENS",
+  "serie": "58966",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E",
+  "marca": "SIEMENS",
+  "serie": "58740",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "31106",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E",
+  "marca": "SIEMENS",
+  "serie": "58967",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500E",
+  "marca": "SIEMENS",
+  "serie": "58960",
+  "status": "USADO_FUNCIONANDO"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "33087",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "40936",
+  "status": "USADO_AVALIAR"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "36068",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "31688",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "33086",
+  "status": "DOADORA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "43347",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "41194",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "43039",
+  "status": "EM_REFORMA"
+ },
+ {
+  "nome": "ANALISADOR GASOMETRIA RAPID POINT 500",
+  "marca": "SIEMENS",
+  "serie": "36812",
+  "status": "EM_REFORMA"
+ }
+]

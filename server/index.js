@@ -728,6 +728,34 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim recalcular prazos lancados ──
 
+    // ── Importa os 88 equipamentos da filial de SP (extraidos dos prints
+    //    do sistema antigo EquipQuallyx). Rodar 1x, depois remover. ──
+    app.get('/api/admin/importar-equip-quallyx-sp', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const itens = require('./dados-equip-quallyx-sp.json');
+        const norm = s => String(s || '').trim().toUpperCase();
+        const existentes = db.query('SELECT nome, serie FROM equip_quallyx_sp');
+        let criados = 0, jaExistiam = 0;
+        for (const it of itens) {
+          const ja = existentes.some(e => norm(e.nome) === norm(it.nome) && norm(e.serie) === norm(it.serie || ''));
+          if (ja) { jaExistiam++; continue; }
+          const id = db.uid();
+          db.runBatch(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+            [id, it.nome, it.marca || '', it.serie || '', it.status || 'NOVO', it.obs || '', '', Date.now(), 'import', Date.now()]);
+          criados++;
+        }
+        db.persist();
+        res.json({ ok: true, totalNaLista: itens.length, criados, jaExistiam });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim importar equip quallyx sp ──
+
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {
       const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
