@@ -241,6 +241,10 @@ async function init() {
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_complexidade TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_limite TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN tecnico_responsavel TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  // Guarda o prazo ORIGINAL calculado (nunca muda depois de criado), pra
+  // comparar com data_limite (que pode ser ajustada manualmente) e saber
+  // quantos dias de atraso/prorrogação foram adicionados.
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_limite_original TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
   // Registro fotográfico das peças: no despacho (desktop), no recebimento e
   // na devolução (mobile, pelo técnico) — cada coluna guarda um array JSON

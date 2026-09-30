@@ -3708,6 +3708,7 @@ function renderValidacao(etapa, q) {
           `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
         if (!concluido) {
           acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalValidacao('${v.id}')" title="Editar">✎</button>`;
+          if (v.data_limite) acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="Ajustar prazo">📅</button>`;
           if (v.status === 'ASSESSORIA') {
             acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAvancarValidacao('${v.id}','voltar')" title="Voltar pro Repair">↩</button>`;
             acoes += `<button class="btn btn-sm" style="background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
@@ -3738,7 +3739,7 @@ function renderValidacao(etapa, q) {
           <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${tecInfo.label}` : '<span style="color:var(--text3)">—</span>'}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
-          <td>${urg ? `<div style="font-size:11px;font-weight:600;color:${urg.cor}">${urg.icone} ${urg.label}</div><div style="font-size:10px;color:var(--text3)">${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '<span style="color:var(--text3)">—</span>'}</td>
+          <td>${urg ? `<div style="font-size:11px;font-weight:600;color:${urg.cor}">${urg.icone} ${urg.label}</div><div style="font-size:10px;color:var(--text3)">${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}${(v.data_limite_original && v.data_limite !== v.data_limite_original) ? ' <span title="Prazo ajustado (original: '+new Date(v.data_limite_original+'T00:00:00').toLocaleDateString('pt-BR')+')">⚠</span>' : ''}</div>` : '<span style="color:var(--text3)">—</span>'}</td>
           <td>${colPecaProduto}</td>
           <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.obs || ''}</td>
           <td style="text-align:right;white-space:nowrap">${acoes}</td>
@@ -3783,30 +3784,47 @@ function renderAgendaCalendario() {
   const diasNoMes = new Date(_agendaAno, _agendaMes + 1, 0).getDate();
   const offsetInicio = primeiroDia.getDay(); // 0 = domingo
 
-  // Agrupa por dia do mês exibido — considera qualquer equipamento com
-  // data-limite caindo nesse mês, independente da etapa atual (itens já
-  // concluídos aparecem riscados, pra manter o histórico visível).
+  // Agrupa por dia do mês exibido — cada equipamento pode aparecer em até 2
+  // dias: o dia que ENTROU no Repair (marcador 🔧) e o dia do PRAZO FINAL de
+  // validação (marcador 🏁, ou ⚠ se o prazo foi ajustado manualmente).
+  // Considera todas as etapas — itens já concluídos aparecem riscados, pra
+  // manter o histórico visível no calendário.
   const porDia = {};
+  const idsNoMes = new Set();
   (db.validacoes || []).forEach(v => {
-    if (!v.data_limite) return;
-    const [ano, mes] = v.data_limite.split('-').map(Number);
-    if (ano === _agendaAno && (mes - 1) === _agendaMes) {
-      const dia = parseInt(v.data_limite.split('-')[2], 10);
-      (porDia[dia] = porDia[dia] || []).push(v);
+    if (v.created_at) {
+      const d = new Date(v.created_at);
+      if (d.getFullYear() === _agendaAno && d.getMonth() === _agendaMes) {
+        (porDia[d.getDate()] = porDia[d.getDate()] || []).push({ v, tipo: 'entrada' });
+        idsNoMes.add(v.id);
+      }
+    }
+    if (v.data_limite) {
+      const [ano, mes] = v.data_limite.split('-').map(Number);
+      if (ano === _agendaAno && (mes - 1) === _agendaMes) {
+        const dia = parseInt(v.data_limite.split('-')[2], 10);
+        (porDia[dia] = porDia[dia] || []).push({ v, tipo: 'prazo' });
+        idsNoMes.add(v.id);
+      }
     }
   });
 
   const hojeStr = new Date().toISOString().slice(0, 10);
-  const cardEquip = v => {
+  const cardEquip = item => {
+    const v = item.v, tipo = item.tipo;
     const tecInfo = VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel);
     const concluido = v.status === 'CONCLUIDO';
     const cor = tecInfo ? tecInfo.cor : '#8294a0';
+    const ajustado = tipo === 'prazo' && v.data_limite_original && v.data_limite !== v.data_limite_original;
+    const icone = tipo === 'entrada' ? '🔧' : (ajustado ? '⚠' : '🏁');
+    const rotulo = tipo === 'entrada' ? 'Entrada no Repair' : 'Prazo final de validação';
     return `<div onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')"
-      title="${(v.equip_modelo || '').replace(/"/g, '')} · ${tecInfo ? tecInfo.label : 'sem técnico'}"
+      title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}"
       style="font-size:9px;padding:2px 4px;margin-bottom:2px;border-radius:3px;cursor:pointer;background:${cor}22;
       border-left:2px solid ${cor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      ${tipo === 'entrada' ? 'border-style:dashed;opacity:0.85' : ''}
       ${concluido ? 'opacity:0.5;text-decoration:line-through' : ''}">
-      ${v.equip_serie || v.equip_modelo || '?'}
+      ${icone} ${v.equip_serie || v.equip_modelo || '?'}
     </div>`;
   };
 
@@ -3818,14 +3836,14 @@ function renderAgendaCalendario() {
     const dataStr = _agendaAno + '-' + String(_agendaMes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
     const itens = porDia[dia] || [];
     const ehHoje = dataStr === hojeStr;
-    celulas += `<div style="min-height:72px;max-height:110px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:4px;
+    celulas += `<div style="min-height:72px;max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:4px;padding:4px;
       ${ehHoje ? 'background:rgba(255,165,2,0.08);border-color:var(--accent)' : ''}">
       <div style="font-size:11px;font-weight:700;color:${ehHoje ? 'var(--accent)' : 'var(--text3)'};margin-bottom:3px">${dia}</div>
       ${itens.map(cardEquip).join('')}
     </div>`;
   }
 
-  const totalNoMes = Object.values(porDia).reduce((s, arr) => s + arr.length, 0);
+  const totalNoMes = idsNoMes.size;
 
   overlay.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:820px;width:100%;max-height:90vh;overflow-y:auto">
@@ -3840,9 +3858,14 @@ function renderAgendaCalendario() {
           <span style="font-weight:700;font-size:14px">${AGENDA_MESES[_agendaMes]} ${_agendaAno}</span>
           <button class="btn btn-ghost btn-sm" onclick="mudarMesAgenda(1)">▶</button>
         </div>
-        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:14px;margin-bottom:6px;font-size:10px;flex-wrap:wrap">
           ${VALIDACAO_TECNICOS.map(t => `<span><span style="color:${t.cor}">●</span> ${t.label}</span>`).join('')}
           <span style="color:var(--text3)"><span style="color:#8294a0">●</span> Sem técnico</span>
+        </div>
+        <div style="display:flex;gap:14px;margin-bottom:10px;font-size:10px;color:var(--text3)">
+          <span>🔧 Entrada no Repair</span>
+          <span>🏁 Prazo final</span>
+          <span>⚠ Prazo ajustado</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:10px;color:var(--text3);text-align:center;margin-bottom:4px">
           <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
@@ -4190,6 +4213,75 @@ function salvarValidacao(id) {
 }
 
 // ── Avançar / Voltar etapa ──
+// ── Ajustar prazo manualmente (ex.: precisou de mais dias de validação) ──
+function abrirModalAjustarPrazo(id) {
+  const v = (db.validacoes || []).find(x => x.id === id);
+  if (!v) return;
+  let overlay = document.getElementById('modal-ajustar-prazo-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-ajustar-prazo-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  const original = v.data_limite_original || v.data_limite;
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:400px;width:100%">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">📅 Ajustar Prazo</span>
+        <button onclick="document.getElementById('modal-ajustar-prazo-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${v.equip_modelo || ''} · S/N: ${v.equip_serie || '—'}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+          Prazo original (${v.prazo_dias || '?'}d, ${v.prazo_complexidade || '—'}): <strong>${new Date(original + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
+          ${v.data_limite !== original ? `<br>Prazo atual: <strong>${new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>` : ''}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nova data-limite</label>
+          <input class="form-input" type="date" id="ajustar-prazo-data" value="${v.data_limite}" oninput="atualizarPreviewAjustePrazo('${original}')">
+        </div>
+        <div id="ajustar-prazo-preview" style="font-size:12px;margin-bottom:10px"></div>
+        <div class="form-group">
+          <label class="form-label">Motivo (opcional)</label>
+          <textarea class="form-textarea" id="ajustar-prazo-motivo" style="min-height:50px" placeholder="Ex.: peça de reposição atrasou"></textarea>
+        </div>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-ajustar-prazo-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarAjustarPrazo('${id}')">✓ Salvar</button>
+      </div>
+    </div>`;
+  atualizarPreviewAjustePrazo(original);
+}
+
+function atualizarPreviewAjustePrazo(original) {
+  const el = document.getElementById('ajustar-prazo-preview');
+  const novaData = document.getElementById('ajustar-prazo-data')?.value;
+  if (!el || !novaData || !original) return;
+  const diff = Math.round((new Date(novaData) - new Date(original)) / 86400000);
+  if (diff === 0) { el.innerHTML = '<span style="color:var(--text3)">Sem alteração em relação ao prazo original</span>'; return; }
+  const cor = diff > 0 ? 'var(--red)' : 'var(--green)';
+  el.innerHTML = `<span style="color:${cor};font-weight:600">${diff > 0 ? '+' : ''}${diff} dia${Math.abs(diff) !== 1 ? 's' : ''} em relação ao prazo original</span>`;
+}
+
+function confirmarAjustarPrazo(id) {
+  const nova_data_limite = document.getElementById('ajustar-prazo-data')?.value;
+  const motivo = document.getElementById('ajustar-prazo-motivo')?.value.trim() || '';
+  if (!nova_data_limite) { toast('Escolha uma data', 'error'); return; }
+  API.put('/validacoes/' + id + '/ajustar-prazo', { nova_data_limite, motivo })
+    .then(res => {
+      const msg = res.diffDias ? `Prazo ajustado (${res.diffDias > 0 ? '+' : ''}${res.diffDias}d)` : 'Prazo ajustado';
+      toast(msg, 'success');
+      document.getElementById('modal-ajustar-prazo-overlay')?.remove();
+      loadAndRenderValidacao('repair');
+      loadAndRenderValidacao('assessoria');
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 function abrirModalAvancarValidacao(id, acao) {
   const v = (db.validacoes || []).find(x => x.id === id);
   if (!v) return;

@@ -886,12 +886,12 @@ router.post('/validacoes', autenticar, (req, res) => {
 
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, v.tecnico_responsavel || '', now(), req.user.nome, now()]);
+     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, dataLimite, v.tecnico_responsavel || '', now(), req.user.nome, now()]);
   res.status(201).json({ id, seq_num: seq, prazo: prazo ? { modelo: prazo.modelo, dias: prazoDias, complexidade: prazoComplexidade, dataLimite } : null });
 });
 
@@ -906,6 +906,27 @@ router.put('/validacoes/:id', autenticar, (req, res) => {
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
      J(v.fotos || []), v.tecnico_responsavel || '', now(), req.params.id]);
   res.json({ ok: true });
+});
+
+// Ajusta manualmente a data-limite de um equipamento (ex.: precisou de mais
+// dias de validação). Compara sempre com data_limite_original (o prazo
+// calculado no dia em que entrou, que nunca muda) pra saber quantos dias a
+// mais foram adicionados, e registra isso no histórico.
+router.put('/validacoes/:id/ajustar-prazo', autenticar, (req, res) => {
+  const { nova_data_limite, motivo } = req.body;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nova_data_limite || '')) return res.status(400).json({ erro: 'Data inválida' });
+  const existente = db.get('SELECT data_limite, data_limite_original, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!existente) return res.status(404).json({ erro: 'Não encontrado' });
+  const base = existente.data_limite_original || existente.data_limite;
+  const diffDias = base ? Math.round((new Date(nova_data_limite) - new Date(base)) / 86400000) : 0;
+  let eventos = []; try { eventos = JSON.parse(existente.eventos || '[]'); } catch (e) { eventos = []; }
+  const obsEvento = `Prazo ajustado de ${existente.data_limite || '(sem prazo)'} para ${nova_data_limite}` +
+    (diffDias !== 0 ? ` (${diffDias > 0 ? '+' : ''}${diffDias}d em relação ao prazo original)` : '') +
+    (motivo ? `. Motivo: ${motivo}` : '');
+  eventos.push({ status: 'PRAZO_AJUSTADO', data: now(), obs: obsEvento, user: req.user.nome });
+  db.run('UPDATE validacoes_equipamento SET data_limite=?, eventos=?, updated_at=? WHERE id=?',
+    [nova_data_limite, J(eventos), now(), req.params.id]);
+  res.json({ ok: true, diffDias });
 });
 
 // Avança para a próxima etapa do pipeline: REPAIR -> ASSESSORIA -> CONCLUIDO.
@@ -983,12 +1004,12 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       const dataLimiteImp = prazoDiasImp > 0 ? somarDias(now(), prazoDiasImp) : '';
       db.runBatch(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,
-        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,
+        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, seqCounter, '', it.equip_serie || '', it.equip_modelo || '', it.equip_cliente || '', 'REPAIR', it.obs || '', eventos,
          it.peca_solicitada || '', it.data_solicitacao_peca || '', it.data_entrega_peca || '',
          it.produto_solicitado || '', it.data_solicitacao_produto || '', it.data_entrega_produto || '',
-         prazoDiasImp, prazoImp?.tolerancia || 0, prazoImp?.complexidade || '', dataLimiteImp, it.tecnico_responsavel || '',
+         prazoDiasImp, prazoImp?.tolerancia || 0, prazoImp?.complexidade || '', dataLimiteImp, dataLimiteImp, it.tecnico_responsavel || '',
          now(), req.user.nome, now()]);
       criados++;
     } else {
@@ -1354,11 +1375,11 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,tecnico_responsavel,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
          v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
          v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
-         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'', v.tecnico_responsavel||'',
+         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'', v.data_limite_original||v.data_limite||'', v.tecnico_responsavel||'',
          v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)

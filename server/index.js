@@ -714,8 +714,8 @@ app.listen(PORT, '0.0.0.0', () => {
           const d = new Date(v.created_at);
           d.setDate(d.getDate() + Math.round(p.prazo_final));
           const dataLimite = d.toISOString().slice(0, 10);
-          db.runBatch('UPDATE validacoes_equipamento SET prazo_dias=?, prazo_tolerancia=?, prazo_complexidade=?, data_limite=? WHERE id=?',
-            [p.prazo_final, p.tolerancia, p.complexidade, dataLimite, v.id]);
+          db.runBatch('UPDATE validacoes_equipamento SET prazo_dias=?, prazo_tolerancia=?, prazo_complexidade=?, data_limite=?, data_limite_original=? WHERE id=?',
+            [p.prazo_final, p.tolerancia, p.complexidade, dataLimite, dataLimite, v.id]);
           detalhes.push({ modelo: v.equip_modelo, prazoEncontrado: p.modelo, dias: p.prazo_final, dataLimite });
           corrigidos++;
         }
