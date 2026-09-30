@@ -336,6 +336,7 @@ app.listen(PORT, '0.0.0.0', () => {
           kits_preventivas:    db.query('SELECT * FROM kits_preventivas'),
           garantia_config:     db.query('SELECT * FROM garantia_config'),
           validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento'),
+          prazos_validacao:    db.query('SELECT * FROM prazos_validacao'),
           clientes:            db.query('SELECT * FROM clientes'),
           doadoras:            db.query('SELECT * FROM doadoras'),
           retiradas:           db.query('SELECT * FROM retiradas'),
@@ -630,6 +631,35 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     });
     // ── fim importar garantia equipamentos ──
+
+    // ── Importa os prazos de validacao por modelo (planilha do usuario).
+    //    Rodar 1x, depois remover. ──
+    app.get('/api/admin/importar-prazos-validacao', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const itens = require('./dados-prazos-validacao.json');
+        const normalizar = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        let criados = 0, atualizados = 0;
+        for (const it of itens) {
+          const modeloNorm = normalizar(it.modelo);
+          const existente = db.get('SELECT id FROM prazos_validacao WHERE modelo_norm=?', [modeloNorm]);
+          const id = existente?.id || db.uid();
+          db.runBatch(`INSERT OR REPLACE INTO prazos_validacao(id,marca,modelo,modelo_norm,complexidade,dias_reforma,dias_teste,dias_embalagem,prazo_final,tolerancia,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+            [id, it.marca || '', it.modelo, modeloNorm, it.complexidade || '', it.dias_reforma || 0, it.dias_teste || 0,
+             it.dias_embalagem || 0, it.prazo_final || 0, it.tolerancia || 0, Date.now()]);
+          if (existente) atualizados++; else criados++;
+        }
+        db.persist();
+        res.json({ ok: true, total: itens.length, criados, atualizados });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim importar prazos validacao ──
 
     // ── Cancela orcamentos em Rascunho, exceto o 1041 (rodar 1x, depois remover) ──
     app.get('/api/admin/cancelar-rascunhos', (req, res) => {

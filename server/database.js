@@ -221,6 +221,26 @@ async function init() {
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_entrega_produto TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN fotos TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
 
+  // Prazos de reforma/validação por MODELO de equipamento (tabela vinda de
+  // planilha do usuário: marca, complexidade, dias de cada etapa, prazo
+  // final e tolerância). Usado pra puxar o prazo automaticamente ao incluir
+  // um equipamento no Repair.
+  try { _db.run(`CREATE TABLE IF NOT EXISTS prazos_validacao (
+    id TEXT PRIMARY KEY, marca TEXT DEFAULT '', modelo TEXT NOT NULL, modelo_norm TEXT NOT NULL,
+    complexidade TEXT DEFAULT '', dias_reforma REAL DEFAULT 0, dias_teste REAL DEFAULT 0,
+    dias_embalagem REAL DEFAULT 0, prazo_final REAL DEFAULT 0, tolerancia REAL DEFAULT 0,
+    updated_at INTEGER DEFAULT 0
+  )`); } catch(e) { console.log('erro criando prazos_validacao', e.message); }
+  try { _db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_prazos_validacao_modelo ON prazos_validacao(modelo_norm)"); } catch(e) { /* ja existe */ }
+
+  // No item de validação: guarda o prazo que foi encontrado/aplicado na hora
+  // da entrada no Repair (um retrato — não muda se a config for editada
+  // depois), e a data-limite já calculada (entrada + prazo_final).
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_dias REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_tolerancia REAL DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN prazo_complexidade TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_limite TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+
   // Registro fotográfico das peças: no despacho (desktop), no recebimento e
   // na devolução (mobile, pelo técnico) — cada coluna guarda um array JSON
   // de {nome, dados (base64)}.

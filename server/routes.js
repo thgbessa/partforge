@@ -793,6 +793,58 @@ router.post('/garantia/importar', autenticar, isAdmin, (req, res) => {
 });
 
 // -- VALIDAÇÃO DE EQUIPAMENTO (pipeline Repair -> Assessoria -> Concluído) --
+// ── Prazos de validação por modelo (puxados automaticamente ao incluir um
+// equipamento no Repair) ──
+const normalizarModeloPrazo = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+function buscarPrazoPorModelo(modeloEquip) {
+  const norm = normalizarModeloPrazo(modeloEquip);
+  if (!norm) return null;
+  const todos = db.query('SELECT * FROM prazos_validacao');
+  // 1) match exato
+  const exato = todos.find(p => p.modelo_norm === norm);
+  if (exato) return exato;
+  // 2) por substring — só considera modelos com pelo menos 4 caracteres
+  //    normalizados, pra códigos curtos (ex.: "Q") não "casarem" com
+  //    qualquer texto que contenha aquela letra. Entre vários candidatos,
+  //    prefere o mais específico (modelo_norm mais longo — ex.: "HMG51VET"
+  //    antes de "HMG51", se o texto do equipamento mencionar os dois).
+  const candidatos = todos.filter(p =>
+    p.modelo_norm && p.modelo_norm.length >= 4 &&
+    (norm.includes(p.modelo_norm) || p.modelo_norm.includes(norm))
+  );
+  if (!candidatos.length) return null;
+  candidatos.sort((a, b) => b.modelo_norm.length - a.modelo_norm.length);
+  return candidatos[0];
+}
+function somarDias(dataMs, dias) {
+  const d = new Date(dataMs);
+  d.setDate(d.getDate() + Math.round(dias));
+  return d.toISOString().slice(0, 10);
+}
+
+router.get('/prazos-validacao', autenticar, (req, res) => {
+  res.json(db.query('SELECT * FROM prazos_validacao ORDER BY marca, modelo'));
+});
+router.get('/prazos-validacao/buscar', autenticar, (req, res) => {
+  const p = buscarPrazoPorModelo(req.query.modelo || '');
+  res.json(p || null);
+});
+router.post('/prazos-validacao', autenticar, isAdmin, (req, res) => {
+  const p = req.body;
+  if (!p.modelo) return res.status(400).json({ erro: 'Modelo obrigatório' });
+  const modeloNorm = normalizarModeloPrazo(p.modelo);
+  const existente = db.get('SELECT id FROM prazos_validacao WHERE modelo_norm=?', [modeloNorm]);
+  const id = existente?.id || uid();
+  db.run(`INSERT OR REPLACE INTO prazos_validacao(id,marca,modelo,modelo_norm,complexidade,dias_reforma,dias_teste,dias_embalagem,prazo_final,tolerancia,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, p.marca || '', p.modelo, modeloNorm, p.complexidade || '', p.dias_reforma || 0, p.dias_teste || 0,
+     p.dias_embalagem || 0, p.prazo_final || 0, p.tolerancia || 0, now()]);
+  res.status(201).json({ id });
+});
+router.delete('/prazos-validacao/:id', autenticar, isAdmin, (req, res) => {
+  db.run('DELETE FROM prazos_validacao WHERE id=?', [req.params.id]); res.json({ ok: true });
+});
+
 router.get('/validacoes', autenticar, (req, res) => {
   const { status, q } = req.query;
   let sql = 'SELECT * FROM validacoes_equipamento WHERE 1=1'; const p = [];
@@ -823,15 +875,25 @@ router.post('/validacoes', autenticar, (req, res) => {
   else db.run("INSERT INTO configuracoes(chave,valor) VALUES('validacao_seq_counter',?)", [String(seq)]);
   const id = uid();
   const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome }]);
+
+  // Puxa o prazo de validação pelo modelo do equipamento (planilha de
+  // prazos por modelo) — vira um retrato: não muda se a config for editada
+  // depois. Data-limite = hoje + prazo final (dias).
+  const prazo = buscarPrazoPorModelo(v.equip_modelo);
+  const prazoDias = prazo?.prazo_final || 0;
+  const prazoTolerancia = prazo?.tolerancia || 0;
+  const prazoComplexidade = prazo?.complexidade || '';
+  const dataLimite = prazoDias > 0 ? somarDias(now(), prazoDias) : '';
+
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    fotos,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), now(), req.user.nome, now()]);
-  res.status(201).json({ id, seq_num: seq });
+     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, now(), req.user.nome, now()]);
+  res.status(201).json({ id, seq_num: seq, prazo: prazo ? { modelo: prazo.modelo, dias: prazoDias, complexidade: prazoComplexidade, dataLimite } : null });
 });
 
 router.put('/validacoes/:id', autenticar, (req, res) => {
@@ -1152,6 +1214,7 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
     kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens),itens_opcionais:P(k.itens_opcionais)})),
     garantia_config: db.query('SELECT * FROM garantia_config'),
     validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos),fotos:P(v.fotos)})),
+    prazos_validacao: db.query('SELECT * FROM prazos_validacao'),
     clientes:      db.query('SELECT * FROM clientes'),
     doadoras:      db.query('SELECT * FROM doadoras'),
     retiradas:     db.query('SELECT * FROM retiradas'),
@@ -1286,11 +1349,16 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        fotos,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
          v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
          v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
-         J(v.fotos||[]), v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
+         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'',
+         v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
+
+    if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)
+      db.runBatch(`INSERT OR REPLACE INTO prazos_validacao(id,marca,modelo,modelo_norm,complexidade,dias_reforma,dias_teste,dias_embalagem,prazo_final,tolerancia,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+        [p.id||uid(), p.marca||'', p.modelo||'', normalizarModeloPrazo(p.modelo), p.complexidade||'', p.dias_reforma||0, p.dias_teste||0, p.dias_embalagem||0, p.prazo_final||0, p.tolerancia||0, p.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);

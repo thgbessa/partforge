@@ -3637,6 +3637,20 @@ const VALIDACAO_ETAPA_LABEL = {
 };
 const VALIDACAO_STATUS_MAP = { repair: 'REPAIR', assessoria: 'ASSESSORIA' };
 
+// Calcula a urgência de um prazo (data_limite, formato AAAA-MM-DD) em
+// relação a hoje. Não mostra nada pra itens já concluídos (o prazo deles já
+// não importa mais pra fins de urgência).
+function calcularUrgenciaPrazo(dataLimite, status) {
+  if (!dataLimite || status === 'CONCLUIDO') return null;
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const limite = new Date(dataLimite + 'T00:00:00');
+  const diffDias = Math.round((limite - hoje) / 86400000);
+  if (diffDias < 0) return { label: `${Math.abs(diffDias)}d atrasado`, cor: 'var(--red)', icone: '⚠', diffDias };
+  if (diffDias === 0) return { label: 'Vence hoje', cor: 'var(--red)', icone: '⚠', diffDias };
+  if (diffDias <= 2) return { label: `${diffDias}d restantes`, cor: 'var(--accent)', icone: '⏰', diffDias };
+  return { label: `${diffDias}d restantes`, cor: 'var(--green)', icone: '✓', diffDias };
+}
+
 async function loadAndRenderValidacao(etapa, q = '') {
   setSyncing(true);
   try {
@@ -3679,7 +3693,7 @@ function renderValidacao(etapa, q) {
   }
 
   el.innerHTML = `<table class="data-table">
-    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
     <tbody>
       ${lista.map(v => {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
@@ -3709,6 +3723,7 @@ function renderValidacao(etapa, q) {
           colPecaProduto = `<div style="font-size:11px">${nomeItem}</div>` +
             (dataEntregaItem ? `<div style="font-size:10px;color:${atrasado ? 'var(--red)' : 'var(--text3)'}">${atrasado ? '⚠ ' : ''}entrega: ${new Date(dataEntregaItem + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '');
         }
+        const urg = calcularUrgenciaPrazo(v.data_limite, v.status);
         return `<tr>
           <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
           <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
@@ -3716,12 +3731,78 @@ function renderValidacao(etapa, q) {
           <td style="font-size:12px">${v.equip_cliente || '—'}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
+          <td>${urg ? `<div style="font-size:11px;font-weight:600;color:${urg.cor}">${urg.icone} ${urg.label}</div><div style="font-size:10px;color:var(--text3)">${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '<span style="color:var(--text3)">—</span>'}</td>
           <td>${colPecaProduto}</td>
           <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.obs || ''}</td>
           <td style="text-align:right;white-space:nowrap">${acoes}</td>
         </tr>`;
       }).join('')}
     </tbody></table>`;
+}
+
+// ── Agenda: equipamentos na bancada do Repair, priorizados por prazo ──
+function abrirAgendaRepair() {
+  let overlay = document.getElementById('modal-agenda-repair-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-agenda-repair-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+
+  const naBancada = (db.validacoes || []).filter(v => v.status === 'REPAIR');
+  const grupos = {
+    atrasado:  { titulo: '⚠ ATRASADOS',            cor: 'var(--red)',    itens: [] },
+    hoje:      { titulo: '⚠ VENCE HOJE',            cor: 'var(--red)',    itens: [] },
+    proximo:   { titulo: '⏰ PRÓXIMOS 2 DIAS',       cor: 'var(--accent)', itens: [] },
+    noPrazo:   { titulo: '✓ NO PRAZO',              cor: 'var(--green)',  itens: [] },
+    semPrazo:  { titulo: '— SEM PRAZO CONFIGURADO', cor: 'var(--text3)',  itens: [] },
+  };
+  naBancada.forEach(v => {
+    const urg = calcularUrgenciaPrazo(v.data_limite, v.status);
+    if (!urg) { grupos.semPrazo.itens.push(v); return; }
+    if (urg.diffDias < 0) grupos.atrasado.itens.push({ ...v, _urg: urg });
+    else if (urg.diffDias === 0) grupos.hoje.itens.push({ ...v, _urg: urg });
+    else if (urg.diffDias <= 2) grupos.proximo.itens.push({ ...v, _urg: urg });
+    else grupos.noPrazo.itens.push({ ...v, _urg: urg });
+  });
+  // Ordena cada grupo pelo prazo mais urgente primeiro
+  ['atrasado', 'hoje', 'proximo', 'noPrazo'].forEach(k => grupos[k].itens.sort((a, b) => a._urg.diffDias - b._urg.diffDias));
+
+  const renderItem = v => `
+    <div style="padding:10px 12px;border-left:3px solid ${v._urg?.cor || 'var(--border2)'};background:var(--surface2);border-radius:6px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">#${v.seq_num||'—'} · ${v.equip_serie||'—'}</span>
+          <div style="font-size:12px;margin-top:2px">${v.equip_modelo||'—'}${v.equip_cliente?' · <span style="color:var(--text3)">'+v.equip_cliente+'</span>':''}</div>
+        </div>
+        ${v._urg ? `<div style="text-align:right;flex-shrink:0"><div style="font-size:11px;font-weight:700;color:${v._urg.cor}">${v._urg.icone} ${v._urg.label}</div><div style="font-size:9px;color:var(--text3)">limite: ${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}</div></div>` : ''}
+      </div>
+      <div style="margin-top:6px;display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" style="font-size:10px" onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')">✎ Editar</button>
+        <button class="btn btn-sm" style="font-size:10px;background:rgba(52,152,219,0.15);color:#3498db;border:1px solid rgba(52,152,219,0.3)" onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalAvancarValidacao('${v.id}','avancar')">✓ Enviar p/ Assessoria</button>
+      </div>
+    </div>`;
+
+  const gruposComItens = Object.values(grupos).filter(g => g.itens.length);
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:520px;width:100%;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">📅 Agenda — Equipamentos na Bancada (${naBancada.length})</span>
+        <button onclick="document.getElementById('modal-agenda-repair-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        ${!naBancada.length ? '<div style="text-align:center;color:var(--text3);font-size:13px">Nenhum equipamento no Repair no momento</div>' :
+          gruposComItens.map(g => `
+            <div style="margin-bottom:18px">
+              <div style="font-size:11px;font-weight:700;color:${g.cor};margin-bottom:8px">${g.titulo} (${g.itens.length})</div>
+              ${g.itens.map(renderItem).join('')}
+            </div>`).join('')}
+      </div>
+    </div>`;
 }
 
 // ── Modal Novo/Editar equipamento em validação ──
@@ -3908,7 +3989,12 @@ function abrirModalValidacao(id) {
         </div>
         <div class="form-group">
           <label class="form-label">Modelo</label>
-          <input class="form-input" id="validacao-modelo" value="${v?.equip_modelo || ''}" placeholder="Preenche sozinho ao selecionar, ou digite">
+          <input class="form-input" id="validacao-modelo" value="${v?.equip_modelo || ''}" placeholder="Preenche sozinho ao selecionar, ou digite"
+            ${v ? '' : 'oninput="atualizarPreviewPrazoValidacao()"'}>
+          <div id="validacao-prazo-preview" style="font-size:11px;margin-top:5px">
+            ${v && v.data_limite ? `<span style="color:var(--accent);font-weight:600">📅 Prazo aplicado: ${v.prazo_dias}d (${v.prazo_complexidade || '—'}) · limite: ${new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR')}</span>`
+              : (v ? '<span style="color:var(--text3)">Nenhum prazo configurado pra esse modelo quando entrou no Repair</span>' : '')}
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Cliente</label>
@@ -3995,6 +4081,26 @@ function selecionarEquipValidacao(id, serie, modelo, cliente) {
   document.getElementById('validacao-modelo').value = modelo;
   document.getElementById('validacao-cliente').value = cliente;
   document.getElementById('validacao-equip-dropdown').style.display = 'none';
+  if (typeof atualizarPreviewPrazoValidacao === 'function') atualizarPreviewPrazoValidacao();
+}
+
+let _prazoPreviewTimer;
+function atualizarPreviewPrazoValidacao() {
+  clearTimeout(_prazoPreviewTimer);
+  const el = document.getElementById('validacao-prazo-preview');
+  const modelo = document.getElementById('validacao-modelo')?.value.trim();
+  if (!el) return;
+  if (!modelo) { el.innerHTML = ''; return; }
+  _prazoPreviewTimer = setTimeout(() => {
+    API.get('/prazos-validacao/buscar?modelo=' + encodeURIComponent(modelo)).then(p => {
+      if (p && p.prazo_final > 0) {
+        const dataLimite = new Date(Date.now() + p.prazo_final * 86400000).toLocaleDateString('pt-BR');
+        el.innerHTML = `<span style="color:var(--accent);font-weight:600">📅 Prazo encontrado: ${p.modelo} · ${p.prazo_final}d (${p.complexidade}) → previsão de conclusão: ${dataLimite}</span>`;
+      } else {
+        el.innerHTML = `<span style="color:var(--text3)">Nenhum prazo configurado pra esse modelo ainda</span>`;
+      }
+    }).catch(() => { el.innerHTML = ''; });
+  }, 400);
 }
 
 function salvarValidacao(id) {
@@ -4016,8 +4122,12 @@ function salvarValidacao(id) {
     fotos: _validacaoFotos,
   };
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
-  prom.then(() => {
-    toast(id ? 'Atualizado' : 'Equipamento adicionado ao Repair', 'success');
+  prom.then(res => {
+    if (!id && res?.prazo) {
+      toast(`Adicionado ao Repair — prazo: ${res.prazo.dias}d (${res.prazo.complexidade}), limite ${new Date(res.prazo.dataLimite+'T00:00:00').toLocaleDateString('pt-BR')}`, 'success');
+    } else {
+      toast(id ? 'Atualizado' : 'Equipamento adicionado ao Repair (sem prazo configurado pra esse modelo)', id ? 'success' : 'info');
+    }
     document.getElementById('modal-validacao-overlay')?.remove();
     loadAndRenderValidacao('repair');
     loadAndRenderValidacao('assessoria');
@@ -7609,12 +7719,13 @@ function exportarExcel(aba) {
       return String(v.equip_serie || '').toLowerCase().includes(q) || String(v.equip_modelo || '').toLowerCase().includes(q) || String(v.equip_cliente || '').toLowerCase().includes(q);
     });
     const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
-    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Status', 'Data Entrada', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
+    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
     const rows = [heads, ...lista.map(function(v) {
       return [
         v.seq_num || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '',
         (VALIDACAO_ETAPA_LABEL[v.status] || {}).label || v.status,
         v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '',
+        v.prazo_complexidade || '', v.prazo_dias || '', fmtBR(v.data_limite),
         v.peca_solicitada || '', fmtBR(v.data_solicitacao_peca), fmtBR(v.data_entrega_peca),
         v.produto_solicitado || '', fmtBR(v.data_solicitacao_produto), fmtBR(v.data_entrega_produto),
         v.obs || ''
@@ -8543,6 +8654,7 @@ function navigate(page, el) {
     loadAndRenderGarantia();
   } else if (page === 'validacao-repair') {
     if (actionsEl) actionsEl.innerHTML = `
+      <button class="btn btn-ghost" onclick="abrirAgendaRepair()">📅 Agenda</button>
       <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('validacao-repair')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalValidacao()">⊕ Novo Equipamento no Repair</button>`;

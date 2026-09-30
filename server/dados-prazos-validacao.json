@@ -1,0 +1,522 @@
+[
+ {
+  "marca": "Mindray",
+  "modelo": "BC-2800",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-2800 VET",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-3200",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-3600",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-5000",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-5150",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BC-5380",
+  "complexidade": "Média",
+  "dias_reforma": 7.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 9.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Snibe",
+  "modelo": "BIOSSAYS 240",
+  "complexidade": "Alta",
+  "dias_reforma": 7.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 10.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BS-120",
+  "complexidade": "Média",
+  "dias_reforma": 5.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 8.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BS-200E",
+  "complexidade": "Média",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BS-380",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "BS-480",
+  "complexidade": "Alta",
+  "dias_reforma": 15.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 18.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SYSMEX",
+  "modelo": "CA 500",
+  "complexidade": "Média",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "CHEMRAY-120",
+  "complexidade": "Média",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Dymaind",
+  "modelo": "DH 615",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 12.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Dymaind",
+  "modelo": "DH 76",
+  "complexidade": "Média",
+  "dias_reforma": 8.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 10.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "FUJI FILM",
+  "modelo": "DRICHEM",
+  "complexidade": "Baixa",
+  "dias_reforma": 2.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SIEMENS",
+  "modelo": "EPOC",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "HEMACOUNTER 60",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "HEMACOUNTER SL",
+  "complexidade": "Média",
+  "dias_reforma": 10.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 12.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "HEMACOUNTER VET",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "HMG 51",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "HMG 51 VET",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "LAVADORA RT-3000",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "LEITORA RT-6000",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Medmax",
+  "modelo": "MAX COAG 4",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Diesse",
+  "modelo": "MINI-CUBE",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "MR-96A",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Mindray",
+  "modelo": "MW-12A",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Grifols",
+  "modelo": "Q",
+  "complexidade": "Média",
+  "dias_reforma": 5.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 8.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "IN VITRO",
+  "modelo": "QUICK STAR",
+  "complexidade": "Baixa",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "RAC50",
+  "complexidade": "Média",
+  "dias_reforma": 3.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 6.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "CA50",
+  "complexidade": "Média",
+  "dias_reforma": 3.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 6.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SIEMENS",
+  "modelo": "RL-348",
+  "complexidade": "Média",
+  "dias_reforma": 5.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 8.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SIEMENS",
+  "modelo": "RP-500",
+  "complexidade": "Alta",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "RT2201C (semi)",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "RT2202C (semi)",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Rayto",
+  "modelo": "RT1904C (semi)",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Abbott",
+  "modelo": "Ruby",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "STAGO",
+  "modelo": "SATELLITE MAX",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Vyttra",
+  "modelo": "SLIDEINK PLUS",
+  "complexidade": "Baixa",
+  "dias_reforma": 3.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 5.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SENSA CORE",
+  "modelo": "ST-200",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SENSA CORE",
+  "modelo": "ST-200 TOUCH",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "VIDA",
+  "modelo": "VIDA ELETROLYTE",
+  "complexidade": "Média",
+  "dias_reforma": 1.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 3.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS 250",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS 350",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS 3600",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS 4600",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS 5600",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "ORTHO",
+  "modelo": "VITROS ECI",
+  "complexidade": "Alta",
+  "dias_reforma": 10.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 13.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "SNIBE",
+  "modelo": "E6",
+  "complexidade": "Média",
+  "dias_reforma": 5.0,
+  "dias_teste": 2.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 8.0,
+  "tolerancia": 2.0
+ },
+ {
+  "marca": "Dymaind",
+  "modelo": "DH 61",
+  "complexidade": "Baixa",
+  "dias_reforma": 5.0,
+  "dias_teste": 1.0,
+  "dias_embalagem": 1.0,
+  "prazo_final": 7.0,
+  "tolerancia": 2.0
+ }
+]
