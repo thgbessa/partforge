@@ -728,6 +728,33 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim recalcular prazos lancados ──
 
+    // ── Diagnostico temporario: investigar por que o card de Equip. Quallyx
+    //    SP nao atualiza ao adicionar mais uma retirada. Rodar, ver, depois
+    //    remover. ──
+    app.get('/api/admin/diag-retiradas', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const movsComRetirada = db.query(`SELECT id, seq_num, peca_nome, peca_codigo, retirada_eqsp_id, retirada_eqsp_nome, created_at
+          FROM movimentacoes WHERE retirada_eqsp_id != '' ORDER BY created_at DESC`);
+        const equips = db.query('SELECT id, nome, serie, retiradas_qtd FROM equip_quallyx_sp').map(e => ({ id: e.id, nome: e.nome, serie: e.serie }));
+        const contagemReal = {};
+        movsComRetirada.forEach(m => { contagemReal[m.retirada_eqsp_id] = (contagemReal[m.retirada_eqsp_id] || 0) + 1; });
+        res.json({
+          ok: true,
+          totalMovimentacoesComRetirada: movsComRetirada.length,
+          movimentacoesComRetirada: movsComRetirada.map(m => ({ ...m, created_at_fmt: new Date(m.created_at).toLocaleString('pt-BR') })),
+          equipamentosExistentes: equips,
+          contagemCalculadaAgora: contagemReal
+        });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim diag retiradas ──
+
     // ── Importa os 88 equipamentos da filial de SP (extraidos dos prints
     //    do sistema antigo EquipQuallyx). Rodar 1x, depois remover. ──
     app.get('/api/admin/importar-equip-quallyx-sp', (req, res) => {
