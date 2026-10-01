@@ -1134,11 +1134,14 @@ let actionModalTarget = null; // id da solicitação sendo editada
 
 let movItens = [];
 function adicionarItemMov() {
-  const pecaId = document.getElementById('mov-peca').value;
+  const pecaHidden = document.getElementById('mov-peca');
+  const pecaId = pecaHidden.value;
+  const manual = pecaHidden.dataset.manual === '1';
+  const manualTexto = pecaHidden.dataset.manualTexto || '';
   const qtd = parseInt(document.getElementById('mov-qtd').value) || 0;
-  if (!pecaId) { toast('Selecione uma peca', 'error'); return; }
+  if (!pecaId && !manual) { toast('Selecione uma peca', 'error'); return; }
   if (qtd <= 0) { toast('Informe uma quantidade valida', 'error'); return; }
-  const peca = db.pecas.find(function(x) { return x.id === pecaId; });
+  const peca = manual ? null : db.pecas.find(function(x) { return x.id === pecaId; });
   // Captura o equipamento selecionado NO MOMENTO em que este item é
   // adicionado — assim, cada item da lista pode ir pra um equipamento
   // diferente (troque o equipamento selecionado entre uma adição e outra).
@@ -1150,9 +1153,9 @@ function adicionarItemMov() {
   const retiradaEqspId = document.getElementById('mov-retirada-eqsp')?.value || '';
   const retiradaEqspNome = document.getElementById('mov-retirada-eqsp')?.dataset.nome || '';
   movItens.push({
-    peca_id: pecaId,
-    peca_codigo: peca?.codigo || pecaId,
-    peca_nome: peca?.nome || '?',
+    peca_id: manual ? '' : pecaId,
+    peca_codigo: manual ? manualTexto : (peca?.codigo || pecaId),
+    peca_nome: manual ? manualTexto : (peca?.nome || '?'),
     peca_unidade: peca?.unidade || 'UN',
     peca_fonte: peca?.fonte || '',
     peca_custo: peca?.custo || 0,
@@ -1164,10 +1167,13 @@ function adicionarItemMov() {
     equip_modelo: equip?.modelo || '',
     retirada_eqsp_id: retiradaEqspId,
     retirada_eqsp_nome: retiradaEqspNome,
+    manual: manual,
   });
   document.getElementById('mov-peca-search').value = '';
-  document.getElementById('mov-peca').value = '';
-  document.getElementById('mov-peca').dataset.label = '';
+  pecaHidden.value = '';
+  pecaHidden.dataset.label = '';
+  delete pecaHidden.dataset.manual;
+  delete pecaHidden.dataset.manualTexto;
   var selEl = document.getElementById('mov-peca-selected');
   if (selEl) selEl.style.display = 'none';
   document.getElementById('mov-qtd').value = '';
@@ -1187,7 +1193,7 @@ function renderItensMov() {
         ? '🔧 ' + it.retirada_eqsp_nome
         : '<span style="color:var(--text3)">—</span>';
       return '<tr><td class="mono" style="font-size:11px;color:var(--accent)">' + (it.peca_codigo||'') + '</td>' +
-        '<td style="font-size:12px">' + (it.peca_nome||'') + '</td>' +
+        '<td style="font-size:12px">' + (it.peca_nome||'') + (it.manual ? ' <span style="color:var(--accent);font-size:9px">(avulsa)</span>' : '') + '</td>' +
         '<td class="mono">' + it.qtd + '</td>' +
         '<td style="font-size:11px">' + equipInfo + '</td>' +
         '<td style="font-size:10px">' + retiradaInfo + '</td>' +
@@ -1200,20 +1206,26 @@ function removerItemMov(idx) {
 }
 function criarSolicitacao() {
   var listaFinal = movItens.slice();
-  var pecaIdAtual = document.getElementById('mov-peca').value;
+  var pecaHiddenAtual = document.getElementById('mov-peca');
+  var pecaIdAtual = pecaHiddenAtual.value;
+  var manualAtual = pecaHiddenAtual.dataset.manual === '1';
+  var manualTextoAtual = pecaHiddenAtual.dataset.manualTexto || '';
   var qtdAtual = parseInt(document.getElementById('mov-qtd').value) || 0;
-  if (!listaFinal.length && pecaIdAtual && qtdAtual > 0) {
-    var pecaAtual = db.pecas.find(function(x) { return x.id === pecaIdAtual; });
+  if (!listaFinal.length && (pecaIdAtual || manualAtual) && qtdAtual > 0) {
+    var pecaAtual = manualAtual ? null : db.pecas.find(function(x) { return x.id === pecaIdAtual; });
     var equipIdAtual = document.getElementById('mov-equip').value;
     var equipAtual   = equipIdAtual ? db.equipamentos.find(x => x.id === equipIdAtual) : null;
     listaFinal.push({
-      peca_id: pecaIdAtual, peca_codigo: pecaAtual?.codigo || pecaIdAtual,
-      peca_nome: pecaAtual?.nome || '?', peca_unidade: pecaAtual?.unidade || 'UN',
+      peca_id: manualAtual ? '' : pecaIdAtual,
+      peca_codigo: manualAtual ? manualTextoAtual : (pecaAtual?.codigo || pecaIdAtual),
+      peca_nome: manualAtual ? manualTextoAtual : (pecaAtual?.nome || '?'),
+      peca_unidade: pecaAtual?.unidade || 'UN',
       peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, peca_valor_venda: pecaAtual?.valor_venda || 0, qtd: qtdAtual,
       equip_id: equipIdAtual || '', equip_serie: equipAtual?.serie || equipAtual?.codigo || '',
       equip_cliente: equipAtual?.nome_fantasia || equipAtual?.cliente || '', equip_modelo: equipAtual?.modelo || '',
       retirada_eqsp_id: document.getElementById('mov-retirada-eqsp')?.value || '',
       retirada_eqsp_nome: document.getElementById('mov-retirada-eqsp')?.dataset.nome || '',
+      manual: manualAtual,
     });
   }
   if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
@@ -1241,6 +1253,12 @@ function criarSolicitacao() {
     var item = listaFinal[i];
     var estoqueAtual = db.estoque[item.peca_id] || 0;
     var temEstoque = estoqueAtual >= item.qtd;
+    // Peça avulsa (sem cadastro): não vincula a nenhuma peça real do
+    // catálogo — registra o que foi digitado nas observações, igual já
+    // acontece no app mobile.
+    var obsFinal = item.manual
+      ? ('PEÇA NÃO CADASTRADA: ' + item.peca_codigo + (obs ? ' | ' + obs : ''))
+      : obs;
     var data = {
       peca_id: item.peca_id, peca_codigo: item.peca_codigo, peca_nome: item.peca_nome,
       peca_unidade: item.peca_unidade, peca_fonte: item.peca_fonte, peca_custo: item.peca_custo,
@@ -1249,7 +1267,7 @@ function criarSolicitacao() {
       equip_id: item.equip_id || '', equip_serie: item.equip_serie || '',
       equip_cliente: item.equip_cliente || '', equip_modelo: item.equip_modelo || '',
       retirada_eqsp_id: item.retirada_eqsp_id || '', retirada_eqsp_nome: item.retirada_eqsp_nome || '',
-      tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId, data_solicitacao: dataSolicitacao
+      tecnico: tecnico, obs: obsFinal, tem_estoque: temEstoque, grupo_id: grupoId, data_solicitacao: dataSolicitacao
     };
     API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
       .catch(function() { erros++; processarProximo(i + 1); });
@@ -6324,8 +6342,20 @@ function filtrarPecasMov(q) {
     String(p.grupo||'').toLowerCase().includes(ql)
   ).slice(0, 50);
 
+  // Opção de peça avulsa (não cadastrada) — útil principalmente pra peças
+  // usadas retiradas de outro equipamento, que normalmente não têm um
+  // código próprio no catálogo. Sempre aparece no final, se tiver algo
+  // digitado na busca.
+  const qOriginal = (q || '').trim();
+  const opcaoAvulsa = qOriginal ? `<div class="mov-dd-item" onmousedown="selecionarPecaAvulsa('${qOriginal.replace(/'/g, "\\'")}')" style="
+      padding:9px 14px; cursor:pointer; border-top:1px dashed var(--accent); border-bottom:1px solid var(--border);
+    " onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="font-size:12px;color:var(--accent)">➕ Usar "${qOriginal}" como peça avulsa</div>
+      <div style="font-size:10px;color:var(--text3)">Peça não cadastrada — segue com esse código/descrição mesmo assim</div>
+    </div>` : '';
+
   if (!list.length) {
-    dd.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--text3)">Nenhuma peça encontrada</div>`;
+    dd.innerHTML = `<div style="padding:12px 14px;font-size:12px;color:var(--text3)">Nenhuma peça encontrada</div>` + opcaoAvulsa;
     dd.style.display = 'block';
     return;
   }
@@ -6348,8 +6378,24 @@ function filtrarPecasMov(q) {
       </div>
       <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:${cor};white-space:nowrap">${qty} ${p.unidade}</span>
     </div>`;
-  }).join('');
+  }).join('') + opcaoAvulsa;
   dd.style.display = 'block';
+}
+
+function selecionarPecaAvulsa(texto) {
+  const searchEl = document.getElementById('mov-peca-search');
+  const hidden   = document.getElementById('mov-peca');
+  const card     = document.getElementById('mov-peca-selected');
+  const dd       = document.getElementById('mov-peca-dropdown');
+
+  searchEl.value = texto;
+  hidden.value = '';
+  hidden.dataset.label = texto;
+  hidden.dataset.manual = '1';
+  hidden.dataset.manualTexto = texto;
+  dd.style.display = 'none';
+  card.style.display = 'block';
+  card.innerHTML = `<div style="color:var(--accent)">➕ ${texto} <span style="color:var(--text3);font-size:10px">(peça avulsa, não cadastrada)</span></div>`;
 }
 
 function selecionarPeca(id) {
@@ -6367,6 +6413,8 @@ function selecionarPeca(id) {
   searchEl.value     = label;
   hidden.value       = id;
   hidden.dataset.label = label;
+  delete hidden.dataset.manual;
+  delete hidden.dataset.manualTexto;
   dd.style.display   = 'none';
 
   card.innerHTML = `
