@@ -110,6 +110,7 @@ function navigate(page, el) {
     renderEstoque();
   } else if (page === 'movimentacao') {
     populateMovSelects();
+    limparRetiradaEqspMov();
   } else if (page === 'historico') {
     actionsEl.innerHTML = `<button class="btn btn-excel" onclick="exportarExcel('historico')">⬇ Exportar Excel</button>`;
     renderHistorico();
@@ -1295,7 +1296,11 @@ function populateMovSelects() {
   document.getElementById('mov-doadora-search').value = '';
   document.getElementById('mov-doadora').value = '';
   document.getElementById('mov-doadora-card').style.display = 'none';
-  limparRetiradaEqspMov();
+  // A retirada de equipamento (Quallyx SP) NÃO é limpa aqui de propósito:
+  // depois de criar uma solicitação com sucesso, é comum lançar mais peças
+  // retiradas do MESMO equipamento em seguida — então ela persiste até o
+  // usuário trocar, clicar no ✕, ou realmente cancelar/sair da tela (ver
+  // limparRetiradaEqspMov() chamado explicitamente nesses outros casos).
 }
 
 // -----------------------------------------------
@@ -1405,10 +1410,12 @@ function selecionarRetiradaEqspMov(id, nome, sub) {
   card.style.display = 'block';
 }
 function limparRetiradaEqspMov() {
-  document.getElementById('mov-retirada-eqsp').value = '';
-  document.getElementById('mov-retirada-eqsp').dataset.nome = '';
-  document.getElementById('mov-retirada-eqsp-search').value = '';
-  document.getElementById('mov-retirada-eqsp-card').style.display = 'none';
+  const hidden = document.getElementById('mov-retirada-eqsp');
+  if (hidden) { hidden.value = ''; hidden.dataset.nome = ''; }
+  const searchEl = document.getElementById('mov-retirada-eqsp-search');
+  if (searchEl) searchEl.value = '';
+  const card = document.getElementById('mov-retirada-eqsp-card');
+  if (card) card.style.display = 'none';
 }
 function fecharDropdownRetiradaEqsp() {
   const dd = document.getElementById('mov-retirada-eqsp-dropdown');
@@ -1929,7 +1936,7 @@ function simularEmail(tipo, sol) {
 // -----------------------------------------------
 // CANCELAR / LIMPAR
 // -----------------------------------------------
-function cancelarMov() { populateMovSelects(); }
+function cancelarMov() { populateMovSelects(); limparRetiradaEqspMov(); }
 
 // ============================================================
 //  AUTH — LOGIN / LOGOUT / SESSÃO
@@ -9202,6 +9209,7 @@ async function loadMovimentacoesParaForm() {
     db.estoque = {};
     estoque.forEach(e => { db.estoque[e.peca_id] = e.quantidade; });
     populateMovSelects();
+    limparRetiradaEqspMov();
   } catch(e) { toast(e.message, 'error'); }
 }
 
