@@ -4292,17 +4292,34 @@ function sugerirEquipValidacao(q) {
   if (!dd) return;
   const ql = (q || '').toLowerCase().trim();
   if (!ql || ql.length < 2) { dd.style.display = 'none'; return; }
-  API.get('/equipamentos?q=' + encodeURIComponent(ql)).then(equips => {
-    const list = (equips || []).slice(0, 15);
+  // Busca ao mesmo tempo no catálogo principal de Equipamentos e no
+  // Equip. Quallyx SP — equipamento lançado no Repair costuma vir de
+  // qualquer um dos dois, então ambos aparecem juntos no mesmo dropdown
+  // (o da SP marcado com uma etiqueta, pra diferenciar).
+  Promise.all([
+    API.get('/equipamentos?q=' + encodeURIComponent(ql)).catch(() => []),
+    API.get('/equip-quallyx-sp?q=' + encodeURIComponent(ql)).catch(() => []),
+  ]).then(([equips, eqsp]) => {
+    const doCatalogo = (equips || []).slice(0, 10).map(e => ({
+      id: e.id || '', serie: e.serie || '', modelo: e.modelo || '',
+      sub: String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim(),
+      quallyxSP: false,
+    }));
+    const daQuallyxSP = (eqsp || []).slice(0, 10).map(e => ({
+      id: '', serie: e.serie || '', modelo: e.nome || '',
+      sub: e.marca || '',
+      quallyxSP: true,
+    }));
+    const list = [...doCatalogo, ...daQuallyxSP];
     dd.style.display = list.length ? 'block' : 'none';
     dd.innerHTML = list.map(e => {
-      const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
-      return `<div onmousedown="selecionarEquipValidacao('${e.id||''}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${cliente.replace(/'/g,"\\'")}')"
+      const badge = e.quallyxSP ? '<span style="font-size:8px;padding:1px 5px;border-radius:3px;background:var(--accent-dim);color:var(--accent);margin-left:6px;vertical-align:middle">QUALLYX SP</span>' : '';
+      return `<div onmousedown="selecionarEquipValidacao('${e.id}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${(e.sub||'').replace(/'/g,"\\'")}')"
         style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}</div>
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}${badge}</div>
         <div style="font-size:12px;color:var(--text2)">${e.modelo || ''}</div>
-        ${cliente ? `<div style="font-size:10px;color:var(--text3)">${cliente}</div>` : ''}
+        ${e.sub ? `<div style="font-size:10px;color:var(--text3)">${e.sub}</div>` : ''}
       </div>`;
     }).join('');
   }).catch(() => { dd.style.display = 'none'; });
