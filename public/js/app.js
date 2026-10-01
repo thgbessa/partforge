@@ -1177,7 +1177,9 @@ function adicionarItemMov() {
   var selEl = document.getElementById('mov-peca-selected');
   if (selEl) selEl.style.display = 'none';
   document.getElementById('mov-qtd').value = '';
-  limparRetiradaEqspMov();
+  // Não limpa a retirada aqui de propósito: igual o equipamento de destino,
+  // ela fica selecionada pra facilitar adicionar várias peças seguidas da
+  // mesma origem — só muda quando o usuário trocar ou clicar em "✕".
   renderItensMov();
 }
 function renderItensMov() {
