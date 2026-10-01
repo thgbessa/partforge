@@ -267,6 +267,11 @@ async function init() {
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN os_numero TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN origem TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
+  // Peça usada retirada de um equipamento da aba Equip. Quallyx SP, pra
+  // registrar a origem quando a peça enviada numa movimentação não é nova.
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN retirada_eqsp_id TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE movimentacoes ADD COLUMN retirada_eqsp_nome TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+
   persist();
   console.log('✅ Banco de dados iniciado');
   return _db;

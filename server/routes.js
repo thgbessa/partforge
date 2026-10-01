@@ -470,12 +470,14 @@ router.post('/movimentacoes', autenticar, (req, res) => {
   }
   const eventos=J([{status:'SOLICITADA',data:dataMs,obs:'',user:req.user.nome}]);
   db.run(`INSERT INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,peca_valor_venda,
-    qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem,grupo_id)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,valor_por_orc,obs,eventos,created_at,created_by,origem,grupo_id,
+    retirada_eqsp_id,retirada_eqsp_nome)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id,seq,'SOLICITADA',m.peca_id||'',m.peca_codigo||'',m.peca_nome||'',m.peca_unidade||'UN',
      m.peca_fonte||'',m.peca_custo||0,m.peca_valor_venda||0,m.qtd||1,m.equip_id||'',m.equip_serie||'',m.equip_cliente||'',
      m.equip_modelo||'',m.tecnico||req.user.nome,m.tem_estoque?1:0,m.tipo_alocacao||'',
-     m.valor_por_orc?1:0,m.obs||'',eventos,dataMs,req.user.id,m.origem||'desktop',m.grupo_id||'']);
+     m.valor_por_orc?1:0,m.obs||'',eventos,dataMs,req.user.id,m.origem||'desktop',m.grupo_id||'',
+     m.retirada_eqsp_id||'',m.retirada_eqsp_nome||'']);
   res.status(201).json({id,seq_num:seq});
 });
 
@@ -1032,17 +1034,27 @@ router.get('/equip-quallyx-sp', autenticar, (req, res) => {
   let sql = 'SELECT * FROM equip_quallyx_sp WHERE 1=1'; const p = [];
   if (status) { sql += ' AND status=?'; p.push(status); }
   if (q) { sql += ' AND (nome LIKE ? OR marca LIKE ? OR serie LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  // Contagem de peças retiradas (movimentações que apontam esse equipamento
+  // como origem da peça usada), pra mostrar o indicador "X retirada(s)".
+  const contagens = {};
+  db.query("SELECT retirada_eqsp_id, COUNT(*) as n FROM movimentacoes WHERE retirada_eqsp_id != '' GROUP BY retirada_eqsp_id")
+    .forEach(r => { contagens[r.retirada_eqsp_id] = r.n; });
   // A imagem (base64) fica de fora da listagem, só um booleano — o
   // conteúdo é buscado sob demanda em /equip-quallyx-sp/:id/imagem.
   res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(e => {
     const { imagem, ...resto } = e;
-    return { ...resto, tem_imagem: !!imagem };
+    return { ...resto, tem_imagem: !!imagem, retiradas_qtd: contagens[e.id] || 0 };
   }));
 });
 router.get('/equip-quallyx-sp/:id/imagem', autenticar, (req, res) => {
   const e = db.get('SELECT imagem FROM equip_quallyx_sp WHERE id=?', [req.params.id]);
   if (!e) return res.status(404).json({ erro: 'Não encontrado' });
   res.json({ imagem: e.imagem || '' });
+});
+router.get('/equip-quallyx-sp/:id/retiradas', autenticar, (req, res) => {
+  const lista = db.query(`SELECT seq_num, peca_codigo, peca_nome, qtd, equip_serie, equip_cliente, tecnico, created_at
+    FROM movimentacoes WHERE retirada_eqsp_id=? ORDER BY created_at DESC`, [req.params.id]);
+  res.json(lista);
 });
 router.post('/equip-quallyx-sp', autenticar, (req, res) => {
   const e = req.body;
@@ -1426,8 +1438,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     }
 
     if (s.movimentacoes?.length) for (const m of s.movimentacoes)
-      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,fotos_despacho,fotos_recebimento,fotos_devolucao,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',typeof m.eventos==='string'?m.eventos:J(m.eventos||[]),typeof m.fotos_despacho==='string'?m.fotos_despacho:J(m.fotos_despacho||[]),typeof m.fotos_recebimento==='string'?m.fotos_recebimento:J(m.fotos_recebimento||[]),typeof m.fotos_devolucao==='string'?m.fotos_devolucao:J(m.fotos_devolucao||[]),m.created_at||m.createdAt||now(),'restore']);
+      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,fotos_despacho,fotos_recebimento,fotos_devolucao,retirada_eqsp_id,retirada_eqsp_nome,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',typeof m.eventos==='string'?m.eventos:J(m.eventos||[]),typeof m.fotos_despacho==='string'?m.fotos_despacho:J(m.fotos_despacho||[]),typeof m.fotos_recebimento==='string'?m.fotos_recebimento:J(m.fotos_recebimento||[]),typeof m.fotos_devolucao==='string'?m.fotos_devolucao:J(m.fotos_devolucao||[]),m.retirada_eqsp_id||'',m.retirada_eqsp_nome||'',m.created_at||m.createdAt||now(),'restore']);
 
     if (s.orcamentos?.length) for (const o of s.orcamentos)
       db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,boleto_arquivo,boleto_nome,nota_arquivo,nota_nome,equipamentos,created_at,updated_at,status_changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,

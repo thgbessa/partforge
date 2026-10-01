@@ -1144,6 +1144,11 @@ function adicionarItemMov() {
   // diferente (troque o equipamento selecionado entre uma adição e outra).
   const equipId = document.getElementById('mov-equip').value;
   const equip   = equipId ? db.equipamentos.find(x => x.id === equipId) : null;
+  // Captura a peça retirada de equipamento (Quallyx SP) selecionada NESTE
+  // momento — cada item da lista pode ter sua própria origem, igual já
+  // acontece com o equipamento de destino.
+  const retiradaEqspId = document.getElementById('mov-retirada-eqsp')?.value || '';
+  const retiradaEqspNome = document.getElementById('mov-retirada-eqsp')?.dataset.nome || '';
   movItens.push({
     peca_id: pecaId,
     peca_codigo: peca?.codigo || pecaId,
@@ -1157,6 +1162,8 @@ function adicionarItemMov() {
     equip_serie: equip?.serie || equip?.codigo || '',
     equip_cliente: equip?.nome_fantasia || equip?.cliente || '',
     equip_modelo: equip?.modelo || '',
+    retirada_eqsp_id: retiradaEqspId,
+    retirada_eqsp_nome: retiradaEqspNome,
   });
   document.getElementById('mov-peca-search').value = '';
   document.getElementById('mov-peca').value = '';
@@ -1164,21 +1171,26 @@ function adicionarItemMov() {
   var selEl = document.getElementById('mov-peca-selected');
   if (selEl) selEl.style.display = 'none';
   document.getElementById('mov-qtd').value = '';
+  limparRetiradaEqspMov();
   renderItensMov();
 }
 function renderItensMov() {
   const el = document.getElementById('mov-itens-lista');
   if (!el) return;
   if (!movItens.length) { el.innerHTML = ''; return; }
-  el.innerHTML = '<table class="data-table"><thead><tr><th>P/N</th><th>Peca</th><th>Qtd</th><th>Equipamento</th><th></th></tr></thead><tbody>' +
+  el.innerHTML = '<table class="data-table"><thead><tr><th>P/N</th><th>Peca</th><th>Qtd</th><th>Equipamento</th><th>Retirada de</th><th></th></tr></thead><tbody>' +
     movItens.map(function(it, i) {
       const equipInfo = it.equip_serie
         ? '<span style="font-family:var(--mono)">' + it.equip_serie + '</span>' + (it.equip_cliente ? ' · ' + it.equip_cliente : '')
         : '<span style="color:var(--text3);font-style:italic">sem equipamento</span>';
+      const retiradaInfo = it.retirada_eqsp_nome
+        ? '🔧 ' + it.retirada_eqsp_nome
+        : '<span style="color:var(--text3)">—</span>';
       return '<tr><td class="mono" style="font-size:11px;color:var(--accent)">' + (it.peca_codigo||'') + '</td>' +
         '<td style="font-size:12px">' + (it.peca_nome||'') + '</td>' +
         '<td class="mono">' + it.qtd + '</td>' +
         '<td style="font-size:11px">' + equipInfo + '</td>' +
+        '<td style="font-size:10px">' + retiradaInfo + '</td>' +
         '<td><button class="btn btn-danger btn-sm" onclick="removerItemMov(' + i + ')">✕</button></td></tr>';
     }).join('') + '</tbody></table>';
 }
@@ -1200,6 +1212,8 @@ function criarSolicitacao() {
       peca_fonte: pecaAtual?.fonte || '', peca_custo: pecaAtual?.custo || 0, peca_valor_venda: pecaAtual?.valor_venda || 0, qtd: qtdAtual,
       equip_id: equipIdAtual || '', equip_serie: equipAtual?.serie || equipAtual?.codigo || '',
       equip_cliente: equipAtual?.nome_fantasia || equipAtual?.cliente || '', equip_modelo: equipAtual?.modelo || '',
+      retirada_eqsp_id: document.getElementById('mov-retirada-eqsp')?.value || '',
+      retirada_eqsp_nome: document.getElementById('mov-retirada-eqsp')?.dataset.nome || '',
     });
   }
   if (!listaFinal.length) { toast('Adicione ao menos uma peca', 'error'); return; }
@@ -1234,6 +1248,7 @@ function criarSolicitacao() {
       qtd: item.qtd,
       equip_id: item.equip_id || '', equip_serie: item.equip_serie || '',
       equip_cliente: item.equip_cliente || '', equip_modelo: item.equip_modelo || '',
+      retirada_eqsp_id: item.retirada_eqsp_id || '', retirada_eqsp_nome: item.retirada_eqsp_nome || '',
       tecnico: tecnico, obs: obs, tem_estoque: temEstoque, grupo_id: grupoId, data_solicitacao: dataSolicitacao
     };
     API.post('/movimentacoes', data).then(function() { criadas++; processarProximo(i + 1); })
@@ -1260,6 +1275,7 @@ function populateMovSelects() {
   document.getElementById('mov-doadora-search').value = '';
   document.getElementById('mov-doadora').value = '';
   document.getElementById('mov-doadora-card').style.display = 'none';
+  limparRetiradaEqspMov();
 }
 
 // -----------------------------------------------
@@ -1318,6 +1334,64 @@ function limparDoadoraMov() {
 
 function fecharDropdownDoadora() {
   const dd = document.getElementById('mov-doadora-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+// -----------------------------------------------
+// PEÇA RETIRADA DE EQUIPAMENTO (EQUIP. QUALLYX SP) NO FORM DE MOVIMENTAÇÃO
+// Busca ao vivo (não precisa pré-carregar os ~100 equipamentos da SP).
+// -----------------------------------------------
+let _retiradaEqspTimer;
+function filtrarRetiradaEqspMov(q) {
+  clearTimeout(_retiradaEqspTimer);
+  const dd = document.getElementById('mov-retirada-eqsp-dropdown');
+  if (!dd) return;
+  const termo = (q || '').trim();
+  if (termo.length < 2) { dd.style.display = 'none'; return; }
+  _retiradaEqspTimer = setTimeout(() => {
+    API.get('/equip-quallyx-sp?q=' + encodeURIComponent(termo)).then(lista => {
+      const filtrada = (lista || []).slice(0, 12);
+      if (!filtrada.length) { dd.style.display = 'none'; return; }
+      dd.innerHTML = filtrada.map(e => {
+        const st = EQSP_STATUS_LABEL[e.status] || {};
+        const nomeAttr = e.nome.replace(/'/g, "\\'");
+        const subAttr = [e.marca, e.serie].filter(Boolean).join(' · ').replace(/'/g, "\\'");
+        return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)"
+          onmousedown="selecionarRetiradaEqspMov('${e.id}','${nomeAttr}','${subAttr}')"
+          onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+          <div style="font-size:13px;color:var(--text)">${e.nome}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text3)">${[e.marca, e.serie].filter(Boolean).join(' · ')}
+            ${st.label ? ' · <span style="color:' + st.dot + '">' + st.label + '</span>' : ''}</div>
+        </div>`;
+      }).join('');
+      dd.style.display = 'block';
+    }).catch(() => { dd.style.display = 'none'; });
+  }, 300);
+}
+function selecionarRetiradaEqspMov(id, nome, sub) {
+  document.getElementById('mov-retirada-eqsp').value = id;
+  document.getElementById('mov-retirada-eqsp').dataset.nome = nome + (sub ? ' · ' + sub : '');
+  document.getElementById('mov-retirada-eqsp-search').value = nome;
+  document.getElementById('mov-retirada-eqsp-dropdown').style.display = 'none';
+  const card = document.getElementById('mov-retirada-eqsp-card');
+  card.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span style="color:var(--accent);font-weight:600">🔧 RETIRADA DE EQUIP. QUALLYX SP</span>
+      <span style="cursor:pointer;color:var(--text3);font-size:12px" onclick="limparRetiradaEqspMov()" title="Remover vínculo">✕</span>
+    </div>
+    <div style="color:var(--text)">${nome}</div>
+    ${sub ? `<div style="color:var(--text3);font-family:var(--mono)">${sub}</div>` : ''}
+  `;
+  card.style.display = 'block';
+}
+function limparRetiradaEqspMov() {
+  document.getElementById('mov-retirada-eqsp').value = '';
+  document.getElementById('mov-retirada-eqsp').dataset.nome = '';
+  document.getElementById('mov-retirada-eqsp-search').value = '';
+  document.getElementById('mov-retirada-eqsp-card').style.display = 'none';
+}
+function fecharDropdownRetiradaEqsp() {
+  const dd = document.getElementById('mov-retirada-eqsp-dropdown');
   if (dd) dd.style.display = 'none';
 }
 
@@ -4498,7 +4572,10 @@ function renderEquipQuallyxSP(q) {
       </div>
       <div style="font-weight:700;font-size:13px;line-height:1.3;margin-bottom:4px">${e.nome}</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${[e.marca, e.serie].filter(Boolean).join(' · ') || '—'}</div>
-      <span class="badge ${st.badge || 'badge-gray'}" style="font-size:10px">${st.label || e.status}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span class="badge ${st.badge || 'badge-gray'}" style="font-size:10px">${st.label || e.status}</span>
+        ${e.retiradas_qtd > 0 ? `<span onclick="event.stopPropagation();verRetiradasEqsp('${e.id}','${e.nome.replace(/'/g, "\\'")}')" style="font-size:10px;color:var(--accent);cursor:pointer;text-decoration:underline">🔧 ${e.retiradas_qtd} retirada${e.retiradas_qtd>1?'s':''}</span>` : ''}
+      </div>
     </div>`;
   }).join('');
 
@@ -4601,6 +4678,48 @@ function selecionarImagemEqsp(inputEl) {
     renderPreviewImagemEqsp();
   }).catch(() => toast('Erro ao processar imagem', 'error'));
   inputEl.value = '';
+}
+
+function verRetiradasEqsp(id, nomeEquip) {
+  let overlay = document.getElementById('modal-retiradas-eqsp-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-retiradas-eqsp-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:480px;width:100%;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">🔧 Peças Retiradas — ${nomeEquip}</span>
+        <button onclick="document.getElementById('modal-retiradas-eqsp-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px" id="retiradas-eqsp-body">
+        <div style="text-align:center;color:var(--text3);font-size:12px">Carregando...</div>
+      </div>
+    </div>`;
+  API.get('/equip-quallyx-sp/' + id + '/retiradas').then(lista => {
+    const body = document.getElementById('retiradas-eqsp-body');
+    if (!body) return;
+    if (!lista.length) { body.innerHTML = '<div style="color:var(--text3);font-size:12px">Nenhuma retirada registrada</div>'; return; }
+    body.innerHTML = lista.map(r => `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;font-size:13px">${r.peca_nome || '—'}</span>
+          <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">${new Date(r.created_at).toLocaleDateString('pt-BR')}</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">
+          Cód. ${r.peca_codigo || '—'} · Qtd ${r.qtd}
+          ${r.equip_serie ? ' · enviada pra ' + r.equip_serie + (r.equip_cliente ? ' (' + r.equip_cliente + ')' : '') : ''}
+        </div>
+        ${r.tecnico ? `<div style="font-size:10px;color:var(--text3)">Técnico: ${r.tecnico}</div>` : ''}
+      </div>`).join('');
+  }).catch(() => {
+    const body = document.getElementById('retiradas-eqsp-body');
+    if (body) body.innerHTML = '<div style="color:var(--red);font-size:12px">Erro ao carregar</div>';
+  });
 }
 
 // Ajuste rápido da posição direto pelo ícone 📍 no card, sem abrir o modal

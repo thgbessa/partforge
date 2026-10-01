@@ -336,6 +336,23 @@
               </div>
             </div>
 
+            <!-- PEÇA RETIRADA DE EQUIPAMENTO (QUALLYX SP) -->
+            <div class="form-group" style="position:relative">
+              <label class="form-label">Peça Retirada de Equipamento <span style="color:var(--text3);font-size:9px">(opcional — se for peça usada)</span></label>
+              <input class="form-input" id="mov-retirada-eqsp-search" placeholder="Buscar em Equip. Quallyx SP por nome ou série..." autocomplete="off"
+                oninput="filtrarRetiradaEqspMov(this.value)" onfocus="filtrarRetiradaEqspMov(this.value)" onblur="setTimeout(()=>fecharDropdownRetiradaEqsp(),200)">
+              <input type="hidden" id="mov-retirada-eqsp">
+              <div id="mov-retirada-eqsp-dropdown" style="
+                display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+                background:var(--surface); border:1px solid var(--border2); border-radius:var(--radius);
+                max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.4); margin-top:2px;
+              "></div>
+              <div id="mov-retirada-eqsp-card" style="display:none; margin-top:6px; padding:8px 10px;
+                background:rgba(230,126,34,0.08); border:1px solid rgba(230,126,34,0.25); border-radius:var(--radius);
+                font-size:11px; line-height:1.7">
+              </div>
+            </div>
+
             <!-- EQUIPAMENTO / SÉRIE -->
             <div class="form-group" style="position:relative">
               <label class="form-label">Nº de Série do Equipamento</label>
