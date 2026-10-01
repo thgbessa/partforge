@@ -4594,6 +4594,11 @@ function renderEquipQuallyxSP(q) {
         <span class="badge ${st.badge || 'badge-gray'}" style="font-size:10px">${st.label || e.status}</span>
         ${e.retiradas_qtd > 0 ? `<span onclick="event.stopPropagation();verRetiradasEqsp('${e.id}','${e.nome.replace(/'/g, "\\'")}')" style="font-size:10px;color:var(--accent);cursor:pointer;text-decoration:underline">🔧 ${e.retiradas_qtd} retirada${e.retiradas_qtd>1?'s':''}</span>` : ''}
       </div>
+      ${e.ultima_retirada ? `<div onclick="event.stopPropagation();verRetiradasEqsp('${e.id}','${e.nome.replace(/'/g, "\\'")}')"
+        style="margin-top:6px;padding:5px 7px;background:var(--surface2);border-radius:5px;cursor:pointer" title="Ver histórico de retiradas">
+        <div style="font-size:9px;color:var(--text3)">ÚLTIMA PEÇA RETIRADA</div>
+        <div style="font-size:10.5px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.ultima_retirada.peca_nome || '—'}</div>
+      </div>` : ''}
     </div>`;
   }).join('');
 
@@ -8332,12 +8337,14 @@ function exportarExcel(aba) {
     if (q) lista = lista.filter(function(e) {
       return String(e.nome || '').toLowerCase().includes(q) || String(e.marca || '').toLowerCase().includes(q) || String(e.serie || '').toLowerCase().includes(q);
     });
-    const heads = ['Nome', 'Marca', 'Série', 'Status', 'Posição', 'Observação', 'Cadastrado em'];
+    const heads = ['Nome', 'Marca', 'Série', 'Status', 'Posição', 'Qtd Retiradas', 'Última Peça Retirada', 'Observação', 'Cadastrado em'];
     const rows = [heads, ...lista.map(function(e) {
       return [
         e.nome || '', e.marca || '', e.serie || '',
         (EQSP_STATUS_LABEL[e.status] || {}).label || e.status,
         e.posicao || '',
+        e.retiradas_qtd || 0,
+        e.ultima_retirada?.peca_nome || '',
         e.obs || '',
         e.created_at ? new Date(e.created_at).toLocaleDateString('pt-BR') : ''
       ];

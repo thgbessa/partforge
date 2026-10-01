@@ -1035,15 +1035,20 @@ router.get('/equip-quallyx-sp', autenticar, (req, res) => {
   if (status) { sql += ' AND status=?'; p.push(status); }
   if (q) { sql += ' AND (nome LIKE ? OR marca LIKE ? OR serie LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   // Contagem de peças retiradas (movimentações que apontam esse equipamento
-  // como origem da peça usada), pra mostrar o indicador "X retirada(s)".
+  // como origem da peça usada), pra mostrar o indicador "X retirada(s)" —
+  // e a última peça retirada, pra já aparecer direto no card sem precisar
+  // clicar (histórico de retiradas por equipamento visível de cara).
   const contagens = {};
   db.query("SELECT retirada_eqsp_id, COUNT(*) as n FROM movimentacoes WHERE retirada_eqsp_id != '' GROUP BY retirada_eqsp_id")
     .forEach(r => { contagens[r.retirada_eqsp_id] = r.n; });
+  const ultimas = {};
+  db.query("SELECT retirada_eqsp_id, peca_nome, created_at FROM movimentacoes WHERE retirada_eqsp_id != '' ORDER BY created_at DESC")
+    .forEach(r => { if (!ultimas[r.retirada_eqsp_id]) ultimas[r.retirada_eqsp_id] = { peca_nome: r.peca_nome, data: r.created_at }; });
   // A imagem (base64) fica de fora da listagem, só um booleano — o
   // conteúdo é buscado sob demanda em /equip-quallyx-sp/:id/imagem.
   res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(e => {
     const { imagem, ...resto } = e;
-    return { ...resto, tem_imagem: !!imagem, retiradas_qtd: contagens[e.id] || 0 };
+    return { ...resto, tem_imagem: !!imagem, retiradas_qtd: contagens[e.id] || 0, ultima_retirada: ultimas[e.id] || null };
   }));
 });
 router.get('/equip-quallyx-sp/:id/imagem', autenticar, (req, res) => {
