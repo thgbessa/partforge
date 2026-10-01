@@ -739,7 +739,7 @@ app.listen(PORT, '0.0.0.0', () => {
       try {
         const movsComRetirada = db.query(`SELECT id, seq_num, peca_nome, peca_codigo, retirada_eqsp_id, retirada_eqsp_nome, created_at
           FROM movimentacoes WHERE retirada_eqsp_id != '' ORDER BY created_at DESC`);
-        const equips = db.query('SELECT id, nome, serie, retiradas_qtd FROM equip_quallyx_sp').map(e => ({ id: e.id, nome: e.nome, serie: e.serie }));
+        const equips = db.query('SELECT id, nome, serie FROM equip_quallyx_sp');
         const contagemReal = {};
         movsComRetirada.forEach(m => { contagemReal[m.retirada_eqsp_id] = (contagemReal[m.retirada_eqsp_id] || 0) + 1; });
         res.json({
