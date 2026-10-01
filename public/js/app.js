@@ -3698,7 +3698,7 @@ function renderValidacao(etapa, q) {
   }
 
   el.innerHTML = `<table class="data-table">
-    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Técnico</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>OS / Origem</th><th>Técnico</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
     <tbody>
       ${lista.map(v => {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
@@ -3736,6 +3736,11 @@ function renderValidacao(etapa, q) {
           <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
           <td style="font-size:12px">${v.equip_modelo || '—'}</td>
           <td style="font-size:12px">${v.equip_cliente || '—'}</td>
+          <td style="font-size:11px">
+            ${v.os_numero ? `<div>📋 ${v.os_numero}</div>` : ''}
+            ${v.origem ? `<div style="color:var(--text3)">📦 ${v.origem}</div>` : ''}
+            ${!v.os_numero && !v.origem ? '<span style="color:var(--text3)">—</span>' : ''}
+          </td>
           <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${tecInfo.label}` : '<span style="color:var(--text3)">—</span>'}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
@@ -4079,6 +4084,16 @@ function abrirModalValidacao(id) {
             ${VALIDACAO_TECNICOS.map(t => `<option value="${t.valor}" ${v?.tecnico_responsavel === t.valor ? 'selected' : ''}>${t.label}</option>`).join('')}
           </select>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label class="form-label">📋 Nº da OS</label>
+            <input class="form-input" id="validacao-os-numero" value="${v?.os_numero || ''}" placeholder="Ex.: 4567">
+          </div>
+          <div class="form-group">
+            <label class="form-label">📦 Origem</label>
+            <input class="form-input" id="validacao-origem" value="${v?.origem || ''}" placeholder="Ex.: Cliente X, Estoque SP">
+          </div>
+        </div>
         <div class="form-group">
           <label class="form-label">Observação</label>
           <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${v?.obs || ''}</textarea>
@@ -4199,6 +4214,8 @@ function salvarValidacao(id) {
     data_solicitacao_produto: document.getElementById('validacao-data-solic-produto')?.value || '',
     data_entrega_produto: document.getElementById('validacao-data-entrega-produto')?.value || '',
     tecnico_responsavel: document.getElementById('validacao-tecnico')?.value || '',
+    os_numero: document.getElementById('validacao-os-numero')?.value.trim() || '',
+    origem: document.getElementById('validacao-origem')?.value.trim() || '',
     fotos: _validacaoFotos,
   };
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
@@ -4468,8 +4485,14 @@ function renderEquipQuallyxSP(q) {
   grid.innerHTML = lista.map(e => {
     const st = EQSP_STATUS_LABEL[e.status] || {};
     return `<div onclick="abrirModalEquipQuallyxSP('${e.id}')"
-      style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s"
+      style="position:relative;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:14px;cursor:pointer;transition:border-color .15s"
       onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border2)'">
+      <button onclick="event.stopPropagation();abrirAjustarPosicaoEqsp('${e.id}','${(e.posicao || '').replace(/'/g, "\\'")}')"
+        title="${e.posicao ? 'Posição: ' + e.posicao : 'Definir posição no estoque'}"
+        style="position:absolute;top:10px;right:10px;background:${e.posicao ? 'var(--accent-dim)' : 'var(--surface2)'};border:1px solid ${e.posicao ? 'var(--accent)' : 'var(--border2)'};
+        color:${e.posicao ? 'var(--accent)' : 'var(--text3)'};border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;z-index:1">
+        📍${e.posicao ? ' ' + e.posicao : ''}
+      </button>
       <div style="width:100%;height:90px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;overflow:hidden">
         ${e.tem_imagem ? `<img id="eqsp-thumb-${e.id}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:32px;opacity:0.3">🔬</span>'}
       </div>
@@ -4531,6 +4554,10 @@ function abrirModalEquipQuallyxSP(id) {
           </select>
         </div>
         <div class="form-group">
+          <label class="form-label">📍 Posição no Estoque</label>
+          <input class="form-input" id="eqsp-posicao" value="${e?.posicao || ''}" placeholder="Ex.: Prateleira A3, Sala 2">
+        </div>
+        <div class="form-group">
           <label class="form-label">Observação</label>
           <textarea class="form-textarea" id="eqsp-obs" style="min-height:60px">${e?.obs || ''}</textarea>
         </div>
@@ -4576,6 +4603,47 @@ function selecionarImagemEqsp(inputEl) {
   inputEl.value = '';
 }
 
+// Ajuste rápido da posição direto pelo ícone 📍 no card, sem abrir o modal
+// completo de edição.
+function abrirAjustarPosicaoEqsp(id, posicaoAtual) {
+  let overlay = document.getElementById('modal-eqsp-posicao-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'modal-eqsp-posicao-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:360px;width:100%" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
+        <span style="font-weight:700;font-size:15px">📍 Posição no Estoque</span>
+        <button onclick="document.getElementById('modal-eqsp-posicao-overlay').remove()"
+          style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:20px">
+        <input class="form-input" id="eqsp-posicao-rapida" value="${posicaoAtual || ''}" placeholder="Ex.: Prateleira A3, Sala 2" autofocus
+          onkeydown="if(event.key==='Enter')confirmarAjustarPosicaoEqsp('${id}')">
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-eqsp-posicao-overlay').remove()">Cancelar</button>
+        <button class="btn btn-primary" onclick="confirmarAjustarPosicaoEqsp('${id}')">✓ Salvar</button>
+      </div>
+    </div>`;
+  document.getElementById('eqsp-posicao-rapida')?.focus();
+}
+
+function confirmarAjustarPosicaoEqsp(id) {
+  const posicao = document.getElementById('eqsp-posicao-rapida')?.value.trim() || '';
+  API.put('/equip-quallyx-sp/' + id + '/posicao', { posicao })
+    .then(() => {
+      toast('Posição atualizada', 'success');
+      document.getElementById('modal-eqsp-posicao-overlay')?.remove();
+      loadAndRenderEquipQuallyxSP();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
 function salvarEquipQuallyxSP(id) {
   const nome = document.getElementById('eqsp-nome')?.value.trim() || '';
   if (!nome) { toast('Informe o nome do equipamento', 'error'); return; }
@@ -4584,6 +4652,7 @@ function salvarEquipQuallyxSP(id) {
     marca: document.getElementById('eqsp-marca')?.value.trim() || '',
     serie: document.getElementById('eqsp-serie')?.value.trim() || '',
     status: document.getElementById('eqsp-status')?.value || 'NOVO',
+    posicao: document.getElementById('eqsp-posicao')?.value.trim() || '',
     obs: document.getElementById('eqsp-obs')?.value.trim() || '',
     imagem: _eqspImagemAtual,
   };
@@ -8096,11 +8165,12 @@ function exportarExcel(aba) {
     if (q) lista = lista.filter(function(e) {
       return String(e.nome || '').toLowerCase().includes(q) || String(e.marca || '').toLowerCase().includes(q) || String(e.serie || '').toLowerCase().includes(q);
     });
-    const heads = ['Nome', 'Marca', 'Série', 'Status', 'Observação', 'Cadastrado em'];
+    const heads = ['Nome', 'Marca', 'Série', 'Status', 'Posição', 'Observação', 'Cadastrado em'];
     const rows = [heads, ...lista.map(function(e) {
       return [
         e.nome || '', e.marca || '', e.serie || '',
         (EQSP_STATUS_LABEL[e.status] || {}).label || e.status,
+        e.posicao || '',
         e.obs || '',
         e.created_at ? new Date(e.created_at).toLocaleDateString('pt-BR') : ''
       ];
@@ -8358,6 +8428,7 @@ function importarEquipQuallyxSP(rows) {
     else if (hn === 'marca') idx.marca = i;
     else if (['série', 'serie'].includes(hn)) idx.serie = i;
     else if (hn === 'status') idx.status = i;
+    else if (hn === 'posição' || hn === 'posicao') idx.posicao = i;
     else if (hn === 'observação' || hn === 'observacao') idx.obs = i;
   });
   if (idx.nome === undefined) { toast('Coluna "Nome" não encontrada', 'error'); return; }
@@ -8368,6 +8439,7 @@ function importarEquipQuallyxSP(rows) {
       marca: idx.marca !== undefined ? String(r[idx.marca] || '').trim() : '',
       serie: idx.serie !== undefined ? String(r[idx.serie] || '').trim() : '',
       status: idx.status !== undefined ? String(r[idx.status] || '').trim() : '',
+      posicao: idx.posicao !== undefined ? String(r[idx.posicao] || '').trim() : '',
       obs: idx.obs !== undefined ? String(r[idx.obs] || '').trim() : '',
     };
   }).filter(function(it) { return it.nome; });

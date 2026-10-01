@@ -261,6 +261,11 @@ async function init() {
     status TEXT DEFAULT 'NOVO', obs TEXT DEFAULT '', imagem TEXT DEFAULT '',
     created_at INTEGER DEFAULT 0, created_by TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando equip_quallyx_sp', e.message); }
+  try { _db.run("ALTER TABLE equip_quallyx_sp ADD COLUMN posicao TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+
+  // Nº da OS e origem do equipamento (de onde ele veio) — Validação Repair.
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN os_numero TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN origem TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
 
   persist();
   console.log('✅ Banco de dados iniciado');

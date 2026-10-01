@@ -886,12 +886,13 @@ router.post('/validacoes', autenticar, (req, res) => {
 
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, dataLimite, v.tecnico_responsavel || '', now(), req.user.nome, now()]);
+     J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, dataLimite, v.tecnico_responsavel || '',
+     v.os_numero || '', v.origem || '', now(), req.user.nome, now()]);
   res.status(201).json({ id, seq_num: seq, prazo: prazo ? { modelo: prazo.modelo, dias: prazoDias, complexidade: prazoComplexidade, dataLimite } : null });
 });
 
@@ -900,11 +901,11 @@ router.put('/validacoes/:id', autenticar, (req, res) => {
   db.run(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
     peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
     produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,
-    fotos=?,tecnico_responsavel=?,updated_at=? WHERE id=?`,
+    fotos=?,tecnico_responsavel=?,os_numero=?,origem=?,updated_at=? WHERE id=?`,
     [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '',
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), v.tecnico_responsavel || '', now(), req.params.id]);
+     J(v.fotos || []), v.tecnico_responsavel || '', v.os_numero || '', v.origem || '', now(), req.params.id]);
   res.json({ ok: true });
 });
 
@@ -989,11 +990,13 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       const data_solicitacao_produto = it.data_solicitacao_produto || existente.data_solicitacao_produto;
       const data_entrega_produto = it.data_entrega_produto || existente.data_entrega_produto;
       const tecnico_responsavel = it.tecnico_responsavel !== undefined && it.tecnico_responsavel !== '' ? it.tecnico_responsavel : existente.tecnico_responsavel;
+      const os_numero = it.os_numero !== undefined && it.os_numero !== '' ? it.os_numero : existente.os_numero;
+      const origem = it.origem !== undefined && it.origem !== '' ? it.origem : existente.origem;
       db.runBatch(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
         peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
-        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,tecnico_responsavel=?,updated_at=? WHERE id=?`,
+        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,tecnico_responsavel=?,os_numero=?,origem=?,updated_at=? WHERE id=?`,
         [equip_serie, equip_modelo, equip_cliente, obs, peca_solicitada, data_solicitacao_peca, data_entrega_peca,
-         produto_solicitado, data_solicitacao_produto, data_entrega_produto, tecnico_responsavel, now(), existente.id]);
+         produto_solicitado, data_solicitacao_produto, data_entrega_produto, tecnico_responsavel, os_numero, origem, now(), existente.id]);
       atualizados++;
     } else if (!seqNum && (it.equip_serie || it.equip_modelo)) {
       seqCounter++;
@@ -1004,12 +1007,13 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       const dataLimiteImp = prazoDiasImp > 0 ? somarDias(now(), prazoDiasImp) : '';
       db.runBatch(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,
-        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,
+        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, seqCounter, '', it.equip_serie || '', it.equip_modelo || '', it.equip_cliente || '', 'REPAIR', it.obs || '', eventos,
          it.peca_solicitada || '', it.data_solicitacao_peca || '', it.data_entrega_peca || '',
          it.produto_solicitado || '', it.data_solicitacao_produto || '', it.data_entrega_produto || '',
          prazoDiasImp, prazoImp?.tolerancia || 0, prazoImp?.complexidade || '', dataLimiteImp, dataLimiteImp, it.tecnico_responsavel || '',
+         it.os_numero || '', it.origem || '',
          now(), req.user.nome, now()]);
       criados++;
     } else {
@@ -1045,16 +1049,22 @@ router.post('/equip-quallyx-sp', autenticar, (req, res) => {
   if (!e.nome) return res.status(400).json({ erro: 'Nome do equipamento obrigatório' });
   const id = uid();
   const status = EQSP_STATUS.includes(e.status) ? e.status : 'NOVO';
-  db.run(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?)`,
-    [id, e.nome, e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', now(), req.user.nome, now()]);
+  db.run(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,posicao,created_at,created_by,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, e.nome, e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', e.posicao || '', now(), req.user.nome, now()]);
   res.status(201).json({ id });
 });
 router.put('/equip-quallyx-sp/:id', autenticar, (req, res) => {
   const e = req.body;
   const status = EQSP_STATUS.includes(e.status) ? e.status : 'NOVO';
-  db.run(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,imagem=?,updated_at=? WHERE id=?`,
-    [e.nome || '', e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', now(), req.params.id]);
+  db.run(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,imagem=?,posicao=?,updated_at=? WHERE id=?`,
+    [e.nome || '', e.marca || '', e.serie || '', status, e.obs || '', e.imagem || '', e.posicao || '', now(), req.params.id]);
+  res.json({ ok: true });
+});
+// Ajuste rápido só da posição/localização no estoque, direto pelo card
+// (sem precisar abrir o modal completo de edição).
+router.put('/equip-quallyx-sp/:id/posicao', autenticar, (req, res) => {
+  db.run('UPDATE equip_quallyx_sp SET posicao=?,updated_at=? WHERE id=?', [req.body.posicao || '', now(), req.params.id]);
   res.json({ ok: true });
 });
 router.delete('/equip-quallyx-sp/:id', autenticar, isAdmin, (req, res) => {
@@ -1080,15 +1090,15 @@ router.post('/equip-quallyx-sp/importar', autenticar, isAdmin, (req, res) => {
     const match = existentes.find(e => norm(e.nome) === norm(it.nome) && norm(e.serie) === norm(it.serie || ''));
     const status = EQSP_STATUS_LABELS_IMPORT[norm(it.status)] || null;
     if (match) {
-      db.runBatch(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,updated_at=? WHERE id=?`,
-        [it.nome, it.marca || match.marca, it.serie || match.serie, status || match.status, it.obs || match.obs, now(), match.id]);
+      db.runBatch(`UPDATE equip_quallyx_sp SET nome=?,marca=?,serie=?,status=?,obs=?,posicao=?,updated_at=? WHERE id=?`,
+        [it.nome, it.marca || match.marca, it.serie || match.serie, status || match.status, it.obs || match.obs, it.posicao || match.posicao, now(), match.id]);
       atualizados++;
     } else {
       const id = uid();
-      db.runBatch(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-        [id, it.nome, it.marca || '', it.serie || '', status || 'NOVO', it.obs || '', '', now(), req.user.nome, now()]);
+      db.runBatch(`INSERT INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,posicao,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+        [id, it.nome, it.marca || '', it.serie || '', status || 'NOVO', it.obs || '', '', it.posicao || '', now(), req.user.nome, now()]);
       criados++;
-      existentes.push({ id, nome: it.nome, serie: it.serie || '', marca: it.marca || '', status: status || 'NOVO', obs: it.obs || '' });
+      existentes.push({ id, nome: it.nome, serie: it.serie || '', marca: it.marca || '', status: status || 'NOVO', obs: it.obs || '', posicao: it.posicao || '' });
     }
   }
   db.persist();
@@ -1450,11 +1460,12 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
          v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
          v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
          J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'', v.data_limite_original||v.data_limite||'', v.tecnico_responsavel||'',
+         v.os_numero||'', v.origem||'',
          v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
 
     if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)
@@ -1462,8 +1473,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         [p.id||uid(), p.marca||'', p.modelo||'', normalizarModeloPrazo(p.modelo), p.complexidade||'', p.dias_reforma||0, p.dias_teste||0, p.dias_embalagem||0, p.prazo_final||0, p.tolerancia||0, p.updated_at||now()]);
 
     if (s.equip_quallyx_sp?.length) for (const e of s.equip_quallyx_sp)
-      db.runBatch(`INSERT OR REPLACE INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-        [e.id||uid(), e.nome||'', e.marca||'', e.serie||'', e.status||'NOVO', e.obs||'', e.imagem||'', e.created_at||now(), e.created_by||'restore', e.updated_at||now()]);
+      db.runBatch(`INSERT OR REPLACE INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,posicao,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+        [e.id||uid(), e.nome||'', e.marca||'', e.serie||'', e.status||'NOVO', e.obs||'', e.imagem||'', e.posicao||'', e.created_at||now(), e.created_by||'restore', e.updated_at||now()]);
 
     if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
