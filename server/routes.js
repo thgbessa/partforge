@@ -911,24 +911,47 @@ router.put('/validacoes/:id', autenticar, (req, res) => {
   res.json({ ok: true });
 });
 
-// Ajusta manualmente a data-limite de um equipamento (ex.: precisou de mais
-// dias de validação). Compara sempre com data_limite_original (o prazo
-// calculado no dia em que entrou, que nunca muda) pra saber quantos dias a
-// mais foram adicionados, e registra isso no histórico.
+// Ajusta manualmente a data-limite (e, opcionalmente, a data de entrada) de
+// um equipamento. Essencial pra quem entrou SEM prazo automático (modelo
+// não configurado na planilha de prazos) — aqui dá pra definir entrada e
+// saída na mão. Compara sempre com data_limite_original (o prazo calculado
+// no dia em que entrou, ou vazio se nunca teve um automático) pra saber
+// quantos dias a mais foram adicionados, e registra isso no histórico.
 router.put('/validacoes/:id/ajustar-prazo', autenticar, (req, res) => {
-  const { nova_data_limite, motivo } = req.body;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(nova_data_limite || '')) return res.status(400).json({ erro: 'Data inválida' });
-  const existente = db.get('SELECT data_limite, data_limite_original, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  const { nova_data_limite, nova_data_entrada, motivo } = req.body;
+  if (nova_data_limite && !/^\d{4}-\d{2}-\d{2}$/.test(nova_data_limite)) return res.status(400).json({ erro: 'Data de saída inválida' });
+  if (nova_data_entrada && !/^\d{4}-\d{2}-\d{2}$/.test(nova_data_entrada)) return res.status(400).json({ erro: 'Data de entrada inválida' });
+  const existente = db.get('SELECT data_limite, data_limite_original, created_at, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
   if (!existente) return res.status(404).json({ erro: 'Não encontrado' });
-  const base = existente.data_limite_original || existente.data_limite;
-  const diffDias = base ? Math.round((new Date(nova_data_limite) - new Date(base)) / 86400000) : 0;
+
   let eventos = []; try { eventos = JSON.parse(existente.eventos || '[]'); } catch (e) { eventos = []; }
-  const obsEvento = `Prazo ajustado de ${existente.data_limite || '(sem prazo)'} para ${nova_data_limite}` +
-    (diffDias !== 0 ? ` (${diffDias > 0 ? '+' : ''}${diffDias}d em relação ao prazo original)` : '') +
-    (motivo ? `. Motivo: ${motivo}` : '');
-  eventos.push({ status: 'PRAZO_AJUSTADO', data: now(), obs: obsEvento, user: req.user.nome });
-  db.run('UPDATE validacoes_equipamento SET data_limite=?, eventos=?, updated_at=? WHERE id=?',
-    [nova_data_limite, J(eventos), now(), req.params.id]);
+  let diffDias = 0;
+  const sets = [], params = [];
+
+  if (nova_data_limite) {
+    const base = existente.data_limite_original || existente.data_limite;
+    diffDias = base ? Math.round((new Date(nova_data_limite) - new Date(base)) / 86400000) : 0;
+    const obsEvento = `Prazo (saída) ajustado de ${existente.data_limite || '(sem prazo)'} para ${nova_data_limite}` +
+      (diffDias !== 0 ? ` (${diffDias > 0 ? '+' : ''}${diffDias}d em relação ao prazo original)` : '') +
+      (motivo ? `. Motivo: ${motivo}` : '');
+    eventos.push({ status: 'PRAZO_AJUSTADO', data: now(), obs: obsEvento, user: req.user.nome });
+    sets.push('data_limite=?'); params.push(nova_data_limite);
+    // Se nunca teve prazo automático, esta data definida na mão vira a
+    // referência (data_limite_original) pra futuros ajustes compararem contra.
+    if (!existente.data_limite_original) { sets.push('data_limite_original=?'); params.push(nova_data_limite); }
+  }
+  if (nova_data_entrada) {
+    const entradaMs = new Date(nova_data_entrada + 'T00:00:00').getTime();
+    const entradaAntigaFmt = new Date(existente.created_at).toLocaleDateString('pt-BR');
+    eventos.push({ status: 'ENTRADA_AJUSTADA', data: now(), obs: `Data de entrada ajustada de ${entradaAntigaFmt} para ${new Date(entradaMs).toLocaleDateString('pt-BR')}`, user: req.user.nome });
+    sets.push('created_at=?'); params.push(entradaMs);
+  }
+  if (!sets.length) return res.status(400).json({ erro: 'Informe ao menos uma data' });
+
+  sets.push('eventos=?'); params.push(J(eventos));
+  sets.push('updated_at=?'); params.push(now());
+  params.push(req.params.id);
+  db.run(`UPDATE validacoes_equipamento SET ${sets.join(',')} WHERE id=?`, params);
   res.json({ ok: true, diffDias });
 });
 

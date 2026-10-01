@@ -3809,7 +3809,7 @@ function renderValidacao(etapa, q) {
           `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
         if (!concluido) {
           acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalValidacao('${v.id}')" title="Editar">✎</button>`;
-          if (v.data_limite) acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="Ajustar prazo">📅</button>`;
+          acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="${v.data_limite ? 'Ajustar prazo' : 'Definir entrada/saída (sem prazo automático)'}">📅</button>`;
           if (v.status === 'ASSESSORIA') {
             acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAvancarValidacao('${v.id}','voltar')" title="Voltar pro Repair">↩</button>`;
             acoes += `<button class="btn btn-sm" style="background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
@@ -4345,23 +4345,33 @@ function abrirModalAjustarPrazo(id) {
     overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   }
-  const original = v.data_limite_original || v.data_limite;
+  const original = v.data_limite_original || v.data_limite || '';
+  const temPrazoAutomatico = !!original;
+  const entradaAtualIso = v.created_at ? new Date(v.created_at).toISOString().slice(0, 10) : '';
   overlay.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:400px;width:100%">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <span style="font-weight:700;font-size:15px">📅 Ajustar Prazo</span>
+        <span style="font-weight:700;font-size:15px">📅 Entrada e Saída</span>
         <button onclick="document.getElementById('modal-ajustar-prazo-overlay').remove()"
           style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
       <div style="padding:20px">
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${v.equip_modelo || ''} · S/N: ${v.equip_serie || '—'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
-          Prazo original (${v.prazo_dias || '?'}d, ${v.prazo_complexidade || '—'}): <strong>${new Date(original + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
-          ${v.data_limite !== original ? `<br>Prazo atual: <strong>${new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>` : ''}
+        ${temPrazoAutomatico ? `
+          <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+            Prazo original (${v.prazo_dias || '?'}d, ${v.prazo_complexidade || '—'}): <strong>${new Date(original + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
+            ${v.data_limite && v.data_limite !== original ? `<br>Prazo atual: <strong>${new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>` : ''}
+          </div>` : `
+          <div style="font-size:11px;color:var(--accent);margin-bottom:12px;padding:8px 10px;background:var(--accent-dim);border-radius:6px">
+            ⚠ Esse modelo não tem prazo configurado na planilha — defina a entrada e a saída na mão abaixo.
+          </div>`}
+        <div class="form-group">
+          <label class="form-label">Data de Entrada</label>
+          <input class="form-input" type="date" id="ajustar-prazo-entrada" value="${entradaAtualIso}">
         </div>
         <div class="form-group">
-          <label class="form-label">Nova data-limite</label>
-          <input class="form-input" type="date" id="ajustar-prazo-data" value="${v.data_limite}" oninput="atualizarPreviewAjustePrazo('${original}')">
+          <label class="form-label">Data de Saída ${temPrazoAutomatico ? '(prazo-limite)' : ''}</label>
+          <input class="form-input" type="date" id="ajustar-prazo-data" value="${v.data_limite || ''}" oninput="atualizarPreviewAjustePrazo('${original}')">
         </div>
         <div id="ajustar-prazo-preview" style="font-size:12px;margin-bottom:10px"></div>
         <div class="form-group">
@@ -4374,13 +4384,13 @@ function abrirModalAjustarPrazo(id) {
         <button class="btn btn-primary" onclick="confirmarAjustarPrazo('${id}')">✓ Salvar</button>
       </div>
     </div>`;
-  atualizarPreviewAjustePrazo(original);
+  if (temPrazoAutomatico) atualizarPreviewAjustePrazo(original);
 }
 
 function atualizarPreviewAjustePrazo(original) {
   const el = document.getElementById('ajustar-prazo-preview');
   const novaData = document.getElementById('ajustar-prazo-data')?.value;
-  if (!el || !novaData || !original) return;
+  if (!el || !novaData || !original) { if (el) el.innerHTML = ''; return; }
   const diff = Math.round((new Date(novaData) - new Date(original)) / 86400000);
   if (diff === 0) { el.innerHTML = '<span style="color:var(--text3)">Sem alteração em relação ao prazo original</span>'; return; }
   const cor = diff > 0 ? 'var(--red)' : 'var(--green)';
@@ -4388,12 +4398,13 @@ function atualizarPreviewAjustePrazo(original) {
 }
 
 function confirmarAjustarPrazo(id) {
-  const nova_data_limite = document.getElementById('ajustar-prazo-data')?.value;
+  const nova_data_entrada = document.getElementById('ajustar-prazo-entrada')?.value || '';
+  const nova_data_limite = document.getElementById('ajustar-prazo-data')?.value || '';
   const motivo = document.getElementById('ajustar-prazo-motivo')?.value.trim() || '';
-  if (!nova_data_limite) { toast('Escolha uma data', 'error'); return; }
-  API.put('/validacoes/' + id + '/ajustar-prazo', { nova_data_limite, motivo })
+  if (!nova_data_entrada && !nova_data_limite) { toast('Preencha ao menos uma das datas', 'error'); return; }
+  API.put('/validacoes/' + id + '/ajustar-prazo', { nova_data_limite, nova_data_entrada, motivo })
     .then(res => {
-      const msg = res.diffDias ? `Prazo ajustado (${res.diffDias > 0 ? '+' : ''}${res.diffDias}d)` : 'Prazo ajustado';
+      const msg = res.diffDias ? `Datas atualizadas (${res.diffDias > 0 ? '+' : ''}${res.diffDias}d no prazo)` : 'Datas atualizadas';
       toast(msg, 'success');
       document.getElementById('modal-ajustar-prazo-overlay')?.remove();
       loadAndRenderValidacao('repair');
