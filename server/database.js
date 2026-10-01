@@ -194,6 +194,11 @@ async function init() {
     marca TEXT PRIMARY KEY, anos_equipamento REAL DEFAULT 1, anos_acessorio REAL DEFAULT 1,
     obs TEXT DEFAULT '', updated_at INTEGER DEFAULT 0
   )`); } catch(e) { console.log('erro criando garantia_config', e.message); }
+  // Meses adicionais de prazo, pra configurar tipo "1 ano e 6 meses" sem
+  // depender de ano fracionado (que o cálculo antigo nem aplicava direito —
+  // setFullYear() com decimal trunca e ignora a fração).
+  try { _db.run("ALTER TABLE garantia_config ADD COLUMN meses_equipamento INTEGER DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE garantia_config ADD COLUMN meses_acessorio INTEGER DEFAULT 0"); } catch(e) { /* coluna ja existe */ }
   // Prazo conhecido do fabricante DYMIND (2 anos equipamento, 1 ano acessorios).
   // Os demais fabricantes ficam sem prazo definido ate o usuario configurar.
   try {

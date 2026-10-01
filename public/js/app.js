@@ -3459,22 +3459,38 @@ const GARANTIA_STATUS_LABEL = {
   SEM_DATA:      { label: 'Sem data de compra',    badge: 'badge-orange' },
 };
 
+// Formata "1a 6m", "1a", "6m" ou "—" (sem prazo) a partir de anos+meses.
+function formatarPrazoGarantia(anos, meses) {
+  anos = parseInt(anos) || 0; meses = parseInt(meses) || 0;
+  if (!anos && !meses) return '—';
+  const partes = [];
+  if (anos) partes.push(anos + 'a');
+  if (meses) partes.push(meses + 'm');
+  return partes.join(' ');
+}
+
 function calcularStatusGarantia(equip, configMap) {
   const marca = (equip.marca || '').trim().toUpperCase() || 'NÃO IDENTIFICADO';
   const cfg = configMap[marca];
   const dataCompra = (equip.data_compra || '').trim();
+  const anos = parseInt(cfg?.anos_equipamento) || 0;
+  const meses = parseInt(cfg?.meses_equipamento) || 0;
   let dataFim = null, status;
   if (!dataCompra) {
     status = 'SEM_DATA';
-  } else if (!cfg || !parseFloat(cfg.anos_equipamento)) {
+  } else if (!cfg || (anos <= 0 && meses <= 0)) {
     status = 'SEM_PRAZO';
   } else {
     const inicio = new Date(dataCompra + 'T00:00:00');
     if (isNaN(inicio.getTime())) {
       status = 'SEM_DATA';
     } else {
+      // setFullYear()/setMonth() só aceitam inteiro — anos e meses ficam
+      // separados de propósito (um campo decimal tipo "1.5" não calculava
+      // certo: a fração simplesmente era ignorada).
       dataFim = new Date(inicio);
-      dataFim.setFullYear(dataFim.getFullYear() + parseFloat(cfg.anos_equipamento));
+      dataFim.setFullYear(dataFim.getFullYear() + anos);
+      dataFim.setMonth(dataFim.getMonth() + meses);
       status = dataFim.getTime() >= Date.now() ? 'EM_GARANTIA' : 'FORA_GARANTIA';
     }
   }
@@ -3544,7 +3560,7 @@ function renderGarantia(q = '') {
   contentEl.innerHTML = marcasOrdenadas.map(marca => {
     const lista = porMarca[marca];
     const cfg = configMap[marca] || {};
-    const temPrazo = parseFloat(cfg.anos_equipamento) > 0;
+    const temPrazo = (parseInt(cfg.anos_equipamento) > 0) || (parseInt(cfg.meses_equipamento) > 0);
     const emG = lista.filter(e => e._garantia.status === 'EM_GARANTIA').length;
     const foraG = lista.filter(e => e._garantia.status === 'FORA_GARANTIA').length;
     const marcaJs = marca.replace(/'/g, "\\'");
@@ -3565,7 +3581,7 @@ function renderGarantia(q = '') {
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:8px" onclick="event.stopPropagation()">
-          ${temPrazo ? `<span style="font-size:11px;color:var(--text2)">Prazo: ${cfg.anos_equipamento}a equip. / ${cfg.anos_acessorio || 0}a acessório</span>` : ''}
+          ${temPrazo ? `<span style="font-size:11px;color:var(--text2)">Prazo: ${formatarPrazoGarantia(cfg.anos_equipamento, cfg.meses_equipamento)} equip. / ${formatarPrazoGarantia(cfg.anos_acessorio, cfg.meses_acessorio)} acessório</span>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirModalGarantiaConfig('${marcaJs}')">⚙ Configurar Prazo</button>
         </div>
       </div>
@@ -3682,12 +3698,30 @@ function abrirModalGarantiaConfig(marca) {
       </div>
       <div style="padding:20px">
         <div class="form-group">
-          <label class="form-label">Anos de garantia — Equipamento</label>
-          <input class="form-input" type="number" step="0.5" min="0" id="garantia-cfg-anos-equip" value="${cfg.anos_equipamento || ''}">
+          <label class="form-label">Garantia — Equipamento</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <input class="form-input" type="number" step="1" min="0" id="garantia-cfg-anos-equip" placeholder="Anos" value="${cfg.anos_equipamento || ''}">
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Anos</div>
+            </div>
+            <div>
+              <input class="form-input" type="number" step="1" min="0" max="11" id="garantia-cfg-meses-equip" placeholder="Meses" value="${cfg.meses_equipamento || ''}">
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Meses</div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
-          <label class="form-label">Anos de garantia — Acessórios</label>
-          <input class="form-input" type="number" step="0.5" min="0" id="garantia-cfg-anos-acessorio" value="${cfg.anos_acessorio || ''}">
+          <label class="form-label">Garantia — Acessórios</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <input class="form-input" type="number" step="1" min="0" id="garantia-cfg-anos-acessorio" placeholder="Anos" value="${cfg.anos_acessorio || ''}">
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Anos</div>
+            </div>
+            <div>
+              <input class="form-input" type="number" step="1" min="0" max="11" id="garantia-cfg-meses-acessorio" placeholder="Meses" value="${cfg.meses_acessorio || ''}">
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">Meses</div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Observação</label>
@@ -3705,10 +3739,13 @@ function abrirModalGarantiaConfig(marca) {
 }
 
 function salvarGarantiaConfig(marca) {
-  const anos_equipamento = parseFloat(document.getElementById('garantia-cfg-anos-equip')?.value) || 0;
-  const anos_acessorio = parseFloat(document.getElementById('garantia-cfg-anos-acessorio')?.value) || 0;
+  const anos_equipamento = parseInt(document.getElementById('garantia-cfg-anos-equip')?.value) || 0;
+  const meses_equipamento = parseInt(document.getElementById('garantia-cfg-meses-equip')?.value) || 0;
+  const anos_acessorio = parseInt(document.getElementById('garantia-cfg-anos-acessorio')?.value) || 0;
+  const meses_acessorio = parseInt(document.getElementById('garantia-cfg-meses-acessorio')?.value) || 0;
   const obs = document.getElementById('garantia-cfg-obs')?.value.trim() || '';
-  API.post('/garantia-config', { marca, anos_equipamento, anos_acessorio, obs })
+  if (!anos_equipamento && !meses_equipamento) { toast('Informe ao menos anos ou meses pro equipamento', 'error'); return; }
+  API.post('/garantia-config', { marca, anos_equipamento, anos_acessorio, meses_equipamento, meses_acessorio, obs })
     .then(() => {
       toast('Prazo de garantia salvo');
       document.getElementById('modal-garantia-config-overlay')?.remove();
@@ -8304,7 +8341,7 @@ function exportarExcel(aba) {
       return a._g.marca.localeCompare(b._g.marca) || String(a.modelo || '').localeCompare(String(b.modelo || '')) || String(a.serie || '').localeCompare(String(b.serie || ''));
     });
     const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
-    const heads = ['Marca', 'Série', 'Modelo', 'Data de Compra', 'Prazo Equip. (anos)', 'Fim da Garantia', 'Status'];
+    const heads = ['Marca', 'Série', 'Modelo', 'Data de Compra', 'Prazo Equip.', 'Fim da Garantia', 'Status'];
     const rows = [heads, ...listaG.map(function(e) {
       const cfg = configMapG[e._g.marca] || {};
       return [
@@ -8312,7 +8349,7 @@ function exportarExcel(aba) {
         String(e.serie || ''),
         e.modelo || '',
         fmtBR(e.data_compra),
-        parseFloat(cfg.anos_equipamento) || '',
+        formatarPrazoGarantia(cfg.anos_equipamento, cfg.meses_equipamento),
         e._g.dataFim ? e._g.dataFim.toLocaleDateString('pt-BR') : '',
         GARANTIA_STATUS_LABEL[e._g.status].label
       ];

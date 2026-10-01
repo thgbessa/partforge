@@ -745,8 +745,8 @@ router.get('/garantia-config', autenticar, (req, res) => {
 });
 router.post('/garantia-config', autenticar, isAdmin, (req, res) => {
   const g = req.body; if (!g.marca) return res.status(400).json({erro:'Marca obrigatória'});
-  db.run(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)`,
-    [g.marca.toUpperCase().trim(), g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', now()]);
+  db.run(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,meses_equipamento,meses_acessorio,obs,updated_at) VALUES(?,?,?,?,?,?,?)`,
+    [g.marca.toUpperCase().trim(), g.anos_equipamento||0, g.anos_acessorio||0, g.meses_equipamento||0, g.meses_acessorio||0, g.obs||'', now()]);
   res.status(201).json({ok:true});
 });
 router.delete('/garantia-config/:marca', autenticar, isAdmin, (req, res) => {
@@ -1494,8 +1494,8 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
         [k.id||uid(),k.nome||'',k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),J(k.itens_opcionais||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
 
     if (s.garantia_config?.length) for (const g of s.garantia_config)
-      db.runBatch(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,obs,updated_at) VALUES(?,?,?,?,?)`,
-        [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.obs||'', g.updated_at||now()]);
+      db.runBatch(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,meses_equipamento,meses_acessorio,obs,updated_at) VALUES(?,?,?,?,?,?,?)`,
+        [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.meses_equipamento||0, g.meses_acessorio||0, g.obs||'', g.updated_at||now()]);
 
     if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
       db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
