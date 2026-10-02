@@ -3962,14 +3962,21 @@ function renderAgendaCalendario() {
     const icone = tipo === 'entrada' ? '🔧' : (ajustado ? '⚠' : '🏁');
     const rotulo = tipo === 'entrada' ? 'Entrada no Repair' : 'Prazo final de validação';
     const nomeExibicao = v.equip_modelo || v.equip_serie || '?';
+    // No card de prazo/saída, mostra também quando entrou — útil quando a
+    // entrada caiu num mês diferente do que está sendo visto no calendário,
+    // já que cada marcador só aparece na página do próprio mês.
+    const entradaFmt = v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '';
+    const subLinha = tipo === 'prazo' && entradaFmt
+      ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.7;font-size:9px">entrou: ${entradaFmt}</div>`
+      : (v.equip_cliente ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.75;font-size:9.5px">${v.equip_cliente}</div>` : '');
     return `<div onclick="document.getElementById('modal-agenda-repair-overlay').remove();abrirModalValidacao('${v.id}')"
-      title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')}${v.equip_cliente ? ' · ' + v.equip_cliente.replace(/"/g, '') : ''} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}"
+      title="${rotulo}: ${(v.equip_modelo || '').replace(/"/g, '')}${v.equip_cliente ? ' · ' + v.equip_cliente.replace(/"/g, '') : ''} · ${tecInfo ? tecInfo.label : 'sem técnico'}${ajustado ? ' (prazo ajustado)' : ''}${tipo === 'prazo' && entradaFmt ? ' · entrou em ' + entradaFmt : ''}"
       style="font-size:10.5px;padding:3px 5px;margin-bottom:3px;border-radius:3px;cursor:pointer;background:${cor}22;
       border-left:2px solid ${cor};overflow:hidden;
       ${tipo === 'entrada' ? 'border-style:dashed;opacity:0.85' : ''}
       ${concluido ? 'opacity:0.5;text-decoration:line-through' : ''}">
       <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${nomeExibicao}</div>
-      ${v.equip_cliente ? `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0.75;font-size:9.5px">${v.equip_cliente}</div>` : ''}
+      ${subLinha}
     </div>`;
   };
 
