@@ -169,10 +169,10 @@ function stockPercent(pecaId) {
 function stockColor(pecaId) {
   const p = db.pecas.find(x => x.id === pecaId);
   const qty = db.estoque[pecaId] || 0;
-  if (!p) return '#3a9ef5';
-  if (p.minimo > 0 && qty <= 0) return '#e74c3c';
-  if (p.minimo > 0 && qty < p.minimo) return '#e8cc2a';
-  return '#2ecc71';
+  if (!p) return '#64a0d8';
+  if (p.minimo > 0 && qty <= 0) return '#dc766a';
+  if (p.minimo > 0 && qty < p.minimo) return '#d0af4e';
+  return '#64b98f';
 }
 
 function movBadge(tipo) {
@@ -438,17 +438,17 @@ function renderPecas(q='', manterPagina=false) {
   const pageList = list.slice(inicio, inicio + PECAS_POR_PAGINA);
 
   const FONTE_BADGE = {
-    DYMIND:             'background:rgba(52,152,219,0.2);color:#3498db;border:1px solid rgba(52,152,219,0.4)',
-    RAYTO:              'background:rgba(46,204,113,0.2);color:#27ae60;border:1px solid rgba(46,204,113,0.4)',
-    ORTHO:              'background:rgba(231,76,60,0.2);color:#e74c3c;border:1px solid rgba(231,76,60,0.4)',
+    DYMIND:             'background:rgba(100,160,216,0.2);color:#64a0d8;border:1px solid rgba(100,160,216,0.4)',
+    RAYTO:              'background:rgba(100,185,143,0.2);color:#64b98f;border:1px solid rgba(100,185,143,0.4)',
+    ORTHO:              'background:rgba(220,118,106,0.2);color:#dc766a;border:1px solid rgba(220,118,106,0.4)',
     SIEMENS:            'background:rgba(52,73,94,0.3);color:#aab7c4;border:1px solid rgba(100,130,150,0.4)',
-    SNIBE:              'background:rgba(243,156,18,0.2);color:#f39c12;border:1px solid rgba(243,156,18,0.4)',
-    FUJIFILM:           'background:rgba(192,57,43,0.2);color:#e74c3c;border:1px solid rgba(192,57,43,0.4)',
-    STAGO:              'background:rgba(142,68,173,0.2);color:#9b59b6;border:1px solid rgba(142,68,173,0.4)',
-    'VIDA BIOTECNOLOGIA':'background:rgba(26,188,156,0.2);color:#1abc9c;border:1px solid rgba(26,188,156,0.4)',
-    SENSACORE:          'background:rgba(230,126,34,0.2);color:#e67e22;border:1px solid rgba(230,126,34,0.4)',
-    BIOBASE:            'background:rgba(52,73,94,0.3);color:#85c1e9;border:1px solid rgba(52,73,94,0.6)',
-    OUTRO:              'background:rgba(155,89,182,0.2);color:#9b59b6;border:1px solid rgba(155,89,182,0.4)',
+    SNIBE:              'background:rgba(208,175,78,0.2);color:#d0af4e;border:1px solid rgba(208,175,78,0.4)',
+    FUJIFILM:           'background:rgba(220,118,106,0.2);color:#dc766a;border:1px solid rgba(220,118,106,0.4)',
+    STAGO:              'background:rgba(176,130,196,0.2);color:#b082c4;border:1px solid rgba(176,130,196,0.4)',
+    'VIDA BIOTECNOLOGIA':'background:rgba(99,176,182,0.2);color:#63b0b6;border:1px solid rgba(99,176,182,0.4)',
+    SENSACORE:          'background:rgba(217,136,74,0.2);color:#d9884a;border:1px solid rgba(217,136,74,0.4)',
+    BIOBASE:            'background:rgba(52,73,94,0.3);color:#8cb9e0;border:1px solid rgba(52,73,94,0.6)',
+    OUTRO:              'background:rgba(176,130,196,0.2);color:#b082c4;border:1px solid rgba(176,130,196,0.4)',
   };
 
   const paginacaoHtml = `
@@ -474,7 +474,7 @@ function renderPecas(q='', manterPagina=false) {
     <tbody>
     ${pageList.map(p => {
       const qty = db.estoque[p.id] || 0;
-      const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#e8cc2a' : 'var(--green)');
+      const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#d0af4e' : 'var(--green)');
       const imgHtml = p.imagem
         ? `<img src="${p.imagem}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border2);cursor:pointer"
             onclick="abrirVisualizadorImg('${p.id}')" title="Ver imagem">`
@@ -653,8 +653,8 @@ function verEquipDoadora(equipId) {
 
   const pct = Math.round((doadora.fator||1)*100);
   const classifStyle = doadora.classificacao === 'USO'
-    ? 'background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)'
-    : 'background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.3)';
+    ? 'background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.3)'
+    : 'background:rgba(220,118,106,0.15);color:var(--red);border:1px solid rgba(220,118,106,0.3)';
 
   const html = `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);
@@ -785,9 +785,9 @@ function renderEquipamentos(q='') {
       const doadBadge = doadora ? `
         <div style="margin-top:4px">
           <button onclick="verEquipDoadora('${e.id}')" style="
-            background:${doadora.classificacao==='SUCATA' ? 'rgba(231,76,60,0.15)' : 'rgba(52,152,219,0.15)'};
-            border:1px solid ${doadora.classificacao==='SUCATA' ? 'rgba(231,76,60,0.4)' : 'rgba(52,152,219,0.4)'};
-            color:${doadora.classificacao==='SUCATA' ? 'var(--red)' : '#3498db'};
+            background:${doadora.classificacao==='SUCATA' ? 'rgba(220,118,106,0.15)' : 'rgba(100,160,216,0.15)'};
+            border:1px solid ${doadora.classificacao==='SUCATA' ? 'rgba(220,118,106,0.4)' : 'rgba(100,160,216,0.4)'};
+            color:${doadora.classificacao==='SUCATA' ? 'var(--red)' : '#64a0d8'};
             border-radius:4px;padding:2px 8px;font-family:var(--mono);font-size:9px;cursor:pointer;
             font-weight:700;letter-spacing:0.5px">
             ⊘ DOADORA ${doadora.classificacao==='SUCATA'?'SUCATA':'EM USO'}
@@ -851,7 +851,7 @@ function renderEstoqueFiltros(countFiltrado, countTotal) {
   const grupos = [...new Set(db.pecas.map(p => (p.grupo || '').trim()).filter(Boolean))].sort();
 
   const pill = (valor, atual, label, onclick) => `
-    <button onclick="${onclick}('${valor}')" style="padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;
+    <button onclick="${onclick}('${valor}')" style="height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 12px;border-radius:20px;font-size:12px;cursor:pointer;white-space:nowrap;
       background:${atual === valor ? 'var(--surface2)' : 'transparent'};
       border:1px solid ${atual === valor ? 'var(--accent)' : 'var(--border2)'};
       color:${atual === valor ? 'var(--text)' : 'var(--text2)'};font-weight:${atual === valor ? '700' : '400'}">${label}</button>`;
@@ -860,44 +860,44 @@ function renderEstoqueFiltros(countFiltrado, countTotal) {
 
   el.innerHTML = `
     <div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">STATUS</div>
+      <div class="flt-rotulo">STATUS</div>
       <div style="display:flex;gap:6px">
         ${pill('', estoqueFiltroStatus, 'Todos', 'setEstoqueFiltroStatus')}
-        ${pill('SEM_ESTOQUE', estoqueFiltroStatus, '🔴 Sem estoque', 'setEstoqueFiltroStatus')}
-        ${pill('ABAIXO_MINIMO', estoqueFiltroStatus, '🟡 Abaixo do mínimo', 'setEstoqueFiltroStatus')}
-        ${pill('OK', estoqueFiltroStatus, '🟢 Com estoque OK', 'setEstoqueFiltroStatus')}
+        ${pill('SEM_ESTOQUE', estoqueFiltroStatus, '<span style="color:var(--red);font-size:11px">●</span> Sem estoque', 'setEstoqueFiltroStatus')}
+        ${pill('ABAIXO_MINIMO', estoqueFiltroStatus, '<span style="color:var(--yellow);font-size:11px">●</span> Abaixo do mínimo', 'setEstoqueFiltroStatus')}
+        ${pill('OK', estoqueFiltroStatus, '<span style="color:var(--green);font-size:11px">●</span> Com estoque OK', 'setEstoqueFiltroStatus')}
       </div>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">LOCALIZAÇÃO</div>
+      <div class="flt-rotulo">LOCALIZAÇÃO</div>
       <div style="display:flex;gap:6px">
         ${pill('', estoqueFiltroLocal, 'Todos', 'setEstoqueFiltroLocal')}
-        ${pill('COM', estoqueFiltroLocal, '📍 Com localização', 'setEstoqueFiltroLocal')}
-        ${pill('SEM', estoqueFiltroLocal, '📍 Sem localização', 'setEstoqueFiltroLocal')}
+        ${pill('COM', estoqueFiltroLocal, 'Com localização', 'setEstoqueFiltroLocal')}
+        ${pill('SEM', estoqueFiltroLocal, 'Sem localização', 'setEstoqueFiltroLocal')}
       </div>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">DEPÓSITO</div>
-      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroDeposito(this.value)">
+      <div class="flt-rotulo">DEPÓSITO</div>
+      <select class="form-select flt-select" onchange="setEstoqueFiltroDeposito(this.value)">
         <option value="">Todos</option>
         ${DEPOSITOS_ATIVOS.map(d => `<option value="${d}" ${estoqueFiltroDeposito === d ? 'selected' : ''}>${d}</option>`).join('')}
       </select>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">FONTE/FABRICANTE</div>
-      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroFonte(this.value)">
+      <div class="flt-rotulo">FONTE/FABRICANTE</div>
+      <select class="form-select flt-select" onchange="setEstoqueFiltroFonte(this.value)">
         <option value="">Todos</option>
         ${fontes.map(f => `<option value="${f}" ${estoqueFiltroFonte === f ? 'selected' : ''}>${f}</option>`).join('')}
       </select>
     </div>
     <div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">GRUPO</div>
-      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroGrupo(this.value)">
+      <div class="flt-rotulo">GRUPO</div>
+      <select class="form-select flt-select" onchange="setEstoqueFiltroGrupo(this.value)">
         <option value="">Todos</option>
         ${grupos.map(g => `<option value="${g}" ${estoqueFiltroGrupo === g ? 'selected' : ''}>${g}</option>`).join('')}
       </select>
     </div>
-    ${temFiltroAtivo ? `<button class="btn btn-ghost btn-sm" onclick="limparFiltrosEstoque()" style="align-self:flex-end">✕ Limpar filtros</button>` : ''}
+    ${temFiltroAtivo ? `<button class="btn btn-ghost btn-sm" onclick="limparFiltrosEstoque()" style="align-self:flex-end;height:30px">✕ Limpar filtros</button>` : ''}
     <div style="font-size:11px;color:var(--text3);align-self:flex-end;margin-left:auto">${countFiltrado} de ${countTotal} peças</div>
   `;
 }
@@ -1033,7 +1033,7 @@ function renderEstoque(q='', manterPagina=false) {
       const grupoDisplay = grupo.replace(/^\d+\s*-\s*/, '');
 
       const pct = minimo > 0 ? Math.min(100, Math.round((total / (minimo * 2)) * 100)) : (total > 0 ? 100 : 0);
-      const cor = total <= 0 ? 'var(--red)' : (minimo > 0 && total < minimo ? '#e8cc2a' : 'var(--green)');
+      const cor = total <= 0 ? 'var(--red)' : (minimo > 0 && total < minimo ? '#d0af4e' : 'var(--green)');
       const sit = total <= 0 ? ['Zerado','badge-red'] : (minimo > 0 && total < minimo ? ['Crítico','badge-orange'] : ['Normal','badge-green']);
 
       return `<tr>
@@ -1231,9 +1231,9 @@ const PIPELINE_STATUS = {
   ENVIADA:         { label:'Enviada',         badge:'badge-blue',   step:2, cor:'var(--blue)' },
   COMPRA_PENDENTE: { label:'Compra Pendente', badge:'badge-orange', step:2, cor:'var(--accent)' },
   DESPACHADA:      { label:'Despachada',      badge:'badge-purple', step:3, cor:'var(--purple)' },
-  RECEBIDA:        { label:'Recebida',        badge:'badge-teal',   step:4, cor:'#1abc9c' },
+  RECEBIDA:        { label:'Recebida',        badge:'badge-teal',   step:4, cor:'#63b0b6' },
   ALOCADA:         { label:'Alocada',         badge:'badge-green',  step:5, cor:'var(--green)' },
-  NF_EMITIDA:      { label:'NF Emitida',      badge:'badge-yellow', step:6, cor:'#f1c40f' },
+  NF_EMITIDA:      { label:'NF Emitida',      badge:'badge-yellow', step:6, cor:'#d0af4e' },
   FINALIZADO:      { label:'Finalizado',      badge:'badge-green',  step:7, cor:'var(--green)' },
 };
 
@@ -1427,7 +1427,7 @@ function filtrarDoadorasMov(q) {
   if (!filtrada.length) { dd.style.display = 'none'; return; }
 
   dd.innerHTML = filtrada.slice(0,12).map(d => {
-    const classifColor = d.classificacao === 'SUCATA' ? 'var(--red)' : '#3498db';
+    const classifColor = d.classificacao === 'SUCATA' ? 'var(--red)' : '#64a0d8';
     return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s"
       onmousedown="selecionarDoadoraMov('${d.id}')"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
@@ -1445,7 +1445,7 @@ function selecionarDoadoraMov(id) {
   document.getElementById('mov-doadora-search').value = `${d.modelo} · ${d.serie||''}`;
   document.getElementById('mov-doadora-dropdown').style.display = 'none';
   const card = document.getElementById('mov-doadora-card');
-  const classifColor = d.classificacao === 'SUCATA' ? 'var(--red)' : '#3498db';
+  const classifColor = d.classificacao === 'SUCATA' ? 'var(--red)' : '#64a0d8';
   card.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between">
       <span style="color:${classifColor};font-weight:600">⊘ DOADORA ${d.classificacao||'EM USO'}</span>
@@ -1814,14 +1814,14 @@ function abrirActionModal(id, acao) {
     const numRetorno = (sol.numSeq||sol.num_seq||sol.seqNum||sol.seq_num||'???') + 'R';
     const isRetornoFin = sol.tipoAlocacao==='RETORNO'||sol.tipo_alocacao==='RETORNO';
     body.innerHTML = pInfoBox + `
-      <div style="background:rgba(46,204,113,0.08);border:1px solid rgba(46,204,113,0.25);border-radius:var(--radius);
+      <div style="background:rgba(100,185,143,0.08);border:1px solid rgba(100,185,143,0.25);border-radius:var(--radius);
         padding:14px;margin-bottom:16px;font-size:13px;color:var(--text2)">
         <strong style="color:var(--green)">✓ Processo completo.</strong>
         ${sol.nfNumero ? `NF <strong>${sol.nfNumero}</strong> emitida em <strong>${sol.nfData}</strong>.` : ''}
         Confirma a finalização desta solicitação?
       </div>
 
-      <div style="background:rgba(231,76,60,0.06);border:1px solid rgba(231,76,60,0.2);border-radius:var(--radius);
+      <div style="background:rgba(220,118,106,0.06);border:1px solid rgba(220,118,106,0.2);border-radius:var(--radius);
         padding:12px 14px;margin-bottom:16px;display:${isRetornoFin?'none':'block'}">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none">
           <input type="checkbox" id="am-devolucao" onchange="toggleDevolucaoInfo(this.checked)"
@@ -1831,7 +1831,7 @@ function abrirActionModal(id, acao) {
           </span>
         </label>
         <div id="am-devolucao-info" style="display:none;margin-top:10px;padding:8px 10px;
-          background:rgba(231,76,60,0.08);border-radius:var(--radius);font-size:12px;color:var(--text2);line-height:1.7">
+          background:rgba(220,118,106,0.08);border-radius:var(--radius);font-size:12px;color:var(--text2);line-height:1.7">
           Será iniciado o processo de retorno da peça. Esta solicitação receberá o número de retorno
           <strong style="font-family:var(--mono);color:var(--red)">${numRetorno}</strong>,
           indicando que é o retorno da solicitação <strong style="font-family:var(--mono)">${sol.numSeq||'????'}</strong>.
@@ -2358,7 +2358,7 @@ function renderLogistica(tab) {
           ${m.equipCliente ? `· <span style="color:var(--text3)">${m.equipCliente}</span>` : ''}
         </div>` : ''}
         ${m.doadoraModelo ? `<div style="font-size:11px;margin-top:3px;display:flex;align-items:center;gap:6px">
-          <span style="background:rgba(52,152,219,0.12);border:1px solid rgba(52,152,219,0.3);color:#3498db;font-family:var(--mono);font-size:9px;padding:1px 7px;border-radius:2px;letter-spacing:1px">⊘ DOADORA</span>
+          <span style="background:rgba(100,160,216,0.12);border:1px solid rgba(100,160,216,0.3);color:#64a0d8;font-family:var(--mono);font-size:9px;padding:1px 7px;border-radius:2px;letter-spacing:1px">⊘ DOADORA</span>
           <span style="font-family:var(--mono);color:var(--text2)">${m.doadoraModelo}${m.doadoraSerie?' · '+m.doadoraSerie:''}</span>
         </div>` : ''}
         ${m.tecnico ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">Técnico: ${m.tecnico}${m.emailTecnico?` · <span style="font-family:var(--mono)">${m.emailTecnico}</span>`:''}</div>` : ''}
@@ -2771,10 +2771,10 @@ function montarCardMov(m) {
        </div>` : '';
 
   const recInfo = m.dataRecebimento
-    ? `<div style="font-size:11px;color:#1abc9c;margin-top:3px">✓ Recebido: ${m.dataRecebimento} ${m.horaRecebimento}</div>` : '';
+    ? `<div style="font-size:11px;color:#63b0b6;margin-top:3px">✓ Recebido: ${m.dataRecebimento} ${m.horaRecebimento}</div>` : '';
 
   const nfInfo = m.nfNumero
-    ? `<div style="font-size:11px;color:#f1c40f;margin-top:3px">📄 NF ${m.nfNumero} · ${m.nfData}</div>` : '';
+    ? `<div style="font-size:11px;color:#d0af4e;margin-top:3px">📄 NF ${m.nfNumero} · ${m.nfData}</div>` : '';
 
   return `
   <div class="sol-card ${isFin?'finalizado':''}">
@@ -3061,7 +3061,7 @@ function renderOrcamentos(q='') {
           ${o.nota_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','nota')" title="Baixar nota: ${o.nota_nome}">📄</button>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')" title="Editar">✎</button>
           <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')" title="Status">▾</button>
-          <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento('${o.id}')" title="Gerar PDF">⬇</button>
+          <button class="btn btn-info btn-sm" onclick="gerarPDFOrcamento('${o.id}')" title="Gerar PDF">⬇</button>
           <button class="btn btn-danger btn-sm" onclick="deleteOrcamento('${o.id}')" title="Excluir">✕</button>
         </td>
       </tr>`;
@@ -3881,9 +3881,9 @@ const VALIDACAO_ETAPA_LABEL = {
 };
 const VALIDACAO_STATUS_MAP = { repair: 'REPAIR', assessoria: 'ASSESSORIA' };
 const VALIDACAO_TECNICOS = [
-  { valor: 'ICARO', label: 'Icaro', cor: '#3498db' },
-  { valor: 'MORENTE', label: 'Morente', cor: '#e67e22' },
-  { valor: 'TEC_EXTERNO', label: 'Téc. Externo', cor: '#9b59b6' },
+  { valor: 'ICARO', label: 'Icaro', cor: '#64a0d8' },
+  { valor: 'MORENTE', label: 'Morente', cor: '#d9884a' },
+  { valor: 'TEC_EXTERNO', label: 'Téc. Externo', cor: '#b082c4' },
 ];
 
 // Calcula a urgência de um prazo (data_limite, formato AAAA-MM-DD) em
@@ -3955,9 +3955,9 @@ function renderValidacao(etapa, q) {
           acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="${v.data_limite ? 'Ajustar prazo' : 'Definir entrada/saída (sem prazo automático)'}">📅</button>`;
           if (v.status === 'ASSESSORIA') {
             acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAvancarValidacao('${v.id}','voltar')" title="Voltar pro Repair">↩</button>`;
-            acoes += `<button class="btn btn-sm" style="background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
+            acoes += `<button class="btn btn-sm" style="background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
           } else {
-            acoes += `<button class="btn btn-sm" style="background:rgba(52,152,219,0.15);color:#3498db;border:1px solid rgba(52,152,219,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Concluir Repair - Enviar pra Assessoria">✓ Enviar p/ Assessoria</button>`;
+            acoes += `<button class="btn btn-sm" style="background:rgba(100,160,216,0.15);color:#64a0d8;border:1px solid rgba(100,160,216,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Concluir Repair - Enviar pra Assessoria">✓ Enviar p/ Assessoria</button>`;
           }
           acoes += `<button class="btn btn-danger btn-sm" onclick="excluirValidacao('${v.id}')" title="Excluir">✕</button>`;
         }
@@ -6554,7 +6554,7 @@ function filtrarPecasMov(q) {
 
   dd.innerHTML = list.map(p => {
     const qty = db.estoque[p.id] || 0;
-    const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#e8cc2a' : 'var(--green)');
+    const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#d0af4e' : 'var(--green)');
     return `<div class="mov-dd-item" onmousedown="selecionarPeca('${p.id}')" style="
       padding:9px 14px; cursor:pointer; border-bottom:1px solid var(--border);
       display:flex; justify-content:space-between; align-items:center; gap:12px;
@@ -6594,7 +6594,7 @@ function selecionarPeca(id) {
   const p = db.pecas.find(x => x.id === id);
   if (!p) return;
   const qty = db.estoque[p.id] || 0;
-  const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#e8cc2a' : 'var(--green)');
+  const cor = qty <= 0 ? 'var(--red)' : (p.minimo > 0 && qty < p.minimo ? '#d0af4e' : 'var(--green)');
 
   const searchEl = document.getElementById('mov-peca-search');
   const hidden   = document.getElementById('mov-peca');
@@ -6822,7 +6822,7 @@ function renderChartFaturamentoMensal(dados) {
     type: 'bar',
     data: { labels, datasets: [{
       label: 'Faturamento (R$)', data: valores,
-      backgroundColor: 'rgba(46,204,113,0.65)', borderColor: '#2ecc71', borderWidth: 1, borderRadius: 4,
+      backgroundColor: 'rgba(100,185,143,0.65)', borderColor: '#64b98f', borderWidth: 1, borderRadius: 4,
     }]},
     options: {
       responsive: true,
@@ -6868,7 +6868,7 @@ function renderChartEnviosCliente(dados) {
     type: 'bar',
     data: { labels, datasets: [
       { label: 'Custo das Peças (R$)', data: custoPecas, backgroundColor: 'rgba(212,140,50,0.75)', borderRadius: 3 },
-      { label: 'Custo de Frete (R$)',  data: custoFrete, backgroundColor: 'rgba(52,152,219,0.75)', borderRadius: 3 },
+      { label: 'Custo de Frete (R$)',  data: custoFrete, backgroundColor: 'rgba(100,160,216,0.75)', borderRadius: 3 },
     ]},
     options: {
       indexAxis: 'y',
@@ -6913,7 +6913,7 @@ function renderChartGastosSC(dados) {
   _chartGastosSC = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: { labels, datasets: [
-      { label: 'Gasto em Compras (R$)', data: totais, backgroundColor: 'rgba(155,89,182,0.75)', borderRadius: 3 },
+      { label: 'Gasto em Compras (R$)', data: totais, backgroundColor: 'rgba(176,130,196,0.75)', borderRadius: 3 },
     ]},
     options: {
       indexAxis: 'y',
@@ -7087,7 +7087,7 @@ function onDoadFatorChange(val) {
   if (!labelEl) return;
   const pct = Math.round(parseFloat(val) * 100);
   labelEl.textContent = `= ${pct}%`;
-  labelEl.style.color = pct >= 100 ? 'var(--green)' : (pct >= 60 ? '#e8cc2a' : 'var(--red)');
+  labelEl.style.color = pct >= 100 ? 'var(--green)' : (pct >= 60 ? '#d0af4e' : 'var(--red)');
 }
 
 function salvarDoadora() {
@@ -7140,10 +7140,10 @@ function renderDoadoras(q = '') {
 
   const classifBadge = c => c === 'USO'
     ? `<span style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;
-        background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.4);
+        background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.4);
         font-weight:700;letter-spacing:1px">EM USO</span>`
     : `<span style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;
-        background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.4);
+        background:rgba(220,118,106,0.15);color:var(--red);border:1px solid rgba(220,118,106,0.4);
         font-weight:700;letter-spacing:1px">SUCATA</span>`;
 
   el.innerHTML = `<table class="data-table">
@@ -7156,7 +7156,7 @@ function renderDoadoras(q = '') {
     ${list.map(d => {
       const nRet = db.retiradas.filter(r => r.doadId === d.id).length;
       const pct  = Math.round((d.fator || 1) * 100);
-      const pctColor = pct >= 100 ? 'var(--green)' : (pct >= 60 ? '#e8cc2a' : 'var(--red)');
+      const pctColor = pct >= 100 ? 'var(--green)' : (pct >= 60 ? '#d0af4e' : 'var(--red)');
       return `<tr>
         <td style="font-weight:700;color:var(--text)">${d.modelo}</td>
         <td class="mono" style="font-size:11px;color:var(--accent)">${d.serie || '—'}</td>
@@ -7197,9 +7197,9 @@ function abrirModalRetirada(doadId) {
   const pct   = Math.round((d.fator || 1) * 100);
   const isUSO = d.classificacao === 'USO';
   const classifBadge = isUSO
-    ? `<span style="background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3);
+    ? `<span style="background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.3);
         font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;font-weight:700">EM USO · 100%</span>`
-    : `<span style="background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.3);
+    : `<span style="background:rgba(220,118,106,0.15);color:var(--red);border:1px solid rgba(220,118,106,0.3);
         font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;font-weight:700">SUCATA · ${pct}%</span>`;
 
   document.getElementById('modal-retirada-body').innerHTML = `
@@ -7361,7 +7361,7 @@ function recalcRetirada() {
       </div>
     </div>
     ${!isUSO ? `
-    <div style="margin-top:10px;padding:8px 12px;background:rgba(231,76,60,0.08);border:1px solid rgba(231,76,60,0.3);
+    <div style="margin-top:10px;padding:8px 12px;background:rgba(220,118,106,0.08);border:1px solid rgba(220,118,106,0.3);
       border-radius:6px;font-size:11px;color:var(--red)">
       ⚠ Máquina classificada como <strong>Sucata</strong> — custo aplicado a ${pct}% do valor cheio
       ${isAdmin ? `(R$ ${custoBase.toFixed(2)} × ${(fator*100).toFixed(0)}% = R$ ${custoUnit.toFixed(2)}/un)` : ''}
@@ -7441,9 +7441,9 @@ function renderRetiradas(q = '') {
 
   const classifBadge = c => c === 'USO'
     ? `<span style="font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:4px;
-        background:rgba(46,204,113,0.15);color:var(--green);border:1px solid rgba(46,204,113,0.3)">USO</span>`
+        background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.3)">USO</span>`
     : `<span style="font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:4px;
-        background:rgba(231,76,60,0.15);color:var(--red);border:1px solid rgba(231,76,60,0.3)">SUCATA</span>`;
+        background:rgba(220,118,106,0.15);color:var(--red);border:1px solid rgba(220,118,106,0.3)">SUCATA</span>`;
 
   const totalCusto = list.reduce((s,r) => s + (r.custoTotal||0), 0);
   const totalVenda = list.reduce((s,r) => s + (r.vendaTotal||0), 0);
@@ -7723,7 +7723,7 @@ function renderSugestao(q = '') {
     kpiEl.innerHTML =
       kpi('ITENS NA FILA', lista.length, 'var(--text)', lista.filter(i=>i.origens.includes('pendente')).length + ' pendentes') +
       kpi('PENDENTES S/ ESTOQUE', lista.filter(i=>i.origens.includes('pendente')).length, 'var(--red)', 'solicitações aguardando') +
-      kpi('ABAIXO DO MÍNIMO',    lista.filter(i=>i.origens.includes('minimo')).length,   '#e8cc2a', 'estoque crítico') +
+      kpi('ABAIXO DO MÍNIMO',    lista.filter(i=>i.origens.includes('minimo')).length,   '#d0af4e', 'estoque crítico') +
       kpi('REPOSIÇÃO DOADORA',   lista.filter(i=>i.origens.includes('doadora')).length,  'var(--accent)', 'máquinas em uso') +
       (isAdmin ? kpi('CUSTO ESTIMADO', 'R$ ' + totalCusto.toLocaleString('pt-BR',{minimumFractionDigits:2}), 'var(--accent)', 'baseado no custo de reposição') : '') +
       kpi('VENDA ESTIMADA', 'R$ ' + totalVenda.toLocaleString('pt-BR',{minimumFractionDigits:2}), 'var(--green)', 'valor de venda ao cliente');
@@ -7740,9 +7740,9 @@ function renderSugestao(q = '') {
 
   const origemTag = o => {
     const map = {
-      doadora: ['REPOSIÇÃO DOADORA','rgba(52,152,219,0.2)','#3498db','rgba(52,152,219,0.4)'],
-      pendente:['SEM ESTOQUE','rgba(231,76,60,0.2)','var(--red)','rgba(231,76,60,0.4)'],
-      minimo:  ['ABAIXO MÍNIMO','rgba(232,204,42,0.2)','#e8cc2a','rgba(232,204,42,0.4)'],
+      doadora: ['REPOSIÇÃO DOADORA','rgba(100,160,216,0.2)','#64a0d8','rgba(100,160,216,0.4)'],
+      pendente:['SEM ESTOQUE','rgba(220,118,106,0.2)','var(--red)','rgba(220,118,106,0.4)'],
+      minimo:  ['ABAIXO MÍNIMO','rgba(208,175,78,0.2)','#d0af4e','rgba(208,175,78,0.4)'],
     };
     return (o || []).map(k => {
       const [label, bg, color, border] = map[k] || [k,'var(--surface2)','var(--text3)','var(--border)'];
@@ -7768,8 +7768,8 @@ function renderSugestao(q = '') {
     <tbody>
     ${lista.map((item, i) => {
       const urgente = item.origens.includes('pendente') || item.estoqueAtual <= 0;
-      const cor     = item.estoqueAtual <= 0 ? 'var(--red)' : (item.estoqueAtual < item.minimo ? '#e8cc2a' : 'var(--text2)');
-      return `<tr style="${urgente ? 'background:rgba(231,76,60,0.04)' : ''}">
+      const cor     = item.estoqueAtual <= 0 ? 'var(--red)' : (item.estoqueAtual < item.minimo ? '#d0af4e' : 'var(--text2)');
+      return `<tr style="${urgente ? 'background:rgba(220,118,106,0.04)' : ''}">
         <td><input type="checkbox" class="sug-chk" data-idx="${i}" checked></td>
         <td>
           <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${item.codigo}</div>
@@ -8025,9 +8025,9 @@ function renderPedidos(q = '') {
   }
 
   const statusBadge = s => ({
-    ABERTO:    ['ABERTO',   'rgba(231,76,60,0.15)',  'var(--red)',   'rgba(231,76,60,0.4)'],
-    PARCIAL:   ['PARCIAL',  'rgba(243,156,18,0.15)', '#f39c12',     'rgba(243,156,18,0.4)'],
-    CONCLUIDO: ['CONCLUÍDO','rgba(46,204,113,0.15)', 'var(--green)','rgba(46,204,113,0.4)'],
+    ABERTO:    ['ABERTO',   'rgba(220,118,106,0.15)',  'var(--red)',   'rgba(220,118,106,0.4)'],
+    PARCIAL:   ['PARCIAL',  'rgba(219,145,67,0.15)', '#db9143',     'rgba(219,145,67,0.4)'],
+    CONCLUIDO: ['CONCLUÍDO','rgba(100,185,143,0.15)', 'var(--green)','rgba(100,185,143,0.4)'],
     CANCELADO: ['CANCELADO','rgba(100,100,100,0.15)','var(--text3)','rgba(100,100,100,0.4)'],
   }[s] || [s,'var(--surface2)','var(--text3)','var(--border)']);
 
@@ -9667,7 +9667,7 @@ function renderMobOrc() {
         '<td style="font-family:var(--mono);color:var(--green)">R$ '+parseFloat(o.total||0).toFixed(2)+'</td>'+
         '<td>'+(o.data||'—')+'</td>'+
         '<td><span class="status-badge status-'+(o.status||'').toLowerCase()+'">'+(o.status||'—')+'</span></td>'+
-        '<td><button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento(\''+o.id+'\')">Ver</button> <button class="btn btn-sm" style="background:rgba(231,76,60,0.15);color:#e74c3c;border:1px solid rgba(231,76,60,0.3)" onclick="gerarPDFOrcamento(\''+o.id+'\')">⬇ PDF</button></td>'+
+        '<td><button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento(\''+o.id+'\')">Ver</button> <button class="btn btn-info btn-sm" onclick="gerarPDFOrcamento(\''+o.id+'\')">⬇ PDF</button></td>'+
       '</tr>';
     }).join('')+
   '</tbody></table>';
