@@ -755,6 +755,60 @@ app.listen(PORT, '0.0.0.0', () => {
     });
     // ── fim diag retiradas ──
 
+    // ── Atualiza o custo das pecas SIEMENS existentes a partir da planilha
+    //    de precos (valor ja em R$, com impostos brasileiros — nao e preco
+    //    de importacao em USD). Casa por codigo + fonte=SIEMENS. Zera o
+    //    campo dolar nos casados, ja que nao se aplica a pecas nao
+    //    importadas. So atualiza peca que ja existe; nunca cria peca nova.
+    //    Rodar 1x, depois remover. ──
+    app.get('/api/admin/atualizar-precos-siemens', (req, res) => {
+      const secret = process.env.RELATORIO_TESTE_SECRET || 'partforge-teste-2026';
+      if (req.query.secret !== secret) {
+        return res.status(403).json({ erro: 'Nao autorizado. Use ?secret=' + secret });
+      }
+      try {
+        const itens = require('./dados-precos-siemens.json');
+        const norm = s => String(s || '').trim().toUpperCase();
+        const todasPecas = db.query("SELECT id, codigo, fonte, custo FROM pecas");
+        const porCodigoSiemens = {};
+        const porCodigoOutraFonte = {};
+        todasPecas.forEach(p => {
+          const c = norm(p.codigo);
+          if (!c) return;
+          if (norm(p.fonte) === 'SIEMENS') porCodigoSiemens[c] = p;
+          else (porCodigoOutraFonte[c] = porCodigoOutraFonte[c] || []).push(p.fonte);
+        });
+
+        let atualizados = 0, semMudanca = 0, naoEncontrados = 0, encontradosOutraFonte = 0;
+        const amostraAtualizados = [], amostraNaoEncontrados = [];
+        for (const it of itens) {
+          const c = norm(it.codigo);
+          const peca = porCodigoSiemens[c];
+          if (peca) {
+            if (Math.abs((peca.custo || 0) - it.custo) < 0.005) { semMudanca++; continue; }
+            db.runBatch('UPDATE pecas SET custo=?, dolar=0 WHERE id=?', [it.custo, peca.id]);
+            if (amostraAtualizados.length < 10) amostraAtualizados.push({ codigo: it.codigo, custoAntes: peca.custo, custoNovo: it.custo });
+            atualizados++;
+          } else if (porCodigoOutraFonte[c]) {
+            encontradosOutraFonte++;
+          } else {
+            naoEncontrados++;
+            if (amostraNaoEncontrados.length < 15) amostraNaoEncontrados.push(it.codigo);
+          }
+        }
+        db.persist();
+        res.json({
+          ok: true,
+          totalNaPlanilha: itens.length,
+          atualizados, semMudanca, naoEncontrados, encontradosOutraFonte,
+          amostraAtualizados, amostraNaoEncontrados
+        });
+      } catch (err) {
+        res.status(500).json({ ok: false, erro: err.message });
+      }
+    });
+    // ── fim atualizar precos siemens ──
+
     // ── Importa os 88 equipamentos da filial de SP (extraidos dos prints
     //    do sistema antigo EquipQuallyx). Rodar 1x, depois remover. ──
     app.get('/api/admin/importar-equip-quallyx-sp', (req, res) => {
