@@ -400,10 +400,76 @@ function salvarPeca() {
 let pecasPagina = 1;
 const PECAS_POR_PAGINA = 150;
 
+// ── Filtros da aba Peças ──
+let pecasFiltroGrupo = '';
+let pecasFiltroQualidade = '';   // '' | SEM_CUSTO | SEM_VENDA | SEM_FOTO | SEM_GRUPO
+let _pecasFonteSig = '';
+const _escAttr = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+// Monta o dropdown Fonte/Linha a partir do catálogo real (antes era uma lista fixa que ignorava
+// fontes e linhas novas). Só reconstrói quando o conjunto de fontes/linhas muda.
+function atualizarFiltroFontePecas() {
+  const sel = document.getElementById('pecas-filter-fonte'); if (!sel) return;
+  const mapa = {};
+  db.pecas.forEach(p => {
+    if (!(p.fonte || '').trim() || (p.fonte || '').includes(':')) return;
+    const set = (mapa[p.fonte] = mapa[p.fonte] || new Set());
+    if ((p.linha || '').trim() && !p.linha.includes(':')) set.add(p.linha);
+  });
+  const fontes = Object.keys(mapa).sort();
+  const sig = fontes.map(f => f + '[' + [...mapa[f]].sort().join('|') + ']').join(';');
+  if (sig === _pecasFonteSig) return;
+  _pecasFonteSig = sig;
+  const atual = sel.value;
+  let h = '<option value="">Todas as fontes/linhas</option>';
+  fontes.forEach(f => {
+    const linhas = [...mapa[f]].sort();
+    if (!linhas.length) { h += `<option value="${_escAttr(f)}">${_escAttr(f)}</option>`; return; }
+    h += `<optgroup label="${_escAttr(f)}"><option value="${_escAttr(f)}">— Todas ${_escAttr(f)} —</option>` +
+      linhas.map(l => `<option value="${_escAttr(f)}:${_escAttr(l)}">${_escAttr(f)} · ${_escAttr(l)}</option>`).join('') + '</optgroup>';
+  });
+  sel.innerHTML = h;
+  sel.value = atual;
+}
+
+function renderPecasFiltros(countFiltrado, countTotal) {
+  const el = document.getElementById('pecas-filtros'); if (!el) return;
+  const grupos = [...new Set(db.pecas.map(p => (p.grupo || '').trim()).filter(Boolean))].sort();
+  const pill = (valor, label) => `<button onclick="setPecasFiltroQualidade('${valor}')" style="height:30px;display:inline-flex;align-items:center;padding:0 12px;border-radius:20px;font-size:12px;cursor:pointer;white-space:nowrap;
+    background:${pecasFiltroQualidade === valor ? 'var(--surface2)' : 'transparent'};border:1px solid ${pecasFiltroQualidade === valor ? 'var(--accent)' : 'var(--border2)'};
+    color:${pecasFiltroQualidade === valor ? 'var(--text)' : 'var(--text2)'};font-weight:${pecasFiltroQualidade === valor ? '700' : '400'}">${label}</button>`;
+  const ativo = pecasFiltroGrupo || pecasFiltroQualidade || document.getElementById('pecas-filter-fonte')?.value;
+  el.innerHTML = `
+    <div>
+      <div class="flt-rotulo">QUALIDADE DO CADASTRO</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${pill('', 'Todas')}${pill('SEM_CUSTO', 'Sem custo')}${pill('SEM_VENDA', 'Sem valor de venda')}${pill('SEM_FOTO', 'Sem foto')}${pill('SEM_GRUPO', 'Sem grupo')}
+      </div>
+    </div>
+    <div>
+      <div class="flt-rotulo">GRUPO</div>
+      <select class="form-select flt-select" onchange="setPecasFiltroGrupo(this.value)">
+        <option value="">Todos</option>
+        ${grupos.map(g => `<option value="${_escAttr(g)}" ${pecasFiltroGrupo === g ? 'selected' : ''}>${_escAttr(g)}</option>`).join('')}
+      </select>
+    </div>
+    ${ativo ? `<button class="btn btn-ghost btn-sm" onclick="limparFiltrosPecas()" style="align-self:flex-end;height:30px">✕ Limpar filtros</button>` : ''}
+    <div style="font-size:11px;color:var(--text3);align-self:flex-end;margin-left:auto">${countFiltrado} de ${countTotal} peças</div>`;
+}
+const _pecasBusca = () => document.querySelector('#page-pecas .search-input')?.value || '';
+function setPecasFiltroQualidade(v) { pecasFiltroQualidade = v; renderPecas(_pecasBusca()); }
+function setPecasFiltroGrupo(v) { pecasFiltroGrupo = v; renderPecas(_pecasBusca()); }
+function limparFiltrosPecas() {
+  pecasFiltroGrupo = ''; pecasFiltroQualidade = '';
+  const f = document.getElementById('pecas-filter-fonte'); if (f) f.value = '';
+  renderPecas(_pecasBusca());
+}
+
 function renderPecas(q='', manterPagina=false) {
   const el = document.getElementById('pecas-table');
   if (!el) return;
   if (!manterPagina) pecasPagina = 1;
+  atualizarFiltroFontePecas();
   const ql = (q||'').toLowerCase().trim();
   const fonteFilter = document.getElementById('pecas-filter-fonte')?.value || '';
   const list = db.pecas.filter(p => {
@@ -417,17 +483,24 @@ function renderPecas(q='', manterPagina=false) {
         if ((p.fonte||'') !== fonteFilter) return false;
       }
     }
+    if (pecasFiltroGrupo && (p.grupo || '') !== pecasFiltroGrupo) return false;
+    if (pecasFiltroQualidade === 'SEM_CUSTO' && (parseFloat(p.custo) || 0) > 0) return false;
+    if (pecasFiltroQualidade === 'SEM_VENDA' && (parseFloat(p.valor_venda) || 0) > 0) return false;
+    if (pecasFiltroQualidade === 'SEM_FOTO' && p.imagem) return false;
+    if (pecasFiltroQualidade === 'SEM_GRUPO' && (p.grupo || '').trim()) return false;
     if (!ql) return true;
     return String(p.codigo||'').toLowerCase().includes(ql) ||
            String(p.nome||'').toLowerCase().includes(ql) ||
            String(p.fonte||'').toLowerCase().includes(ql) ||
            String(p.linha||'').toLowerCase().includes(ql);
   });
+  renderPecasFiltros(list.length, db.pecas.length);
+  document.getElementById('badge-pecas').textContent = db.pecas.length;
   if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">⬡</div>
-      <div class="empty-title">Nenhuma Peça</div>
-      <div class="empty-sub">Importe a planilha ou cadastre manualmente</div></div>`;
-    document.getElementById('badge-pecas').textContent = 0;
+    const filtrando = ql || fonteFilter || pecasFiltroGrupo || pecasFiltroQualidade;
+    el.innerHTML = filtrando
+      ? `<div class="empty-state"><div class="empty-icon">⬡</div><div class="empty-title">Nenhuma peça encontrada</div><div class="empty-sub">Tente ajustar a busca ou os filtros</div></div>`
+      : `<div class="empty-state"><div class="empty-icon">⬡</div><div class="empty-title">Nenhuma Peça</div><div class="empty-sub">Importe a planilha ou cadastre manualmente</div></div>`;
     return;
   }
 
@@ -511,7 +584,7 @@ function renderPecas(q='', manterPagina=false) {
     }).join('')}
     </tbody></table>
     ${paginacaoHtml}`;
-  document.getElementById('badge-pecas').textContent = list.length;
+  document.getElementById('badge-pecas').textContent = db.pecas.length;
 }
 
 function mudarPaginaPecas(delta) {
@@ -836,7 +909,6 @@ const ESTOQUE_POR_PAGINA = 150;
 // Filtros pré-setados da Posição de Estoque (além da busca por texto).
 let estoqueFiltroStatus = '';    // '' | 'SEM_ESTOQUE' | 'ABAIXO_MINIMO' | 'OK'
 let estoqueFiltroLocal = '';     // '' | 'COM' | 'SEM'
-let estoqueFiltroDeposito = '';  // '' | um dos DEPOSITOS
 let estoqueFiltroFonte = '';     // '' | fonte exata
 let estoqueFiltroGrupo = '';     // '' | grupo exato
 
@@ -856,7 +928,7 @@ function renderEstoqueFiltros(countFiltrado, countTotal) {
       border:1px solid ${atual === valor ? 'var(--accent)' : 'var(--border2)'};
       color:${atual === valor ? 'var(--text)' : 'var(--text2)'};font-weight:${atual === valor ? '700' : '400'}">${label}</button>`;
 
-  const temFiltroAtivo = estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroDeposito || estoqueFiltroFonte || estoqueFiltroGrupo;
+  const temFiltroAtivo = estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroFonte || estoqueFiltroGrupo;
 
   el.innerHTML = `
     <div>
@@ -875,13 +947,6 @@ function renderEstoqueFiltros(countFiltrado, countTotal) {
         ${pill('COM', estoqueFiltroLocal, 'Com localização', 'setEstoqueFiltroLocal')}
         ${pill('SEM', estoqueFiltroLocal, 'Sem localização', 'setEstoqueFiltroLocal')}
       </div>
-    </div>
-    <div>
-      <div class="flt-rotulo">DEPÓSITO</div>
-      <select class="form-select flt-select" onchange="setEstoqueFiltroDeposito(this.value)">
-        <option value="">Todos</option>
-        ${DEPOSITOS_ATIVOS.map(d => `<option value="${d}" ${estoqueFiltroDeposito === d ? 'selected' : ''}>${d}</option>`).join('')}
-      </select>
     </div>
     <div>
       <div class="flt-rotulo">FONTE/FABRICANTE</div>
@@ -903,11 +968,10 @@ function renderEstoqueFiltros(countFiltrado, countTotal) {
 }
 function setEstoqueFiltroStatus(v)    { estoqueFiltroStatus = v;    renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
 function setEstoqueFiltroLocal(v)     { estoqueFiltroLocal = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
-function setEstoqueFiltroDeposito(v)  { estoqueFiltroDeposito = v;  renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
 function setEstoqueFiltroFonte(v)     { estoqueFiltroFonte = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
 function setEstoqueFiltroGrupo(v)     { estoqueFiltroGrupo = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
 function limparFiltrosEstoque() {
-  estoqueFiltroStatus = ''; estoqueFiltroLocal = ''; estoqueFiltroDeposito = ''; estoqueFiltroFonte = ''; estoqueFiltroGrupo = '';
+  estoqueFiltroStatus = ''; estoqueFiltroLocal = ''; estoqueFiltroFonte = ''; estoqueFiltroGrupo = '';
   renderEstoque(document.querySelector('#page-estoque .search-input')?.value || '');
 }
 
@@ -960,9 +1024,6 @@ function renderEstoque(q='', manterPagina=false) {
   } else if (estoqueFiltroLocal === 'SEM') {
     list = list.filter(r => !(r.peca?.localizacao || r.peca?.localizacao_bin || '').trim());
   }
-  if (estoqueFiltroDeposito) {
-    list = list.filter(r => (r.deps[estoqueFiltroDeposito] || 0) > 0);
-  }
   if (estoqueFiltroFonte) {
     list = list.filter(r => (r.peca?.fonte || '') === estoqueFiltroFonte);
   }
@@ -976,7 +1037,7 @@ function renderEstoque(q='', manterPagina=false) {
   list.sort((a,b) => b.total - a.total || String(a.cod).localeCompare(String(b.cod)));
 
   if (!list.length) {
-    const temFiltroOuBusca = q || estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroDeposito || estoqueFiltroFonte || estoqueFiltroGrupo;
+    const temFiltroOuBusca = q || estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroFonte || estoqueFiltroGrupo;
     el.innerHTML = temFiltroOuBusca
       ? `<div class="empty-state"><div class="empty-icon">◫</div><div class="empty-title">Nenhuma peça encontrada</div><div class="empty-sub">Tente ajustar a busca ou os filtros</div></div>`
       : `<div class="empty-state"><div class="empty-icon">◫</div><div class="empty-title">Estoque Vazio</div><div class="empty-sub">Importe a planilha de estoque do eLoca ou registre movimentações</div></div>`;
@@ -2888,7 +2949,7 @@ function montarCardGrupo(itensDoGrupo) {
           <span class="badge badge-gray" style="font-size:9px">📦 LOTE · ${itensDoGrupo.length} ITENS · ${qtdTotal} UNID.</span>
         </div>
         ${equipUnico && primeiro.equipSerie ? `<div style="font-size:12px;color:var(--text2)">S/N: <span style="font-family:var(--mono);color:var(--text)">${primeiro.equipSerie}</span>${primeiro.equipCliente ? ' · <span style="color:var(--text3)">'+primeiro.equipCliente+'</span>' : ''}</div>` : ''}
-        ${!equipUnico ? `<div style="font-size:11px;color:var(--accent)">📍 ${new Set(itensDoGrupo.map(x=>x.equipSerie||'—')).size} equipamentos diferentes neste lote (veja a tabela abaixo)</div>` : ''}
+        ${!equipUnico ? `<div style="font-size:11px;color:var(--accent)">${ico('pin',12)} ${new Set(itensDoGrupo.map(x=>x.equipSerie||'—')).size} equipamentos diferentes neste lote (veja a tabela abaixo)</div>` : ''}
         ${primeiro.tecnico ? `<div style="font-size:11px;color:var(--text3)">Solicitante: ${primeiro.tecnico}</div>` : ''}
         ${primeiro.obs ? `<div style="font-size:11px;color:var(--text3);margin-top:2px;font-style:italic">"${primeiro.obs}"</div>` : ''}
         <div style="font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px">${formatDate(primeiro.eventos?.[0]?.data||0)}</div>
@@ -2915,7 +2976,7 @@ function montarCardGrupo(itensDoGrupo) {
           ${equipCol}
           <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
           <td style="text-align:right;white-space:nowrap">
-            ${((it.fotosDespachoQtd||0)+(it.fotosRecebimentoQtd||0)+(it.fotosDevolucaoQtd||0)) > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosMovimentacao('${it.id}')" style="font-size:9px" title="Ver fotos">📷</button>` : ''}
+            ${((it.fotosDespachoQtd||0)+(it.fotosRecebimentoQtd||0)+(it.fotosDevolucaoQtd||0)) > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosMovimentacao('${it.id}')" style="font-size:9px" title="Ver fotos">${ico('camera',12)}</button>` : ''}
             <button class="btn btn-ghost btn-sm" onclick="abrirModalEditarSolicitacao('${it.id}')" style="font-size:9px" title="Editar este item">✎</button>
             <button class="btn btn-ghost btn-sm" onclick="verEventos('${it.id}')" style="font-size:9px" title="Histórico deste item">⊙</button>
           </td>
@@ -3057,8 +3118,8 @@ function renderOrcamentos(q='') {
         <td class="mono" style="color:var(--accent);font-weight:700">R$ ${parseFloat(o.total||0).toFixed(2)}</td>
         <td class="mono">${o.data||'—'}</td>
         <td style="text-align:right;white-space:nowrap">
-          ${o.boleto_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','boleto')" title="Baixar boleto: ${o.boleto_nome}">🧾</button>` : ''}
-          ${o.nota_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','nota')" title="Baixar nota: ${o.nota_nome}">📄</button>` : ''}
+          ${o.boleto_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','boleto')" title="Baixar boleto: ${o.boleto_nome}">${ico('receipt',14)}</button>` : ''}
+          ${o.nota_nome ? `<button class="btn btn-ghost btn-sm" onclick="baixarAnexoOrcLista('${o.id}','nota')" title="Baixar nota: ${o.nota_nome}">${ico('file',14)}</button>` : ''}
           <button class="btn btn-ghost btn-sm" onclick="abrirModalOrcamento('${o.id}')" title="Editar">✎</button>
           <button class="btn btn-ghost btn-sm" onclick="abrirMenuStatusOrc(event,'${o.id}')" title="Status">▾</button>
           <button class="btn btn-info btn-sm" onclick="gerarPDFOrcamento('${o.id}')" title="Gerar PDF">⬇</button>
@@ -3941,18 +4002,18 @@ function renderValidacao(etapa, q) {
     return;
   }
 
-  el.innerHTML = `<table class="data-table">
+  el.innerHTML = `<table class="data-table compact">
     <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>OS / Origem</th><th>Técnico</th><th>Entrada</th><th>Status</th><th>Prazo</th><th>Peça/Produto</th><th>Obs.</th><th></th></tr></thead>
     <tbody>
       ${lista.map(v => {
         const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
         const dataEntrada = v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—';
         const concluido = v.status === 'CONCLUIDO';
-        let acoes = (v.fotos_qtd > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosValidacao('${v.id}')" title="Ver fotos (${v.fotos_qtd})">📷</button>` : '') +
+        let acoes = (v.fotos_qtd > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosValidacao('${v.id}')" title="Ver fotos (${v.fotos_qtd})">${ico('camera',12)}</button>` : '') +
           `<button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico">⊙</button>`;
         if (!concluido) {
           acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalValidacao('${v.id}')" title="Editar">✎</button>`;
-          acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="${v.data_limite ? 'Ajustar prazo' : 'Definir entrada/saída (sem prazo automático)'}">📅</button>`;
+          acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAjustarPrazo('${v.id}')" title="${v.data_limite ? 'Ajustar prazo' : 'Definir entrada/saída (sem prazo automático)'}">${ico('calendar',12)}</button>`;
           if (v.status === 'ASSESSORIA') {
             acoes += `<button class="btn btn-ghost btn-sm" onclick="abrirModalAvancarValidacao('${v.id}','voltar')" title="Voltar pro Repair">↩</button>`;
             acoes += `<button class="btn btn-sm" style="background:rgba(100,185,143,0.15);color:var(--green);border:1px solid rgba(100,185,143,0.3)" onclick="abrirModalAvancarValidacao('${v.id}','avancar')" title="Validar - Pronto pra Envio">✓ Pronto pra Envio</button>`;
@@ -3981,8 +4042,8 @@ function renderValidacao(etapa, q) {
           <td style="font-size:12px">${v.equip_modelo || '—'}</td>
           <td style="font-size:12px">${v.equip_cliente || '—'}</td>
           <td style="font-size:11px">
-            ${v.os_numero ? `<div>📋 ${v.os_numero}</div>` : ''}
-            ${v.origem ? `<div style="color:var(--text3)">📦 ${v.origem}</div>` : ''}
+            ${v.os_numero ? `<div>${ico('clipboard',13)} ${v.os_numero}</div>` : ''}
+            ${v.origem ? `<div style="color:var(--text3)">${ico('box',13)} ${v.origem}</div>` : ''}
             ${!v.os_numero && !v.origem ? '<span style="color:var(--text3)">—</span>' : ''}
           </td>
           <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${tecInfo.label}` : '<span style="color:var(--text3)">—</span>'}</td>
@@ -4770,10 +4831,10 @@ function renderEquipQuallyxSP(q) {
         title="${e.posicao ? 'Posição: ' + e.posicao : 'Definir posição no estoque'}"
         style="position:absolute;top:10px;right:10px;background:${e.posicao ? 'var(--accent-dim)' : 'var(--surface2)'};border:1px solid ${e.posicao ? 'var(--accent)' : 'var(--border2)'};
         color:${e.posicao ? 'var(--accent)' : 'var(--text3)'};border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;z-index:1">
-        📍${e.posicao ? ' ' + e.posicao : ''}
+        ${ico('pin',12)}${e.posicao ? ' ' + e.posicao : ''}
       </button>
       <div style="width:100%;height:90px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:center;margin-bottom:10px;overflow:hidden">
-        ${e.tem_imagem ? `<img id="eqsp-thumb-${e.id}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:32px;opacity:0.3">🔬</span>'}
+        ${e.tem_imagem ? `<img id="eqsp-thumb-${e.id}" style="width:100%;height:100%;object-fit:cover">` : `<span style="color:var(--text3);opacity:0.6">${ico('microscope',38)}</span>`}
       </div>
       <div style="font-weight:700;font-size:13px;line-height:1.3;margin-bottom:4px">${e.nome}</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${[e.marca, e.serie].filter(Boolean).join(' · ') || '—'}</div>
@@ -4841,7 +4902,7 @@ function abrirModalEquipQuallyxSP(id) {
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">📍 Posição no Estoque</label>
+          <label class="form-label">${ico('pin',13)} Posição no Estoque</label>
           <input class="form-input" id="eqsp-posicao" value="${e?.posicao || ''}" placeholder="Ex.: Prateleira A3, Sala 2">
         </div>
         <div class="form-group">
@@ -4946,7 +5007,7 @@ function abrirAjustarPosicaoEqsp(id, posicaoAtual) {
   overlay.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:360px;width:100%" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <span style="font-weight:700;font-size:15px">📍 Posição no Estoque</span>
+        <span style="font-weight:700;font-size:15px">${ico('pin',15)} Posição no Estoque</span>
         <button onclick="document.getElementById('modal-eqsp-posicao-overlay').remove()"
           style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
@@ -6505,6 +6566,21 @@ function removerImgPeca() {
   if (icon) icon.style.display = 'block';
   if (rem)  rem.style.display  = 'none';
   document.getElementById('peca-img-input').value = '';
+}
+
+// Ícones de linha fina (mesma família da barra lateral) pra usar dentro de botões, tabelas e cards.
+const ICO_PATHS = {
+  calendar:'<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  pin:'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  box:'<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  clipboard:'<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+  microscope:'<path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/>'
+};
+function ico(nome, tam = 14) {
+  return `<svg width="${tam}" height="${tam}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0" aria-hidden="true">${ICO_PATHS[nome]}</svg>`;
 }
 
 function pecaImgTag(peca, size=40) {
@@ -9510,7 +9586,7 @@ function navigate(page, el) {
     loadAndRenderGarantia();
   } else if (page === 'validacao-repair') {
     if (actionsEl) actionsEl.innerHTML = `
-      <button class="btn btn-ghost" onclick="abrirAgendaRepair()">📅 Agenda</button>
+      <button class="btn btn-ghost" onclick="abrirAgendaRepair()">${ico('calendar',14)} Agenda</button>
       <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('validacao-repair')">⬇ Exportar Excel</button>
       <button class="btn btn-primary" onclick="abrirModalValidacao()">⊕ Novo Equipamento no Repair</button>`;
