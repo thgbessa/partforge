@@ -833,6 +833,84 @@ const DEPOSITOS_ATIVOS = ['QUALLYX','QUALLYX SC','QUALLYX SP','CONSUMO - SP','CO
 let estoquePagina = 1;
 const ESTOQUE_POR_PAGINA = 150;
 
+// Filtros pré-setados da Posição de Estoque (além da busca por texto).
+let estoqueFiltroStatus = '';    // '' | 'SEM_ESTOQUE' | 'ABAIXO_MINIMO' | 'OK'
+let estoqueFiltroLocal = '';     // '' | 'COM' | 'SEM'
+let estoqueFiltroDeposito = '';  // '' | um dos DEPOSITOS
+let estoqueFiltroFonte = '';     // '' | fonte exata
+let estoqueFiltroGrupo = '';     // '' | grupo exato
+
+function renderEstoqueFiltros(countFiltrado, countTotal) {
+  const el = document.getElementById('estoque-filtros');
+  if (!el) return;
+
+  // Opções de Fonte e Grupo vêm sempre do catálogo completo de peças (não
+  // da lista já filtrada), pra não ficar sumindo opção do dropdown conforme
+  // outros filtros são aplicados.
+  const fontes = [...new Set(db.pecas.map(p => (p.fonte || '').trim()).filter(Boolean))].sort();
+  const grupos = [...new Set(db.pecas.map(p => (p.grupo || '').trim()).filter(Boolean))].sort();
+
+  const pill = (valor, atual, label, onclick) => `
+    <button onclick="${onclick}('${valor}')" style="padding:6px 12px;border-radius:20px;font-size:11px;cursor:pointer;
+      background:${atual === valor ? 'var(--surface2)' : 'transparent'};
+      border:1px solid ${atual === valor ? 'var(--accent)' : 'var(--border2)'};
+      color:${atual === valor ? 'var(--text)' : 'var(--text2)'};font-weight:${atual === valor ? '700' : '400'}">${label}</button>`;
+
+  const temFiltroAtivo = estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroDeposito || estoqueFiltroFonte || estoqueFiltroGrupo;
+
+  el.innerHTML = `
+    <div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">STATUS</div>
+      <div style="display:flex;gap:6px">
+        ${pill('', estoqueFiltroStatus, 'Todos', 'setEstoqueFiltroStatus')}
+        ${pill('SEM_ESTOQUE', estoqueFiltroStatus, '🔴 Sem estoque', 'setEstoqueFiltroStatus')}
+        ${pill('ABAIXO_MINIMO', estoqueFiltroStatus, '🟡 Abaixo do mínimo', 'setEstoqueFiltroStatus')}
+        ${pill('OK', estoqueFiltroStatus, '🟢 Com estoque OK', 'setEstoqueFiltroStatus')}
+      </div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">LOCALIZAÇÃO</div>
+      <div style="display:flex;gap:6px">
+        ${pill('', estoqueFiltroLocal, 'Todos', 'setEstoqueFiltroLocal')}
+        ${pill('COM', estoqueFiltroLocal, '📍 Com localização', 'setEstoqueFiltroLocal')}
+        ${pill('SEM', estoqueFiltroLocal, '📍 Sem localização', 'setEstoqueFiltroLocal')}
+      </div>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">DEPÓSITO</div>
+      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroDeposito(this.value)">
+        <option value="">Todos</option>
+        ${DEPOSITOS_ATIVOS.map(d => `<option value="${d}" ${estoqueFiltroDeposito === d ? 'selected' : ''}>${d}</option>`).join('')}
+      </select>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">FONTE/FABRICANTE</div>
+      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroFonte(this.value)">
+        <option value="">Todos</option>
+        ${fontes.map(f => `<option value="${f}" ${estoqueFiltroFonte === f ? 'selected' : ''}>${f}</option>`).join('')}
+      </select>
+    </div>
+    <div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px">GRUPO</div>
+      <select class="form-select" style="font-size:12px;padding:6px 10px" onchange="setEstoqueFiltroGrupo(this.value)">
+        <option value="">Todos</option>
+        ${grupos.map(g => `<option value="${g}" ${estoqueFiltroGrupo === g ? 'selected' : ''}>${g}</option>`).join('')}
+      </select>
+    </div>
+    ${temFiltroAtivo ? `<button class="btn btn-ghost btn-sm" onclick="limparFiltrosEstoque()" style="align-self:flex-end">✕ Limpar filtros</button>` : ''}
+    <div style="font-size:11px;color:var(--text3);align-self:flex-end;margin-left:auto">${countFiltrado} de ${countTotal} peças</div>
+  `;
+}
+function setEstoqueFiltroStatus(v)    { estoqueFiltroStatus = v;    renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
+function setEstoqueFiltroLocal(v)     { estoqueFiltroLocal = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
+function setEstoqueFiltroDeposito(v)  { estoqueFiltroDeposito = v;  renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
+function setEstoqueFiltroFonte(v)     { estoqueFiltroFonte = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
+function setEstoqueFiltroGrupo(v)     { estoqueFiltroGrupo = v;     renderEstoque(document.querySelector('#page-estoque .search-input')?.value || ''); }
+function limparFiltrosEstoque() {
+  estoqueFiltroStatus = ''; estoqueFiltroLocal = ''; estoqueFiltroDeposito = ''; estoqueFiltroFonte = ''; estoqueFiltroGrupo = '';
+  renderEstoque(document.querySelector('#page-estoque .search-input')?.value || '');
+}
+
 function renderEstoque(q='', manterPagina=false) {
   const el = document.getElementById('estoque-table');
   if (!manterPagina) estoquePagina = 1;
@@ -869,11 +947,39 @@ function renderEstoque(q='', manterPagina=false) {
     );
   }
 
+  // Filtros pré-setados (combinam em AND com a busca de texto e entre si)
+  if (estoqueFiltroStatus === 'SEM_ESTOQUE') {
+    list = list.filter(r => r.total <= 0);
+  } else if (estoqueFiltroStatus === 'ABAIXO_MINIMO') {
+    list = list.filter(r => r.total > 0 && (r.peca?.minimo || 0) > 0 && r.total < r.peca.minimo);
+  } else if (estoqueFiltroStatus === 'OK') {
+    list = list.filter(r => r.total > 0 && !((r.peca?.minimo || 0) > 0 && r.total < r.peca.minimo));
+  }
+  if (estoqueFiltroLocal === 'COM') {
+    list = list.filter(r => (r.peca?.localizacao || r.peca?.localizacao_bin || '').trim());
+  } else if (estoqueFiltroLocal === 'SEM') {
+    list = list.filter(r => !(r.peca?.localizacao || r.peca?.localizacao_bin || '').trim());
+  }
+  if (estoqueFiltroDeposito) {
+    list = list.filter(r => (r.deps[estoqueFiltroDeposito] || 0) > 0);
+  }
+  if (estoqueFiltroFonte) {
+    list = list.filter(r => (r.peca?.fonte || '') === estoqueFiltroFonte);
+  }
+  if (estoqueFiltroGrupo) {
+    list = list.filter(r => (r.peca?.grupo || r.deps._grupo || '') === estoqueFiltroGrupo);
+  }
+
+  renderEstoqueFiltros(list.length, allCodigos.size);
+
   // Ordena: com estoque primeiro, depois por código
   list.sort((a,b) => b.total - a.total || String(a.cod).localeCompare(String(b.cod)));
 
   if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">◫</div><div class="empty-title">Estoque Vazio</div><div class="empty-sub">Importe a planilha de estoque do eLoca ou registre movimentações</div></div>`;
+    const temFiltroOuBusca = q || estoqueFiltroStatus || estoqueFiltroLocal || estoqueFiltroDeposito || estoqueFiltroFonte || estoqueFiltroGrupo;
+    el.innerHTML = temFiltroOuBusca
+      ? `<div class="empty-state"><div class="empty-icon">◫</div><div class="empty-title">Nenhuma peça encontrada</div><div class="empty-sub">Tente ajustar a busca ou os filtros</div></div>`
+      : `<div class="empty-state"><div class="empty-icon">◫</div><div class="empty-title">Estoque Vazio</div><div class="empty-sub">Importe a planilha de estoque do eLoca ou registre movimentações</div></div>`;
     return;
   }
 
