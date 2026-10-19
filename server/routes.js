@@ -557,11 +557,11 @@ router.put('/movimentacoes/:id/acao', autenticar, (req, res) => {
   };
 
   if (acao==='ENVIAR') {
-    if (!sol.tem_estoque) { upd.status='COMPRA_PENDENTE'; addEv('COMPRA_PENDENTE'); }
-    else {
-      db.run('UPDATE estoque SET quantidade=MAX(0,quantidade-?),updated_at=? WHERE peca_id=?',[sol.qtd,now(),sol.peca_id]);
-      upd.status='ENVIADA'; addEv('ENVIADA');
-    }
+    // Nova Movimentação é sempre saída de peça física: nunca gera compra.
+    // Se o estoque do sistema for menor que a quantidade, a peça enviada era
+    // a última — o estoque trava em 0 (nunca fica negativo).
+    db.run('UPDATE estoque SET quantidade=MAX(0,quantidade-?),updated_at=? WHERE peca_id=?',[sol.qtd,now(),sol.peca_id]);
+    upd.status='ENVIADA'; addEv('ENVIADA');
   } else if (acao==='DESPACHAR') {
     if (!transporte) return res.status(400).json({erro:'Transporte obrigatório'});
     upd.status='DESPACHADA'; upd.transportadora=transporte; upd.rastreio=rastreio||''; upd.previsao_entrega=previsao_entrega||''; upd.valor_frete=parseFloat(valor_frete)||0;

@@ -166,6 +166,14 @@ function stockPercent(pecaId) {
   return Math.min(100, Math.round((qty / (p.minimo * 2)) * 100));
 }
 
+// Verdadeiro quando o estoque ATUAL do sistema é menor que a quantidade da
+// movimentação. Só vale para peças cadastradas (peça avulsa não tem saldo).
+function faltaEstoqueAtual(m) {
+  const pid = m && (m.pecaId || m.peca_id);
+  if (!pid) return false;
+  return (db.estoque[pid] || 0) < (m.qtd || 0);
+}
+
 function stockColor(pecaId) {
   const p = db.pecas.find(x => x.id === pecaId);
   const qty = db.estoque[pecaId] || 0;
@@ -1647,12 +1655,16 @@ function abrirActionModal(id, acao) {
     </div>`;
 
   if (acao === 'ENVIAR') {
-    const sem = !sol.temEstoque;
-    body.innerHTML = pInfoBox + `
+    const itensSemEstoque = itensLote.filter(faltaEstoqueAtual);
+    const avisoEstoque = !itensSemEstoque.length ? '' : `
+      <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);
+        padding:10px 14px;margin-bottom:16px;font-size:12px;line-height:1.6;color:var(--text2)">
+        <span style="color:var(--accent);font-weight:600">⚠ O estoque registrado no sistema é menor que a quantidade enviada${itensLote.length > 1 ? ` (${itensSemEstoque.map(it => it.pecaCodigo).join(', ')})` : ''}.</span>
+        Ao confirmar, o estoque ${itensSemEstoque.length > 1 ? 'dessas peças' : 'desta peça'} ficará em 0. Se o estoque físico estiver diferente, ajuste na tela de Estoque.
+      </div>`;
+    body.innerHTML = pInfoBox + avisoEstoque + `
       <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
-        ${sem
-          ? `<span style="color:var(--accent)">⚠ Peça sem estoque suficiente.</span> Ao confirmar o envio, será gerado um <strong>pedido de compra</strong> por e-mail para Marcelo.`
-          : `Ao confirmar, será enviado um <strong>e-mail para a logística</strong> (marcelo@quallyx.com.br) com os dados desta solicitação.`}
+        Ao confirmar, será enviado um <strong>e-mail para a logística</strong> (marcelo@quallyx.com.br) com os dados desta solicitação.
       </p>
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Observação para logística</label>
@@ -1660,9 +1672,7 @@ function abrirActionModal(id, acao) {
       </div>`;
     footer.innerHTML = `
       <button class="btn btn-ghost" onclick="fecharActionModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="executarAcao('ENVIAR')">
-        ${sem ? '⚠ Gerar Compra + Notificar' : '✉ Enviar para Logística'}
-      </button>`;
+      <button class="btn btn-primary" onclick="executarAcao('ENVIAR')">✉ Enviar para Logística</button>`;
 
   } else if (acao === 'DESPACHAR') {
     body.innerHTML = pInfoBox + `
@@ -2801,7 +2811,6 @@ function montarCardMov(m) {
       acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
     } else {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','ENVIAR')">✉ Enviar</button>`;
-      if (!m.temEstoque) acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal('${m.id}','COMPRA')">🛒 Compra</button>`;
     }
   } else if (m.status === 'ENVIADA' || m.status === 'COMPRA_PENDENTE') {
     acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal('${m.id}','DESPACHAR')">📦 Despachar</button>`;
@@ -2856,7 +2865,7 @@ function montarCardMov(m) {
         <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)">${m.pecaCodigo}</span>
         <span style="font-size:13px;font-weight:600;color:var(--text)">${m.pecaNome}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${m.qtd} ${m.pecaUnidade}</span>
-        ${!m.temEstoque ? `<span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>` : ''}
+        ${m.status === 'SOLICITADA' && faltaEstoqueAtual(m) ? `<span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>` : ''}
       </div>
       ${m.equipSerie ? `<div style="font-size:12px;color:var(--text2)">
         S/N: <span style="font-family:var(--mono);color:var(--text)">${m.equipSerie}</span>
@@ -2912,9 +2921,6 @@ function montarCardGrupo(itensDoGrupo) {
         acoes = `<span style="font-size:11px;color:var(--red);font-style:italic">↩ Aguardando devolução pelo técnico</span>`;
       } else {
         acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'ENVIAR')">✉ Enviar</button>`;
-        if (itensDoGrupo.some(x => !x.temEstoque)) {
-          acoes += ` <button class="btn btn-ghost btn-sm" style="color:var(--accent)" onclick="abrirActionModal(${idsJs},'COMPRA')">🛒 Compra</button>`;
-        }
       }
     } else if (statusRep === 'ENVIADA' || statusRep === 'COMPRA_PENDENTE') {
       acoes = `<button class="btn btn-primary btn-sm" onclick="abrirActionModal(${idsJs},'DESPACHAR')">📦 Despachar</button>`;
@@ -2971,7 +2977,7 @@ function montarCardGrupo(itensDoGrupo) {
           : '';
         return `<tr>
           <td class="mono" style="font-size:11px;color:var(--accent)">${it.pecaCodigo}</td>
-          <td style="font-size:12px">${it.pecaNome}${!it.temEstoque ? ' <span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>' : ''}</td>
+          <td style="font-size:12px">${it.pecaNome}${it.status === 'SOLICITADA' && faltaEstoqueAtual(it) ? ' <span class="badge badge-orange" style="font-size:9px">Sem Estoque</span>' : ''}</td>
           <td class="mono">${it.qtd} ${it.pecaUnidade}</td>
           ${equipCol}
           <td><span class="badge ${psIt.badge}" style="font-size:9px">${psIt.label}</span></td>
@@ -9382,6 +9388,11 @@ async function loadAndRenderHistorico(q='', status='') {
     if (q) params.q = q;
     if (status) params.status = status;
     db.movimentacoes = await API.movimentacoes(params);
+    try {
+      const { estoque } = await API.estoque();
+      db.estoque = {};
+      estoque.forEach(e => { db.estoque[e.peca_id] = e.quantidade; });
+    } catch (e2) { /* estoque opcional, nao bloqueia render */ }
     renderHistorico(q, status);
     updateBadges();
   } catch(e) { toast(e.message, 'error'); }
