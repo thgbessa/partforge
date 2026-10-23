@@ -174,6 +174,19 @@ function faltaEstoqueAtual(m) {
   return (db.estoque[pid] || 0) < (m.qtd || 0);
 }
 
+// ── ESCAPE para textos dentro de onclick/onmousedown="fn('...')" ──
+// Escapa para string JS entre aspas simples E para atributo HTML entre aspas
+// duplas — assim nomes com ' " \ < & (ex.: MONITOR 19") não quebram o clique.
+function _jsAttr(s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, ' ')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+// Escape para valor de atributo HTML (value="...").
+function _htmlAttr(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 // ── BUSCA: comparação tolerante ─────────────────────────────────
 // Ignora acentos, maiúsculas e caracteres especiais. Um item combina se o
 // texto buscado aparecer (a) no texto normal sem acentos ou (b) na versão
@@ -1573,6 +1586,14 @@ function fecharDropdownDoadora() {
 let _retiradaEqspTimer;
 function filtrarRetiradaEqspMov(q) {
   clearTimeout(_retiradaEqspTimer);
+  // Redigitou depois de escolher: esquece a escolha anterior (senão a
+  // movimentação era salva com o equipamento antigo).
+  const hiddenRet = document.getElementById('mov-retirada-eqsp');
+  if (hiddenRet && hiddenRet.value && q !== hiddenRet.dataset.label) {
+    hiddenRet.value = ''; hiddenRet.dataset.nome = ''; hiddenRet.dataset.label = '';
+    const cardRet = document.getElementById('mov-retirada-eqsp-card');
+    if (cardRet) cardRet.style.display = 'none';
+  }
   const dd = document.getElementById('mov-retirada-eqsp-dropdown');
   if (!dd) return;
   const termo = (q || '').trim();
@@ -1583,8 +1604,8 @@ function filtrarRetiradaEqspMov(q) {
       if (!filtrada.length) { dd.style.display = 'none'; return; }
       dd.innerHTML = filtrada.map(e => {
         const st = EQSP_STATUS_LABEL[e.status] || {};
-        const nomeAttr = e.nome.replace(/'/g, "\\'");
-        const subAttr = [e.marca, e.serie].filter(Boolean).join(' · ').replace(/'/g, "\\'");
+        const nomeAttr = _jsAttr(e.nome);
+        const subAttr = _jsAttr([e.marca, e.serie].filter(Boolean).join(' · '));
         return `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border)"
           onmousedown="selecionarRetiradaEqspMov('${e.id}','${nomeAttr}','${subAttr}')"
           onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
@@ -1601,6 +1622,7 @@ function selecionarRetiradaEqspMov(id, nome, sub) {
   document.getElementById('mov-retirada-eqsp').value = id;
   document.getElementById('mov-retirada-eqsp').dataset.nome = nome + (sub ? ' · ' + sub : '');
   document.getElementById('mov-retirada-eqsp-search').value = nome;
+  document.getElementById('mov-retirada-eqsp').dataset.label = nome;
   document.getElementById('mov-retirada-eqsp-dropdown').style.display = 'none';
   const card = document.getElementById('mov-retirada-eqsp-card');
   card.innerHTML = `
@@ -1615,7 +1637,7 @@ function selecionarRetiradaEqspMov(id, nome, sub) {
 }
 function limparRetiradaEqspMov() {
   const hidden = document.getElementById('mov-retirada-eqsp');
-  if (hidden) { hidden.value = ''; hidden.dataset.nome = ''; }
+  if (hidden) { hidden.value = ''; hidden.dataset.nome = ''; hidden.dataset.label = ''; }
   const searchEl = document.getElementById('mov-retirada-eqsp-search');
   if (searchEl) searchEl.value = '';
   const card = document.getElementById('mov-retirada-eqsp-card');
@@ -2560,7 +2582,7 @@ function abrirModalEditarSolicitacao(id) {
         <div class="form-group" style="position:relative">
           <label class="form-label">Peça</label>
           <input class="form-input" id="editmov-peca-search" placeholder="Buscar por código ou nome..." autocomplete="off"
-            value="${(m.pecaCodigo||'') + ' - ' + (m.pecaNome||'')}"
+            value="${_htmlAttr((m.pecaCodigo||'') + ' - ' + (m.pecaNome||''))}"
             oninput="sugerirPecaEditMov(this.value)" onfocus="sugerirPecaEditMov(this.value)"
             onblur="setTimeout(()=>{const dd=document.getElementById('editmov-peca-dropdown'); if(dd) dd.style.display='none';},200)">
           <div id="editmov-peca-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
@@ -2613,6 +2635,10 @@ function abrirModalEditarSolicitacao(id) {
 function sugerirPecaEditMov(q) {
   const dd = document.getElementById('editmov-peca-dropdown');
   if (!dd) return;
+  // Redigitou depois de escolher: esquece a peça anterior.
+  if (_editMovPecaSel && q !== ((_editMovPecaSel.codigo || '') + ' - ' + (_editMovPecaSel.nome || ''))) {
+    _editMovPecaSel = null;
+  }
   const ql = (q || '').toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql || buscaInclui(p.codigo||'', ql) || buscaInclui(p.nome||'', ql) || buscaInclui(p.fonte||'', ql)
@@ -2647,7 +2673,7 @@ function sugerirEquipEditMov(q) {
     dd.style.display = list.length ? 'block' : 'none';
     dd.innerHTML = list.map(e => {
       const cliente = String(e.cliente || e.nome_fantasia || '').replace(/\[\d+\]$/, '').trim();
-      return `<div onmousedown="selecionarEquipEditMov('${e.id||''}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${cliente.replace(/'/g,"\\'")}')"
+      return `<div onmousedown="selecionarEquipEditMov('${_jsAttr(e.id||'')}','${_jsAttr(e.serie||'')}','${_jsAttr(e.modelo||'')}','${_jsAttr(cliente)}')"
         style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}</div>
@@ -2666,6 +2692,7 @@ function selecionarEquipEditMov(id, serie, modelo, cliente) {
 }
 
 function salvarEdicaoSolicitacao() {
+  if (!_editMovPecaSel) { toast('Selecione a peça da lista', 'error'); return; }
   const qtd = parseInt(document.getElementById('editmov-qtd')?.value) || 1;
   const custo = parseFloat(document.getElementById('editmov-custo')?.value) || 0;
   const valorVenda = parseFloat(document.getElementById('editmov-valor-venda')?.value) || 0;
@@ -4526,7 +4553,7 @@ function sugerirEquipValidacao(q) {
     dd.style.display = list.length ? 'block' : 'none';
     dd.innerHTML = list.map(e => {
       const badge = e.quallyxSP ? '<span style="font-size:8px;padding:1px 5px;border-radius:3px;background:var(--accent-dim);color:var(--accent);margin-left:6px;vertical-align:middle">QUALLYX SP</span>' : '';
-      return `<div onmousedown="selecionarEquipValidacao('${e.id}','${(e.serie||'').replace(/'/g,"\\'")}','${(e.modelo||'').replace(/'/g,"\\'")}','${(e.sub||'').replace(/'/g,"\\'")}')"
+      return `<div onmousedown="selecionarEquipValidacao('${_jsAttr(e.id)}','${_jsAttr(e.serie||'')}','${_jsAttr(e.modelo||'')}','${_jsAttr(e.sub||'')}')"
         style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border)"
         onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="font-family:var(--mono);font-size:11px;color:var(--accent);font-weight:700">${e.serie || '—'}${badge}</div>
@@ -6252,7 +6279,7 @@ function filtrarDemandaNomeSC(q) {
   if (!list.length) { dd.style.display = 'none'; return; }
   dd.style.display = 'block';
   dd.innerHTML = list.slice(0, 30).map(nome => `<div
-      onmousedown="selecionarDemandaNomeSC('${nome.replace(/'/g, "\\'")}')"
+      onmousedown="selecionarDemandaNomeSC('${_jsAttr(nome)}')"
       style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"
       onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">${nome}</div>`
   ).join('');
@@ -6654,7 +6681,7 @@ function filtrarPecasMov(q) {
   // código próprio no catálogo. Sempre aparece no final, se tiver algo
   // digitado na busca.
   const qOriginal = (q || '').trim();
-  const opcaoAvulsa = qOriginal ? `<div class="mov-dd-item" onmousedown="selecionarPecaAvulsa('${qOriginal.replace(/'/g, "\\'")}')" style="
+  const opcaoAvulsa = qOriginal ? `<div class="mov-dd-item" onmousedown="selecionarPecaAvulsa('${_jsAttr(qOriginal)}')" style="
       padding:9px 14px; cursor:pointer; border-top:1px dashed var(--accent); border-bottom:1px solid var(--border);
     " onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
       <div style="font-size:12px;color:var(--accent)">➕ Usar "${qOriginal}" como peça avulsa</div>
@@ -7388,6 +7415,14 @@ function abrirModalRetirada(doadId) {
 
 function filtrarPecasRet(q) {
   const dd = document.getElementById('ret-peca-dd');
+  // Redigitou depois de escolher: esquece a peça anterior.
+  if (_retirPecaId) {
+    const pSel = db.pecas.find(x => x.id === _retirPecaId);
+    if (!pSel || q !== `${pSel.codigo} — ${pSel.nome}`) {
+      _retirPecaId = null;
+      const hidRet = document.getElementById('ret-peca-id'); if (hidRet) hidRet.value = '';
+    }
+  }
   const ql = q.toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql ||
