@@ -10,6 +10,14 @@ function uid() { return db.uid(); }
 function now() { return db.now(); }
 function J(v)  { return JSON.stringify(v); }
 function P(v)  { try { return JSON.parse(v||'null') || []; } catch(e) { return []; } }
+// Busca tolerante (mesma regra do front): ignora acentos, maiúsculas e
+// caracteres especiais ("123456789" encontra "123-456.789").
+function _normBusca(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function buscaCasa(q, ...valores) {
+  const n = _normBusca(q); if (!n) return true;
+  const c = n.replace(/[^a-z0-9]/g, '');
+  return valores.some(v => { const vn = _normBusca(v); return vn.includes(n) || (!!c && vn.replace(/[^a-z0-9]/g, '').includes(c)); });
+}
 
 // ── Geração do PDF do orçamento no servidor (pra anexar no e-mail) ──
 function desenharTabelaItensPdf(doc, itens, y, ML, CONTENT_W, corHeader, corTexto) {
@@ -340,12 +348,12 @@ router.post('/pecas/importar', autenticar, isAdmin, (req, res) => {
 // ── EQUIPAMENTOS ──────────────────────────────────────────────
 router.get('/equipamentos', autenticar, (req, res) => {
   const {q}=req.query; let sql='SELECT * FROM equipamentos WHERE 1=1'; const p=[];
-  if (q) { sql+=' AND (modelo LIKE ? OR serie LIKE ? OR cliente LIKE ? OR campos LIKE ?)'; p.push(`%${q}%`,`%${q}%`,`%${q}%`,`%${q}%`); }
+  // filtro de texto aplicado abaixo, em JS (tolerante a acentos e separadores)
   const CAMPOS_EXTRA = ['cod_produto','grupo2','setor','ip','cnpj','local_contrato','ult_os',
     'os_aberta','os_instalacao','fornecedor','nf_compra','data_compra','termino_garantia',
     'envio','ult_retorno','endereco','numero','complemento','bairro','municipio','uf','cep',
     'status','proprietario','usado','ano_fab','valor_compra','valor_mercado'];
-  res.json(db.query(sql+' ORDER BY modelo,cliente',p).map(e=>{
+  res.json(db.query(sql+' ORDER BY modelo,cliente',p).filter(e => !q || buscaCasa(q, e.modelo, e.serie, e.cliente, e.campos)).map(e=>{
     const campos = P(e.campos)||{};
     const extra = {};
     CAMPOS_EXTRA.forEach(k => { extra[k] = campos[k] || ''; });
@@ -1056,7 +1064,7 @@ router.get('/equip-quallyx-sp', autenticar, (req, res) => {
   const { status, q } = req.query;
   let sql = 'SELECT * FROM equip_quallyx_sp WHERE 1=1'; const p = [];
   if (status) { sql += ' AND status=?'; p.push(status); }
-  if (q) { sql += ' AND (nome LIKE ? OR marca LIKE ? OR serie LIKE ?)'; p.push(`%${q}%`, `%${q}%`, `%${q}%`); }
+  // filtro de texto aplicado abaixo, em JS (tolerante a acentos e separadores)
   // Contagem de peças retiradas (movimentações que apontam esse equipamento
   // como origem da peça usada), pra mostrar o indicador "X retirada(s)" —
   // e a última peça retirada, pra já aparecer direto no card sem precisar
@@ -1069,7 +1077,7 @@ router.get('/equip-quallyx-sp', autenticar, (req, res) => {
     .forEach(r => { if (!ultimas[r.retirada_eqsp_id]) ultimas[r.retirada_eqsp_id] = { peca_nome: r.peca_nome, data: r.created_at }; });
   // A imagem (base64) fica de fora da listagem, só um booleano — o
   // conteúdo é buscado sob demanda em /equip-quallyx-sp/:id/imagem.
-  res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(e => {
+  res.json(db.query(sql + ' ORDER BY created_at DESC', p).filter(e => !q || buscaCasa(q, e.nome, e.marca, e.serie)).map(e => {
     const { imagem, ...resto } = e;
     return { ...resto, tem_imagem: !!imagem, retiradas_qtd: contagens[e.id] || 0, ultima_retirada: ultimas[e.id] || null };
   }));

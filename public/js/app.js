@@ -174,6 +174,32 @@ function faltaEstoqueAtual(m) {
   return (db.estoque[pid] || 0) < (m.qtd || 0);
 }
 
+// ── BUSCA: comparação tolerante ─────────────────────────────────
+// Ignora acentos, maiúsculas e caracteres especiais. Um item combina se o
+// texto buscado aparecer (a) no texto normal sem acentos ou (b) na versão
+// só com letras e números — assim "123456789" encontra "123-456.789" e
+// "optico" encontra "ÓPTICO".
+function _normBusca(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+let _buscaCacheQ = null, _buscaCacheN = '', _buscaCacheC = '';
+function buscaInclui(valor, q) {
+  if (q !== _buscaCacheQ) {
+    _buscaCacheQ = q;
+    _buscaCacheN = _normBusca(q);
+    _buscaCacheC = _buscaCacheN.replace(/[^a-z0-9]/g, '');
+  }
+  if (!_buscaCacheN) return true;
+  const vn = _normBusca(valor);
+  if (vn.includes(_buscaCacheN)) return true;
+  return !!_buscaCacheC && vn.replace(/[^a-z0-9]/g, '').includes(_buscaCacheC);
+}
+// Texto atual da caixa de busca de uma tela (para redesenhos que não recebem
+// o texto — navegação, filtros, ações — continuarem respeitando a busca).
+function _textoBusca(seletor) {
+  return document.querySelector(seletor + ' .search-input')?.value || '';
+}
+
 function stockColor(pecaId) {
   const p = db.pecas.find(x => x.id === pecaId);
   const qty = db.estoque[pecaId] || 0;
@@ -474,6 +500,7 @@ function limparFiltrosPecas() {
 }
 
 function renderPecas(q='', manterPagina=false) {
+  if (!q) q = _textoBusca('#page-pecas');
   const el = document.getElementById('pecas-table');
   if (!el) return;
   if (!manterPagina) pecasPagina = 1;
@@ -497,10 +524,10 @@ function renderPecas(q='', manterPagina=false) {
     if (pecasFiltroQualidade === 'SEM_FOTO' && p.imagem) return false;
     if (pecasFiltroQualidade === 'SEM_GRUPO' && (p.grupo || '').trim()) return false;
     if (!ql) return true;
-    return String(p.codigo||'').toLowerCase().includes(ql) ||
-           String(p.nome||'').toLowerCase().includes(ql) ||
-           String(p.fonte||'').toLowerCase().includes(ql) ||
-           String(p.linha||'').toLowerCase().includes(ql);
+    return buscaInclui(p.codigo||'', ql) ||
+           buscaInclui(p.nome||'', ql) ||
+           buscaInclui(p.fonte||'', ql) ||
+           buscaInclui(p.linha||'', ql);
   });
   renderPecasFiltros(list.length, db.pecas.length);
   document.getElementById('badge-pecas').textContent = db.pecas.length;
@@ -825,15 +852,16 @@ function deleteEquip(id) {
     .catch(err => toast(err.message, 'error'));
 }
 function renderEquipamentos(q='') {
+  if (!q) q = _textoBusca('#page-equipamentos');
   const el = document.getElementById('equip-table');
   const list = db.equipamentos.filter(e =>
     !q ||
-    String(e.codigo||'').toLowerCase().includes(q.toLowerCase()) ||
-    String(e.nome||'').toLowerCase().includes(q.toLowerCase()) ||
-    String(e.nome_fantasia||'').toLowerCase().includes(q.toLowerCase()) ||
-    String(e.serie||'').toLowerCase().includes(q.toLowerCase()) ||
-    String(e.municipio||'').toLowerCase().includes(q.toLowerCase()) ||
-    String(e.grupo||'').toLowerCase().includes(q.toLowerCase())
+    buscaInclui(e.codigo||'', q) ||
+    buscaInclui(e.nome||'', q) ||
+    buscaInclui(e.nome_fantasia||'', q) ||
+    buscaInclui(e.serie||'', q) ||
+    buscaInclui(e.municipio||'', q) ||
+    buscaInclui(e.grupo||'', q)
   );
 
   if (!list.length) {
@@ -984,6 +1012,7 @@ function limparFiltrosEstoque() {
 }
 
 function renderEstoque(q='', manterPagina=false) {
+  if (!q) q = _textoBusca('#page-estoque');
   const el = document.getElementById('estoque-table');
   if (!manterPagina) estoquePagina = 1;
 
@@ -1011,11 +1040,11 @@ function renderEstoque(q='', manterPagina=false) {
   if (q) {
     const ql = q.toLowerCase();
     list = list.filter(r =>
-      String(r.cod).toLowerCase().includes(ql) ||
-      String(r.peca?.nome || r.deps._nome || '').toLowerCase().includes(ql) ||
-      String(r.peca?.grupo || r.deps._grupo || '').toLowerCase().includes(ql) ||
-      String(r.peca?.localizacao || '').toLowerCase().includes(ql) ||
-      String(r.peca?.localizacao_bin || '').toLowerCase().includes(ql)
+      buscaInclui(r.cod, ql) ||
+      buscaInclui(r.peca?.nome || r.deps._nome || '', ql) ||
+      buscaInclui(r.peca?.grupo || r.deps._grupo || '', ql) ||
+      buscaInclui(r.peca?.localizacao || '', ql) ||
+      buscaInclui(r.peca?.localizacao_bin || '', ql)
     );
   }
 
@@ -1488,9 +1517,9 @@ function filtrarDoadorasMov(q) {
   const filtrada = termo.length < 1
     ? lista
     : lista.filter(d =>
-        (d.modelo||'').toLowerCase().includes(termo) ||
-        (d.serie||'').toLowerCase().includes(termo) ||
-        (d.marca||'').toLowerCase().includes(termo)
+        buscaInclui(d.modelo||'', termo) ||
+        buscaInclui(d.serie||'', termo) ||
+        buscaInclui(d.marca||'', termo)
       );
 
   if (!filtrada.length) { dd.style.display = 'none'; return; }
@@ -2297,8 +2326,8 @@ function filtrarTecnicosMov(q, prefix) {
   // Busca em usuários (todos os cargos que podem ser técnicos de campo)
   const lista = db.usuarios.filter(u =>
     !ql ||
-    u.nome.toLowerCase().includes(ql) ||
-    (u.email||'').toLowerCase().includes(ql)
+    buscaInclui(u.nome, ql) ||
+    buscaInclui(u.email||'', ql)
   );
   if (!lista.length) { dd.style.display='none'; return; }
   dd.style.display = 'block';
@@ -2586,7 +2615,7 @@ function sugerirPecaEditMov(q) {
   if (!dd) return;
   const ql = (q || '').toLowerCase().trim();
   const list = db.pecas.filter(p =>
-    !ql || String(p.codigo||'').toLowerCase().includes(ql) || String(p.nome||'').toLowerCase().includes(ql) || String(p.fonte||'').toLowerCase().includes(ql)
+    !ql || buscaInclui(p.codigo||'', ql) || buscaInclui(p.nome||'', ql) || buscaInclui(p.fonte||'', ql)
   ).slice(0, 20);
   dd.style.display = list.length ? 'block' : 'none';
   dd.innerHTML = list.map(p => `<div onmousedown="selecionarPecaEditMov('${p.id}')"
@@ -2993,7 +3022,8 @@ function montarCardGrupo(itensDoGrupo) {
   </div>`;
 }
 
-function renderHistorico(q='', statusFilter='') {
+function renderHistorico(q='', statusFilter='', usarCaixaBusca=true) {
+  if (!q && usarCaixaBusca) q = _textoBusca('#page-historico');
   const el = document.getElementById('hist-table');
   const sf = statusFilter || (document.getElementById('hist-filter-status')?.value||'');
   let list = [...db.movimentacoes];
@@ -3005,11 +3035,11 @@ function renderHistorico(q='', statusFilter='') {
   if (q) {
     const ql = q.toLowerCase();
     list = list.filter(m =>
-      String(m.pecaNome||'').toLowerCase().includes(ql) ||
-      String(m.pecaCodigo||'').toLowerCase().includes(ql) ||
-      String(m.equipSerie||'').toLowerCase().includes(ql) ||
-      String(m.equipCliente||'').toLowerCase().includes(ql) ||
-      String(m.tecnico||'').toLowerCase().includes(ql)
+      buscaInclui(m.pecaNome||'', ql) ||
+      buscaInclui(m.pecaCodigo||'', ql) ||
+      buscaInclui(m.equipSerie||'', ql) ||
+      buscaInclui(m.equipCliente||'', ql) ||
+      buscaInclui(m.tecnico||'', ql)
     );
   }
 
@@ -3087,16 +3117,17 @@ const ORC_STATUS = {
 };
 
 function renderOrcamentos(q='') {
+  if (!q) q = _textoBusca('#page-orcamento');
   const el = document.getElementById('orcamento-table');
   if (!el) return;
   const sf = document.getElementById('orc-filter-status')?.value || '';
   let list = [...db.orcamentos].sort((a,b)=> (b.data||'').localeCompare(a.data||''));
   if (sf) list = list.filter(x => x.status === sf);
   if (q)  list = list.filter(x =>
-    (x.numero||'').toLowerCase().includes(q.toLowerCase()) ||
-    (x.cliente||'').toLowerCase().includes(q.toLowerCase()) ||
-    (x.equipSerie||'').toLowerCase().includes(q.toLowerCase()) ||
-    (x.itens||[]).some(i => (i.desc||'').toLowerCase().includes(q.toLowerCase()))
+    buscaInclui(x.numero||'', q) ||
+    buscaInclui(x.cliente||'', q) ||
+    buscaInclui(x.equipSerie||'', q) ||
+    (x.itens||[]).some(i => buscaInclui(i.desc||'', q))
   );
   document.getElementById('badge-orcamento').textContent = db.orcamentos.filter(x=>x.status!=='CANCELADO').length || '';
   if (!list.length) {
@@ -3209,9 +3240,9 @@ function renderKitsPreventivas(q = '') {
   if (fonteFiltro) list = list.filter(k => String(k.fonte || '') === fonteFiltro);
   if (ql) {
     list = list.filter(k =>
-      String(k.nome || '').toLowerCase().includes(ql) ||
-      String(k.fonte || '').toLowerCase().includes(ql) ||
-      String(k.linha || '').toLowerCase().includes(ql)
+      buscaInclui(k.nome || '', ql) ||
+      buscaInclui(k.fonte || '', ql) ||
+      buscaInclui(k.linha || '', ql)
     );
   }
 
@@ -3367,9 +3398,9 @@ function sugerirPecaKit(q, prefixo) {
   const ql = (q || '').toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql ||
-    String(p.codigo || '').toLowerCase().includes(ql) ||
-    String(p.nome || '').toLowerCase().includes(ql) ||
-    String(p.fonte || '').toLowerCase().includes(ql)
+    buscaInclui(p.codigo || '', ql) ||
+    buscaInclui(p.nome || '', ql) ||
+    buscaInclui(p.fonte || '', ql)
   ).slice(0, 30);
 
   dd.style.display = list.length ? 'block' : 'none';
@@ -3689,9 +3720,9 @@ function renderGarantia(q = '') {
 
   if (statusFiltro) equipsEmpresa = equipsEmpresa.filter(e => e._garantia.status === statusFiltro);
   if (ql) equipsEmpresa = equipsEmpresa.filter(e =>
-    String(e.serie || '').toLowerCase().includes(ql) ||
-    String(e.modelo || '').toLowerCase().includes(ql) ||
-    String(e.marca || '').toLowerCase().includes(ql)
+    buscaInclui(e.serie || '', ql) ||
+    buscaInclui(e.modelo || '', ql) ||
+    buscaInclui(e.marca || '', ql)
   );
 
   const totais = { EM_GARANTIA: 0, FORA_GARANTIA: 0, SEM_PRAZO: 0, SEM_DATA: 0 };
@@ -3998,6 +4029,7 @@ function renderValidacao(etapa, q) {
   }
 
   let lista = todas.filter(v => v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'));
+  if (q) lista = lista.filter(v => buscaInclui(v.equip_serie, q) || buscaInclui(v.equip_modelo, q) || buscaInclui(v.equip_cliente, q));
   lista = [...lista].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 
   if (!lista.length) {
@@ -4818,6 +4850,7 @@ function renderEquipQuallyxSP(q) {
 
   let lista = todos;
   if (_eqspFiltroStatus) lista = lista.filter(e => e.status === _eqspFiltroStatus);
+  if (q) lista = lista.filter(e => buscaInclui(e.nome, q) || buscaInclui(e.marca, q) || buscaInclui(e.serie, q));
   lista = [...lista].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 
   const grid = document.getElementById('eqsp-grid');
@@ -5391,15 +5424,15 @@ function sugerirPecaOrc(q) {
 
   const kits = (db.kitsPreventivas || []).filter(k =>
     !ql ||
-    String(k.codigo||'').toLowerCase().includes(ql) ||
-    String(k.nome||'').toLowerCase().includes(ql)
+    buscaInclui(k.codigo||'', ql) ||
+    buscaInclui(k.nome||'', ql)
   ).slice(0, 10);
 
   const list = db.pecas.filter(p =>
     !ql ||
-    String(p.codigo||'').toLowerCase().includes(ql) ||
-    String(p.nome||'').toLowerCase().includes(ql) ||
-    String(p.fonte||'').toLowerCase().includes(ql)
+    buscaInclui(p.codigo||'', ql) ||
+    buscaInclui(p.nome||'', ql) ||
+    buscaInclui(p.fonte||'', ql)
   ).slice(0, 50);
 
   dd.style.display = (list.length || kits.length) ? 'block' : 'none';
@@ -5501,12 +5534,12 @@ function filtrarEquipOrc(q) {
   const ql = q.toLowerCase().trim();
   const list = db.equipamentos.filter(e =>
     !ql ||
-    String(e.serie||'').toLowerCase().includes(ql) ||
-    String(e.codigo||'').toLowerCase().includes(ql) ||
-    String(e.nome||'').toLowerCase().includes(ql) ||
-    String(e.nome_fantasia||'').toLowerCase().includes(ql) ||
-    String(e.modelo||'').toLowerCase().includes(ql) ||
-    String(e.municipio||'').toLowerCase().includes(ql)
+    buscaInclui(e.serie||'', ql) ||
+    buscaInclui(e.codigo||'', ql) ||
+    buscaInclui(e.nome||'', ql) ||
+    buscaInclui(e.nome_fantasia||'', ql) ||
+    buscaInclui(e.modelo||'', ql) ||
+    buscaInclui(e.municipio||'', ql)
   ).slice(0, 60);
   dd.style.display = list.length ? 'block' : 'none';
   const statusColor = {
@@ -6076,9 +6109,9 @@ function renderSolicitacoesCompra(q = '') {
   const ql = (q || document.querySelector('#page-solicitacoescompra .search-input')?.value || '').toLowerCase().trim();
   if (ql) {
     list = list.filter(x =>
-      String(x.numero || '').toLowerCase().includes(ql) ||
-      String(x.demanda_nome || '').toLowerCase().includes(ql) ||
-      String(x.equip_serie || '').toLowerCase().includes(ql)
+      buscaInclui(x.numero || '', ql) ||
+      buscaInclui(x.demanda_nome || '', ql) ||
+      buscaInclui(x.equip_serie || '', ql)
     );
   }
 
@@ -6206,14 +6239,14 @@ function filtrarDemandaNomeSC(q) {
   const ql = (q || '').toLowerCase().trim();
   let list = [];
   if (demanda === 'TECNICO') {
-    list = TECNICOS_SC.filter(t => !ql || t.toLowerCase().includes(ql));
+    list = TECNICOS_SC.filter(t => !ql || buscaInclui(t, ql));
   } else if (demanda === 'CLIENTE') {
     const clientesSet = new Set();
     (db.equipamentos || []).forEach(e => {
       if (e.nome_fantasia) clientesSet.add(e.nome_fantasia.replace(/\[\d+\]$/, '').trim());
     });
     (db.orcamentos || []).forEach(o => { if (o.cliente) clientesSet.add(o.cliente); });
-    list = [...clientesSet].filter(c => !ql || c.toLowerCase().includes(ql));
+    list = [...clientesSet].filter(c => !ql || buscaInclui(c, ql));
   }
 
   if (!list.length) { dd.style.display = 'none'; return; }
@@ -6254,10 +6287,10 @@ function filtrarEquipSC(q) {
   const ql = (q || '').toLowerCase().trim();
   const list = (db.equipamentos || []).filter(e =>
     !ql ||
-    String(e.serie || '').toLowerCase().includes(ql) ||
-    String(e.codigo || '').toLowerCase().includes(ql) ||
-    String(e.nome || '').toLowerCase().includes(ql) ||
-    String(e.nome_fantasia || '').toLowerCase().includes(ql)
+    buscaInclui(e.serie || '', ql) ||
+    buscaInclui(e.codigo || '', ql) ||
+    buscaInclui(e.nome || '', ql) ||
+    buscaInclui(e.nome_fantasia || '', ql)
   ).slice(0, 40);
 
   if (!list.length) { dd.style.display = 'none'; return; }
@@ -6310,9 +6343,9 @@ function sugerirPecaSC(q) {
   const ql = (q || '').toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql ||
-    String(p.codigo || '').toLowerCase().includes(ql) ||
-    String(p.nome || '').toLowerCase().includes(ql) ||
-    String(p.fonte || '').toLowerCase().includes(ql)
+    buscaInclui(p.codigo || '', ql) ||
+    buscaInclui(p.nome || '', ql) ||
+    buscaInclui(p.fonte || '', ql)
   ).slice(0, 30);
 
   dd.style.display = list.length ? 'block' : 'none';
@@ -6611,9 +6644,9 @@ function filtrarPecasMov(q) {
   const ql = q.toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql ||
-    String(p.codigo).toLowerCase().includes(ql) ||
-    String(p.nome).toLowerCase().includes(ql) ||
-    String(p.grupo||'').toLowerCase().includes(ql)
+    buscaInclui(p.codigo, ql) ||
+    buscaInclui(p.nome, ql) ||
+    buscaInclui(p.grupo||'', ql)
   ).slice(0, 50);
 
   // Opção de peça avulsa (não cadastrada) — útil principalmente pra peças
@@ -6784,11 +6817,11 @@ function filtrarEquipMov(q) {
   const ql = q.toLowerCase().trim();
   const list = db.equipamentos.filter(e =>
     !ql ||
-    String(e.serie||'').toLowerCase().includes(ql) ||
-    String(e.codigo||'').toLowerCase().includes(ql) ||
-    String(e.nome||'').toLowerCase().includes(ql) ||
-    String(e.nome_fantasia||'').toLowerCase().includes(ql) ||
-    String(e.modelo||'').toLowerCase().includes(ql)
+    buscaInclui(e.serie||'', ql) ||
+    buscaInclui(e.codigo||'', ql) ||
+    buscaInclui(e.nome||'', ql) ||
+    buscaInclui(e.nome_fantasia||'', ql) ||
+    buscaInclui(e.modelo||'', ql)
   ).slice(0, 50);
 
   if (!list.length) {
@@ -7100,11 +7133,11 @@ function filtrarEquipDoadora(q) {
   const ql = q.toLowerCase().trim();
   const list = db.equipamentos.filter(e =>
     !ql ||
-    String(e.serie||'').toLowerCase().includes(ql) ||
-    String(e.codigo||'').toLowerCase().includes(ql) ||
-    String(e.nome||'').toLowerCase().includes(ql) ||
-    String(e.nome_fantasia||'').toLowerCase().includes(ql) ||
-    String(e.modelo||'').toLowerCase().includes(ql)
+    buscaInclui(e.serie||'', ql) ||
+    buscaInclui(e.codigo||'', ql) ||
+    buscaInclui(e.nome||'', ql) ||
+    buscaInclui(e.nome_fantasia||'', ql) ||
+    buscaInclui(e.modelo||'', ql)
   ).slice(0, 50);
   dd.style.display = list.length ? 'block' : 'none';
   dd.innerHTML = list.map(e => {
@@ -7199,6 +7232,7 @@ function deleteDoadora(id) {
     .catch(err => toast(err.message, 'error'));
 }
 function renderDoadoras(q = '') {
+  if (!q) q = _textoBusca('#panel-doadoras-cadastro');
   const el = document.getElementById('doadoras-table');
   if (!el) return;
   const ql = (q || '').toLowerCase().trim();
@@ -7208,7 +7242,7 @@ function renderDoadoras(q = '') {
     if (sf && d.classificacao !== sf) return false;
     if (!ql) return true;
     return [d.modelo, d.serie, d.marca, d.linha, d.obs].some(v =>
-      String(v || '').toLowerCase().includes(ql));
+      buscaInclui(v || '', ql));
   });
 
   if (!list.length) {
@@ -7345,9 +7379,9 @@ function filtrarPecasRet(q) {
   const ql = q.toLowerCase().trim();
   const list = db.pecas.filter(p =>
     !ql ||
-    String(p.codigo||'').toLowerCase().includes(ql) ||
-    String(p.nome||'').toLowerCase().includes(ql) ||
-    String(p.fonte||'').toLowerCase().includes(ql)
+    buscaInclui(p.codigo||'', ql) ||
+    buscaInclui(p.nome||'', ql) ||
+    buscaInclui(p.fonte||'', ql)
   ).slice(0, 50);
 
   dd.style.display = list.length ? 'block' : 'none';
@@ -7498,6 +7532,7 @@ function verRetiradasDoadora(doadId) {
 }
 
 function renderRetiradas(q = '') {
+  if (!q) q = _textoBusca('#panel-doadoras-retiradas');
   const el = document.getElementById('retiradas-table');
   if (!el) return;
   const ql = (q || '').toLowerCase().trim();
@@ -7505,11 +7540,11 @@ function renderRetiradas(q = '') {
 
   const list = [...db.retiradas].filter(r =>
     !ql ||
-    String(r.pecaCodigo||'').toLowerCase().includes(ql) ||
-    String(r.pecaNome||'').toLowerCase().includes(ql) ||
-    String(r.doadModelo||'').toLowerCase().includes(ql) ||
-    String(r.doadSerie||'').toLowerCase().includes(ql) ||
-    String(r.tecnico||'').toLowerCase().includes(ql)
+    buscaInclui(r.pecaCodigo||'', ql) ||
+    buscaInclui(r.pecaNome||'', ql) ||
+    buscaInclui(r.doadModelo||'', ql) ||
+    buscaInclui(r.doadSerie||'', ql) ||
+    buscaInclui(r.tecnico||'', ql)
   ).sort((a,b) => b.data - a.data);
 
   if (!list.length) {
@@ -7776,9 +7811,9 @@ function renderSugestao(q = '') {
   const lista = calcularDemandaTotal().filter(item => {
     if (origemFlt && !item.origens.includes(origemFlt)) return false;
     if (fonteFlt  && item.fonte !== fonteFlt) return false;
-    if (ql && !String(item.codigo).toLowerCase().includes(ql) &&
-              !String(item.nome).toLowerCase().includes(ql) &&
-              !String(item.fonte).toLowerCase().includes(ql)) return false;
+    if (ql && !buscaInclui(item.codigo, ql) &&
+              !buscaInclui(item.nome, ql) &&
+              !buscaInclui(item.fonte, ql)) return false;
     return true;
   });
 
@@ -8030,7 +8065,7 @@ function renderPendencias(q = '') {
 
   const list = db.movimentacoes
     .filter(m => m.status === 'COMPRA_PENDENTE')
-    .filter(m => !ql || [m.pecaNome,m.pecaCodigo,m.tecnico,m.numSeq].some(v=>String(v||'').toLowerCase().includes(ql)))
+    .filter(m => !ql || [m.pecaNome,m.pecaCodigo,m.tecnico,m.numSeq].some(v=>buscaInclui(v||'', ql)))
     .sort((a,b) => b.eventos[0]?.data - a.eventos[0]?.data);
 
   if (!list.length) {
@@ -8094,7 +8129,7 @@ function renderPedidos(q = '') {
   const isAdmin = podeAcessar('admin');
 
   const list = [...db.pedidos]
-    .filter(p => !ql || String(p.numero).toLowerCase().includes(ql) || String(p.obs).toLowerCase().includes(ql))
+    .filter(p => !ql || buscaInclui(p.numero, ql) || buscaInclui(p.obs, ql))
     .sort((a,b) => b.data - a.data);
 
   if (!list.length) {
@@ -8240,7 +8275,7 @@ function filtrarPecasCfg(q) {
   const ql   = (q||'').toLowerCase().trim();
   const cfg  = db.configCompras;
   const list = db.pecas
-    .filter(p => !ql || String(p.codigo||'').toLowerCase().includes(ql) || String(p.nome||'').toLowerCase().includes(ql))
+    .filter(p => !ql || buscaInclui(p.codigo||'', ql) || buscaInclui(p.nome||'', ql))
     .slice(0, 80);
 
   if (!list.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Nenhuma peça encontrada</div>'; return; }
@@ -8460,10 +8495,10 @@ function exportarExcel(aba) {
     let listaOrcExport = [...db.orcamentos];
     if (sfExport) listaOrcExport = listaOrcExport.filter(function(o) { return o.status === sfExport; });
     if (qExport) listaOrcExport = listaOrcExport.filter(function(o) {
-      return (o.numero||'').toLowerCase().includes(qExport) ||
-        (o.cliente||'').toLowerCase().includes(qExport) ||
-        (o.equip_serie||'').toLowerCase().includes(qExport) ||
-        (o.itens||[]).some(function(i) { return (i.desc||'').toLowerCase().includes(qExport); });
+      return buscaInclui(o.numero||'', qExport) ||
+        buscaInclui(o.cliente||'', qExport) ||
+        buscaInclui(o.equip_serie||'', qExport) ||
+        (o.itens||[]).some(function(i) { return buscaInclui(i.desc||'', qExport); });
     });
 
     const TIPO_NF_LABEL = { NFE:'NFe', NFS:'NFS', AMBAS:'NFe + NFS' };
@@ -8547,7 +8582,7 @@ function exportarExcel(aba) {
       .map(function(e) { return { ...e, _g: calcularStatusGarantia(e, configMapG) }; });
     if (stG) listaG = listaG.filter(function(e) { return e._g.status === stG; });
     if (qG) listaG = listaG.filter(function(e) {
-      return String(e.serie || '').toLowerCase().includes(qG) || String(e.modelo || '').toLowerCase().includes(qG) || String(e.marca || '').toLowerCase().includes(qG);
+      return buscaInclui(e.serie || '', qG) || buscaInclui(e.modelo || '', qG) || buscaInclui(e.marca || '', qG);
     });
     listaG.sort(function(a, b) {
       return a._g.marca.localeCompare(b._g.marca) || String(a.modelo || '').localeCompare(String(b.modelo || '')) || String(a.serie || '').localeCompare(String(b.serie || ''));
@@ -8578,7 +8613,7 @@ function exportarExcel(aba) {
     const mostrarConcluidos = document.getElementById('validacao-' + etapa + '-mostrar-concluidos')?.checked;
     let lista = (db.validacoes || []).filter(function(v) { return v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'); });
     if (q) lista = lista.filter(function(v) {
-      return String(v.equip_serie || '').toLowerCase().includes(q) || String(v.equip_modelo || '').toLowerCase().includes(q) || String(v.equip_cliente || '').toLowerCase().includes(q);
+      return buscaInclui(v.equip_serie || '', q) || buscaInclui(v.equip_modelo || '', q) || buscaInclui(v.equip_cliente || '', q);
     });
     const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
     const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Técnico', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
@@ -8604,7 +8639,7 @@ function exportarExcel(aba) {
     let lista = db.equipQuallyxSP || [];
     if (_eqspFiltroStatus) lista = lista.filter(function(e) { return e.status === _eqspFiltroStatus; });
     if (q) lista = lista.filter(function(e) {
-      return String(e.nome || '').toLowerCase().includes(q) || String(e.marca || '').toLowerCase().includes(q) || String(e.serie || '').toLowerCase().includes(q);
+      return buscaInclui(e.nome || '', q) || buscaInclui(e.marca || '', q) || buscaInclui(e.serie || '', q);
     });
     const heads = ['Nome', 'Marca', 'Série', 'Status', 'Posição', 'Qtd Retiradas', 'Última Peça Retirada', 'Observação', 'Cadastrado em'];
     const rows = [heads, ...lista.map(function(e) {
@@ -9772,7 +9807,7 @@ async function renderMobPed() {
   if(origEl) origEl.id='hist-table-backup';
   el.id='hist-table';
   db.movimentacoes = peds;
-  renderHistorico();
+  renderHistorico('', '', false);
   el.id='mob-ped-table';
   if(origEl) origEl.id='hist-table';
   db.movimentacoes = origMov;
