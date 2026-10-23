@@ -7168,8 +7168,13 @@ function selecionarEquipDoadora(equipId) {
   document.getElementById('doad-linha').value     = e.grupo || '';
 }
 
+// Id da doadora em edição (null = nova doadora). Antes o salvamento lia
+// uma variável que nunca foi declarada, e o botão Salvar dava erro.
+let editDoadId = null;
+
 function abrirModalDoadora(id) {
   editId = id || null;
+  editDoadId = id || null;
   const d = id ? db.doadoras.find(x => x.id === id) : null;
   document.getElementById('modal-doadora-title').textContent = id ? 'Editar Doadora' : 'Nova Máquina Doadora';
   // Reset equip search
@@ -7185,6 +7190,13 @@ function abrirModalDoadora(id) {
   document.getElementById('doad-fator').value          = d?.fator          ?? 1.00;
   document.getElementById('doad-obs').value            = d?.obs            || '';
   onDoadClassifChange(d?.classificacao || 'USO');
+  // Na edição, mantém o fator gravado (onDoadClassifChange aplica o fator
+  // padrão da classificação; sem isso, um fator personalizado seria trocado
+  // pelo padrão ao salvar).
+  if (d && d.fator != null) {
+    document.getElementById('doad-fator').value = Number(d.fator).toFixed(2);
+    if (typeof onDoadFatorChange === 'function') onDoadFatorChange(Number(d.fator));
+  }
   openModal('modal-doadora');
 }
 
@@ -7213,7 +7225,7 @@ function salvarDoadora() {
     serie:        document.getElementById('doad-serie')?.value.trim()  || '',
     marca:        document.getElementById('doad-marca')?.value.trim()  || '',
     linha:        document.getElementById('doad-linha')?.value.trim()  || '',
-    classificacao: document.getElementById('doad-class')?.value       || 'USO',
+    classificacao: document.getElementById('doad-classificacao')?.value || 'USO',
     fator:        parseFloat(document.getElementById('doad-fator')?.value) || 1,
     obs:          document.getElementById('doad-obs')?.value.trim()   || '',
   };
@@ -7221,7 +7233,7 @@ function salvarDoadora() {
   const fn = editDoadId ? API.put('/doadoras/' + editDoadId, data) : API.post('/doadoras', data);
   fn.then(() => {
     toast('Doadora salva');
-    fecharModalDoadora?.();
+    closeModal('modal-doadora');
     loadAndRenderDoadoras();
   }).catch(err => toast(err.message, 'error'));
 }
