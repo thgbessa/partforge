@@ -328,26 +328,9 @@ app.listen(PORT, '0.0.0.0', () => {
     async function gerarBackupAutomatico(opts) {
       const enviarEmail = !opts || opts.enviarEmail !== false;
       try {
-        const backup = {
-          _version: '2.0', _exportedAt: new Date().toISOString(), _origem: 'backup_automatico',
-          pecas:               db.query('SELECT * FROM pecas'),
-          equipamentos:        db.query('SELECT * FROM equipamentos'),
-          estoque:             db.query('SELECT * FROM estoque'),
-          depositos:           db.query('SELECT * FROM depositos'),
-          movimentacoes:       db.query('SELECT * FROM movimentacoes'),
-          orcamentos:          db.query('SELECT * FROM orcamentos'),
-          solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra'),
-          kits_preventivas:    db.query('SELECT * FROM kits_preventivas'),
-          garantia_config:     db.query('SELECT * FROM garantia_config'),
-          validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento'),
-          prazos_validacao:    db.query('SELECT * FROM prazos_validacao'),
-          equip_quallyx_sp:    db.query('SELECT * FROM equip_quallyx_sp'),
-          clientes:            db.query('SELECT * FROM clientes'),
-          doadoras:            db.query('SELECT * FROM doadoras'),
-          retiradas:           db.query('SELECT * FROM retiradas'),
-          pedidos:             db.query('SELECT * FROM pedidos'),
-          usuarios:            db.query('SELECT id,nome,cargo,tel,email,ativo,created_at FROM usuarios'),
-        };
+        // Mesmo conteúdo completo do backup do botão (todas as tabelas e
+        // colunas, usuários sem senha) — um único formato para restaurar.
+        const backup = require('./backup-util').gerarSnapshot({ origem: 'backup_automatico' });
 
         const dbDir = process.env.DB_DIR || path.join(__dirname, '../data');
         const dirBackups = path.join(dbDir, 'backups');
@@ -395,7 +378,27 @@ app.listen(PORT, '0.0.0.0', () => {
             emailEnviado = true;
             console.log('Backup automatico enviado por email para', destinatarios.join(', '));
           } else {
+            // Grande demais para anexar: avisa por e-mail (sem anexo) em vez
+            // de simplesmente parar de mandar sem ninguém saber.
             console.log('Backup automatico grande demais para e-mail (' + tamanhoMB.toFixed(1) + 'MB) - mantido apenas em disco em', arquivo);
+            try {
+              const nodemailer = require('nodemailer');
+              const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+              });
+              await transporter.sendMail({
+                from: process.env.GMAIL_USER,
+                to: destinatarios.join(','),
+                subject: '⚠ PartForge - Backup ' + hojeStr + ' grande demais para o e-mail',
+                text: 'O backup automático de hoje tem ' + tamanhoMB.toFixed(1) + ' MB, acima do limite de 20 MB para anexo, e por isso NÃO foi anexado.\n\n' +
+                      'Ele foi salvo normalmente no servidor. Para ter uma cópia fora do servidor, baixe pelo botão "Backup" no rodapé do menu do PartForge.\n\n' +
+                      'Avise o responsável pelo sistema para ajustar o envio do backup.'
+              });
+              console.log('Aviso de backup grande enviado para', destinatarios.join(', '));
+            } catch (eAviso) {
+              console.error('Erro ao enviar aviso de backup grande:', eAviso.message);
+            }
           }
         }
         return { ok: true, arquivo, tamanhoMB: tamanhoMB.toFixed(2), emailEnviado };

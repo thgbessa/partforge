@@ -1,6 +1,7 @@
 const express = require('express'); // v2
 const router  = express.Router();
 const db      = require('./database');
+const { gerarSnapshot, restaurarSnapshot, validarSnapshot } = require('./backup-util');
 const bcrypt  = require('bcryptjs');
 const { gerarToken, autenticar, isAdmin } = require('./auth');
 const nodemailer = require('nodemailer');
@@ -1360,27 +1361,8 @@ router.get('/dashboard', autenticar, (req, res) => {
 
 // ── BACKUP / RESTORE ──────────────────────────────────────────
 router.get('/backup', autenticar, isAdmin, (req, res) => {
-  const backup = {
-    _version: '2.0', _exportedAt: new Date().toISOString(),
-    pecas:         db.query('SELECT * FROM pecas'),
-    equipamentos:  db.query('SELECT * FROM equipamentos').map(e=>({...e,campos:P(e.campos)||{}})),
-    estoque:       db.query('SELECT * FROM estoque'),
-    depositos:     db.query('SELECT * FROM depositos'),
-    movimentacoes: db.query('SELECT * FROM movimentacoes').map(m=>({...m,eventos:P(m.eventos)})),
-    orcamentos:    db.query('SELECT * FROM orcamentos').map(o=>({...o,itens:P(o.itens),itens_opcionais:P(o.itens_opcionais)})),
-    solicitacoes_compra: db.query('SELECT * FROM solicitacoes_compra').map(sc=>({...sc,itens:P(sc.itens)})),
-    kits_preventivas: db.query('SELECT * FROM kits_preventivas').map(k=>({...k,itens:P(k.itens),itens_opcionais:P(k.itens_opcionais)})),
-    garantia_config: db.query('SELECT * FROM garantia_config'),
-    validacoes_equipamento: db.query('SELECT * FROM validacoes_equipamento').map(v=>({...v,eventos:P(v.eventos),fotos:P(v.fotos)})),
-    prazos_validacao: db.query('SELECT * FROM prazos_validacao'),
-    equip_quallyx_sp: db.query('SELECT * FROM equip_quallyx_sp'),
-    clientes:      db.query('SELECT * FROM clientes'),
-    doadoras:      db.query('SELECT * FROM doadoras'),
-    retiradas:     db.query('SELECT * FROM retiradas'),
-    pedidos:       db.query('SELECT * FROM pedidos').map(p=>({...p,itens:P(p.itens)})),
-    config_orcamento: JSON.parse(db.get("SELECT valor FROM configuracoes WHERE chave='config_orcamento'")?.valor||'{}'),
-    config_compras:   JSON.parse(db.get("SELECT valor FROM configuracoes WHERE chave='config_compras'")?.valor||'{}'),
-  };
+  // Backup completo e automático (todas as tabelas e colunas, usuários sem senha).
+  const backup = gerarSnapshot({ origem: 'backup_manual' });
   res.setHeader('Content-Disposition',`attachment; filename="partforge_backup_${new Date().toISOString().slice(0,10)}.json"`);
   res.json(backup);
 });
@@ -1394,9 +1376,8 @@ function salvarCopiaPreRestauracao(usuario) {
   const dbDir = process.env.DB_DIR || path.join(__dirname, '../data');
   const dir = path.join(dbDir, 'backups');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const tabelas = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").map(t => t.name);
-  const copia = { _version: '2.0', _exportedAt: new Date().toISOString(), _origem: 'pre_restauracao', _usuario: usuario || '', _tabelas: tabelas };
-  for (const t of tabelas) copia[t] = db.query(`SELECT * FROM "${t}"`);
+  const copia = gerarSnapshot({ incluirSenhas: true, origem: 'pre_restauracao' });
+  copia._usuario = usuario || '';
   const carimbo = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23); // inclui milissegundos
   const arquivo = path.join(dir, `pre_restore_${carimbo}.json`);
   const tmp = arquivo + '.tmp';
@@ -1408,7 +1389,10 @@ function salvarCopiaPreRestauracao(usuario) {
 }
 
 router.post('/restore', autenticar, isAdmin, (req, res) => {
-  const s=req.body;
+  const s = req.body;
+  // Validação rápida ANTES de qualquer coisa (arquivo vazio ou de outro sistema).
+  try { validarSnapshot(s); }
+  catch (e) { return res.status(400).json({ erro: e.message + ' Nada foi alterado.' }); }
   // Sem a cópia de segurança, NÃO restaura (melhor falhar do que perder dados).
   let copiaPre;
   try {
@@ -1419,150 +1403,12 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     return res.status(500).json({ erro: 'Restauração cancelada: não foi possível salvar a cópia de segurança dos dados atuais (' + e.message + '). Nada foi alterado.' });
   }
   try {
-    if (s.pecas?.length) {
-      for (const p of s.pecas)
-        db.runBatch(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [p.id||uid(),p.codigo||'',p.nome||'',p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,p.imagem||'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,p.created_at||now()]);
-    } else if (s.pecasPrecos || s.depositos || s.movimentacoes) {
-      const pecasMap = {};
-      if (s.movimentacoes?.length) {
-        for (const m of s.movimentacoes) {
-          const pid = m.peca_id||m.pecaId||'';
-          if (pid && !pecasMap[pid]) {
-            pecasMap[pid] = {
-              id: pid, codigo: m.peca_codigo||m.pecaCodigo||pid,
-              nome: m.peca_nome||m.pecaNome||'', unidade: m.peca_unidade||m.pecaUnidade||'UN',
-              fonte: m.peca_fonte||m.pecaFonte||'', custo: m.peca_custo||m.pecaCusto||0,
-              taxa:0, dolar:0, markup:0, valor_venda:0, grupo:'', linha:'', minimo:0,
-            };
-          }
-        }
-      }
-      if (s.depositos) {
-        for (const [pid, dep] of Object.entries(s.depositos)) {
-          if (!pecasMap[pid] && dep._nome) {
-            pecasMap[pid] = {
-              id: pid, codigo: pid, nome: dep._nome, unidade: dep._und||'UN',
-              fonte:'', custo:0, taxa:0, dolar:0, markup:0, valor_venda:0,
-              grupo: dep._grupo||'', linha:'', minimo:0,
-            };
-          }
-        }
-      }
-      if (s.pecasPrecos) {
-        for (const p of Object.values(pecasMap)) {
-          const preco = s.pecasPrecos[p.codigo] || s.pecasPrecos[p.id];
-          if (preco) Object.assign(p, preco);
-        }
-      }
-      for (const p of Object.values(pecasMap)) {
-        if (!p.nome) continue;
-        db.runBatch(`INSERT OR REPLACE INTO pecas(id,codigo,nome,unidade,grupo,fonte,linha,minimo,imagem,taxa,dolar,markup,custo,valor_venda,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [p.id,p.codigo||'',p.nome,p.unidade||'UN',p.grupo||'',p.fonte||'',p.linha||'',p.minimo||0,'',p.taxa||0,p.dolar||0,p.markup||0,p.custo||0,p.valor_venda||0,now()]);
-      }
-      if (s.depositos) {
-        for (const [pid, dep] of Object.entries(s.depositos)) {
-          const total = typeof dep.Total === 'number' ? dep.Total : 0;
-          if (total > 0 || pecasMap[pid]) {
-            const ex = db.get('SELECT quantidade FROM estoque WHERE peca_id=?',[pid]);
-            if (!ex) db.runBatch('INSERT OR IGNORE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,total,now()]);
-          }
-        }
-      }
-      if (s.estoque && !Array.isArray(s.estoque)) {
-        for (const [pid, qtd] of Object.entries(s.estoque)) {
-          if (pecasMap[pid] && qtd > 0) {
-            db.runBatch('INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)',[pid,qtd,now()]);
-          }
-        }
-      }
-    }
-
-    if (s.equipamentos?.length) for (const e of s.equipamentos) {
-      const modelo  = e.modelo || e.nome || '';
-      const cliente = e.cliente || e.nome_fantasia || '';
-      const local   = e.local || e.endereco || '';
-      const linha   = e.linha || e.grupo || '';
-      const campos  = e.campos || {
-        codigo: e.codigo||'', cod_produto: e.cod_produto||'', grupo: e.grupo||'',
-        grupo2: e.grupo2||'', status: e.status||'', proprietario: e.proprietario||'',
-        municipio: e.municipio||'', uf: e.uf||'', cep: e.cep||'', bairro: e.bairro||'',
-        setor: e.setor||'', ip: e.ip||'', nf_compra: e.nf_compra||'',
-        data_compra: e.data_compra||'', ano_fab: e.ano_fab||'',
-        valor_compra: e.valor_compra||0, valor_mercado: e.valor_mercado||0,
-        os_aberta: e.os_aberta||'', ult_os: e.ult_os||'',
-      };
-      db.runBatch(`INSERT OR REPLACE INTO equipamentos(id,modelo,marca,serie,linha,cliente,local,contrato,obs,campos,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-        [e.id||uid(), modelo, e.marca||'', e.serie||'', linha, cliente, local,
-         e.contrato||'', e.obs||'', J(campos), e.createdAt||e.created_at||now()]);
-    }
-
-    if (s.estoque) {
-      const estoqueList = Array.isArray(s.estoque) ? s.estoque : Object.entries(s.estoque).map(([k,v])=>({peca_id:k,quantidade:v}));
-      for (const e of estoqueList)
-        db.runBatch(`INSERT OR REPLACE INTO estoque(peca_id,quantidade,updated_at) VALUES(?,?,?)`,
-          [e.peca_id||e.pecaId,e.quantidade||0,now()]);
-    }
-
-    if (s.movimentacoes?.length) for (const m of s.movimentacoes)
-      db.runBatch(`INSERT OR REPLACE INTO movimentacoes(id,seq_num,status,peca_id,peca_codigo,peca_nome,peca_unidade,peca_fonte,peca_custo,qtd,equip_id,equip_serie,equip_cliente,equip_modelo,tecnico,tem_estoque,tipo_alocacao,obs,eventos,fotos_despacho,fotos_recebimento,fotos_devolucao,retirada_eqsp_id,retirada_eqsp_nome,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [m.id||uid(),m.seq_num||m.seqNum||0,m.status||'SOLICITADA',m.peca_id||m.pecaId||'',m.peca_codigo||m.pecaCodigo||'',m.peca_nome||m.pecaNome||'',m.peca_unidade||m.pecaUnidade||'UN',m.peca_fonte||m.pecaFonte||'',m.peca_custo||m.pecaCusto||0,m.qtd||1,m.equip_id||m.equipId||'',m.equip_serie||m.equipSerie||'',m.equip_cliente||m.equipCliente||'',m.equip_modelo||m.equipModelo||'',m.tecnico||'',m.tem_estoque||m.temEstoque?1:0,m.tipo_alocacao||m.tipoAlocacao||'',m.obs||'',typeof m.eventos==='string'?m.eventos:J(m.eventos||[]),typeof m.fotos_despacho==='string'?m.fotos_despacho:J(m.fotos_despacho||[]),typeof m.fotos_recebimento==='string'?m.fotos_recebimento:J(m.fotos_recebimento||[]),typeof m.fotos_devolucao==='string'?m.fotos_devolucao:J(m.fotos_devolucao||[]),m.retirada_eqsp_id||'',m.retirada_eqsp_nome||'',m.created_at||m.createdAt||now(),'restore']);
-
-    if (s.orcamentos?.length) for (const o of s.orcamentos)
-      db.runBatch(`INSERT OR REPLACE INTO orcamentos(id,numero,status,cliente,cnpj,equip_serie,equip_nome,os,data,obs,validade,pagamento,entrega,frete,condicoes,assinatura,total,itens,itens_opcionais,tipo_nf,boleto_arquivo,boleto_nome,nota_arquivo,nota_nome,equipamentos,created_at,updated_at,status_changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [o.id||uid(),o.numero||'',o.status||'ABERTO',o.cliente||'',o.cnpj||'',o.equip_serie||o.equipSerie||'',o.equip_nome||o.equipNome||'',o.os||'',o.data||'',o.obs||'',o.validade||'7 dias',o.pagamento||o.formaPagamento||'30 dias',o.entrega||o.prazoEntrega||'A combinar',o.frete||'FOB',o.condicoes||'',o.assinatura||'',o.total||0,J(o.itens||[]),J(o.itens_opcionais||[]),o.tipo_nf||'',o.boleto_arquivo||'',o.boleto_nome||'',o.nota_arquivo||'',o.nota_nome||'',J(o.equipamentos||[]),o.created_at||now(),o.updated_at||now(),o.status_changed_at||now()]);
-
-    if (s.pedidos?.length) for (const p of s.pedidos)
-      db.runBatch(`INSERT OR REPLACE INTO pedidos(id,numero,status,obs,itens,created_at) VALUES(?,?,?,?,?,?)`,
-        [p.id||uid(),p.numero||'',p.status||'ABERTO',p.obs||'',J(p.itens||[]),p.created_at||now()]);
-
-    if (s.doadoras?.length) for (const d of s.doadoras)
-      db.runBatch(`INSERT OR REPLACE INTO doadoras(id,modelo,serie,marca,linha,classificacao,fator,obs,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
-        [d.id||uid(),d.modelo||'',d.serie||'',d.marca||'',d.linha||'',d.classificacao||'USO',d.fator||1,d.obs||'',d.created_at||now()]);
-
-    if (s.solicitacoes_compra?.length) for (const sc of s.solicitacoes_compra)
-      db.runBatch(`INSERT OR REPLACE INTO solicitacoes_compra(id,numero,status,demanda,demanda_nome,equip_serie,equip_nome,equip_cliente,itens,obs,created_at,updated_at,status_changed_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [sc.id||uid(),sc.numero||'',sc.status||'SOLICITADO',sc.demanda||'',sc.demanda_nome||'',sc.equip_serie||'',sc.equip_nome||'',sc.equip_cliente||'',J(sc.itens||[]),sc.obs||'',sc.created_at||now(),sc.updated_at||now(),sc.status_changed_at||now(),sc.created_by||'restore']);
-
-    if (s.clientes?.length) for (const c of s.clientes)
-      db.runBatch(`INSERT OR REPLACE INTO clientes(nome_norm,nome,cnpj,updated_at) VALUES(?,?,?,?)`,
-        [c.nome_norm||normalizarNomeCliente(c.nome||''),c.nome||'',c.cnpj||'',c.updated_at||now()]);
-
-    if (s.kits_preventivas?.length) for (const k of s.kits_preventivas)
-      db.runBatch(`INSERT OR REPLACE INTO kits_preventivas(id,nome,codigo,fonte,linha,taxa,dolar,markup,itens,itens_opcionais,obs,created_at,updated_at,created_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [k.id||uid(),k.nome||'',k.codigo||'',k.fonte||'',k.linha||'',k.taxa||2,k.dolar||5.27,k.markup||2,J(k.itens||[]),J(k.itens_opcionais||[]),k.obs||'',k.created_at||now(),k.updated_at||now(),k.created_by||'restore']);
-
-    if (s.garantia_config?.length) for (const g of s.garantia_config)
-      db.runBatch(`INSERT OR REPLACE INTO garantia_config(marca,anos_equipamento,anos_acessorio,meses_equipamento,meses_acessorio,obs,updated_at) VALUES(?,?,?,?,?,?,?)`,
-        [g.marca, g.anos_equipamento||0, g.anos_acessorio||0, g.meses_equipamento||0, g.meses_acessorio||0, g.obs||'', g.updated_at||now()]);
-
-    if (s.validacoes_equipamento?.length) for (const v of s.validacoes_equipamento)
-      db.runBatch(`INSERT OR REPLACE INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
-        peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-        fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-        [v.id||uid(), v.seq_num||0, v.equip_id||'', v.equip_serie||'', v.equip_modelo||'', v.equip_cliente||'', v.status||'REPAIR', v.obs||'', J(v.eventos||[]),
-         v.peca_solicitada||'', v.data_solicitacao_peca||'', v.data_entrega_peca||'',
-         v.produto_solicitado||'', v.data_solicitacao_produto||'', v.data_entrega_produto||'',
-         J(v.fotos||[]), v.prazo_dias||0, v.prazo_tolerancia||0, v.prazo_complexidade||'', v.data_limite||'', v.data_limite_original||v.data_limite||'', v.tecnico_responsavel||'',
-         v.os_numero||'', v.origem||'',
-         v.created_at||now(), v.created_by||'restore', v.updated_at||now()]);
-
-    if (s.prazos_validacao?.length) for (const p of s.prazos_validacao)
-      db.runBatch(`INSERT OR REPLACE INTO prazos_validacao(id,marca,modelo,modelo_norm,complexidade,dias_reforma,dias_teste,dias_embalagem,prazo_final,tolerancia,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-        [p.id||uid(), p.marca||'', p.modelo||'', normalizarModeloPrazo(p.modelo), p.complexidade||'', p.dias_reforma||0, p.dias_teste||0, p.dias_embalagem||0, p.prazo_final||0, p.tolerancia||0, p.updated_at||now()]);
-
-    if (s.equip_quallyx_sp?.length) for (const e of s.equip_quallyx_sp)
-      db.runBatch(`INSERT OR REPLACE INTO equip_quallyx_sp(id,nome,marca,serie,status,obs,imagem,posicao,created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-        [e.id||uid(), e.nome||'', e.marca||'', e.serie||'', e.status||'NOVO', e.obs||'', e.imagem||'', e.posicao||'', e.created_at||now(), e.created_by||'restore', e.updated_at||now()]);
-
-    if (s.config_orcamento) db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_orcamento',?)",[J(s.config_orcamento)]);
-    if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
-
-    db.persist();
-    res.json({ok:true, copia_pre_restauracao: copiaPre});
-  } catch(e) {
+    const relatorio = restaurarSnapshot(s);
+    console.log('Restauracao concluida:', JSON.stringify(relatorio.tabelas), 'usuarios:', JSON.stringify({ ...relatorio.usuarios, sem_senha: relatorio.usuarios.sem_senha.length }));
+    res.json({ ok: true, copia_pre_restauracao: copiaPre, ...relatorio });
+  } catch (e) {
     console.error('Restore error:', e);
-    res.status(500).json({erro:'Erro no restore: '+e.message+' (os dados de antes estão salvos em '+copiaPre+')'});
+    res.status(400).json({ erro: 'Erro ao restaurar: ' + e.message + '. Nada foi alterado (os dados de antes também estão salvos em ' + copiaPre + ').' });
   }
 });
 

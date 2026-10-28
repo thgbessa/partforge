@@ -9710,7 +9710,8 @@ function navigate(page, el) {
 // ============================================================
 function exportarBancoDados() {
   API.get('/backup').then(function(data) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    // Sem indentação: o arquivo fica bem menor (o conteúdo é o mesmo).
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -9725,21 +9726,90 @@ function exportarBancoDados() {
   });
 }
 
+// Nomes amigáveis para o resumo da restauração.
+const _BACKUP_ROTULOS = {
+  pecas: 'Peças', estoque: 'Estoque', depositos: 'Estoque por depósito', equipamentos: 'Equipamentos',
+  movimentacoes: 'Movimentações', orcamentos: 'Orçamentos', solicitacoes_compra: 'Solicitações de compra',
+  kits_preventivas: 'Kits de preventiva', garantia_config: 'Garantia', validacoes_equipamento: 'Validações',
+  prazos_validacao: 'Prazos de validação', equip_quallyx_sp: 'Equip. Quallyx SP', clientes: 'Clientes',
+  doadoras: 'Doadoras', retiradas: 'Retiradas de doadoras', pedidos: 'Pedidos', configuracoes: 'Configurações',
+  usuarios: 'Usuários'
+};
+
 function importarBancoDados(input) {
   const file = input.files[0];
+  input.value = ''; // permite escolher o mesmo arquivo de novo depois
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = async e => {
+  reader.onload = e => {
+    let snap;
+    try { snap = JSON.parse(e.target.result); }
+    catch (err) { toast('Arquivo inválido: não é um backup do PartForge.', 'error'); return; }
+    if (!snap || typeof snap !== 'object' || Array.isArray(snap)) { toast('Arquivo inválido: não é um backup do PartForge.', 'error'); return; }
+    _confirmarRestauracao(snap, file);
+  };
+  reader.readAsText(file);
+}
+
+// Mostra o resumo do backup e só restaura depois de digitar RESTAURAR.
+function _confirmarRestauracao(snap, file) {
+  const linhas = Object.keys(_BACKUP_ROTULOS)
+    .filter(k => Array.isArray(snap[k]))
+    .map(k => `<tr><td style="padding:3px 10px 3px 0">${_BACKUP_ROTULOS[k]}</td><td style="padding:3px 0;text-align:right;font-family:var(--mono)">${snap[k].length.toLocaleString('pt-BR')}</td></tr>`);
+  if (!linhas.length) { toast('Este arquivo não contém dados do PartForge.', 'error'); return; }
+  const data = snap._exportedAt ? new Date(snap._exportedAt).toLocaleString('pt-BR') : '(data não informada)';
+  const origem = { backup_automatico: 'Backup automático (e-mail)', backup_manual: 'Backup do botão', pre_restauracao: 'Cópia de antes de uma restauração' }[snap._origem] || 'Backup do botão (formato antigo)';
+  const tamanho = (file.size / 1024 / 1024).toFixed(1).replace('.', ',');
+
+  document.getElementById('restore-confirm-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'restore-confirm-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);max-width:460px;width:100%;max-height:90vh;overflow:auto;padding:20px">
+      <div style="font-weight:700;font-size:15px;margin-bottom:12px">Restaurar backup</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+        <div><b>Arquivo:</b> ${_htmlAttr(file.name)} (${tamanho} MB)</div>
+        <div><b>Gerado em:</b> ${data}</div>
+        <div><b>Tipo:</b> ${origem}</div>
+      </div>
+      <table style="font-size:12px;width:100%;margin-bottom:12px">${linhas.join('')}</table>
+      <div style="background:var(--surface2);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 12px;font-size:12px;line-height:1.6;margin-bottom:12px">
+        <b style="color:var(--accent)">⚠ Atenção:</b> as partes listadas acima vão ficar <b>exatamente iguais ao backup</b>.
+        Tudo o que foi feito nelas depois de ${data} será substituído.<br>
+        Antes de restaurar, o sistema salva automaticamente uma cópia dos dados de agora.
+        Usuários que não existirem hoje voltam sem senha: o admin define uma nova senha para cada um.
+      </div>
+      <label style="font-size:12px;color:var(--text2)">Para confirmar, digite <b>RESTAURAR</b>:</label>
+      <input id="restore-confirm-input" class="form-input" autocomplete="off" style="margin:6px 0 14px;width:100%">
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost" id="restore-cancel-btn">Cancelar</button>
+        <button class="btn btn-primary" id="restore-ok-btn" disabled>Restaurar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const inp = document.getElementById('restore-confirm-input');
+  const btn = document.getElementById('restore-ok-btn');
+  inp.addEventListener('input', () => { btn.disabled = inp.value.trim().toUpperCase() !== 'RESTAURAR'; });
+  document.getElementById('restore-cancel-btn').onclick = () => ov.remove();
+  btn.onclick = async () => {
+    if (inp.value.trim().toUpperCase() !== 'RESTAURAR') return;
+    btn.disabled = true; btn.textContent = 'Restaurando...';
     try {
-      const snap = JSON.parse(e.target.result);
-      await API.post('/restore', snap);
-      toast('Backup restaurado com sucesso!');
+      const r = await API.post('/restore', snap);
+      ov.remove();
+      const semSenha = (r.usuarios && r.usuarios.sem_senha) || [];
+      let msg = 'Backup restaurado com sucesso!';
+      if (semSenha.length) msg += ' ' + semSenha.length + ' usuário(s) voltaram sem senha: defina uma nova senha na tela de Usuários (' + semSenha.join(', ') + ').';
+      toast(msg, 'success');
+      if (semSenha.length) alert(msg);
       setTimeout(() => initApp(), 500);
-    } catch(err) {
+    } catch (err) {
+      btn.disabled = false; btn.textContent = 'Restaurar';
       toast('Erro ao restaurar: ' + err.message, 'error');
     }
   };
-  reader.readAsText(file);
+  setTimeout(() => inp.focus(), 50);
 }
 
 // ============================================================
