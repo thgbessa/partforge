@@ -408,22 +408,34 @@ app.listen(PORT, '0.0.0.0', () => {
       }
     }
 
-    // Backup GARANTIDO 1x por dia às 03:00 BRT (06:00 UTC), mesmo que nada
-    // tenha mudado — baseline de segurança independente de atividade.
-    let ultimoDiaBackup = null;
-    setInterval(function() {
+    // Backup GARANTIDO 1x por dia às 07:40 BRT (10:40 UTC), com envio por
+    // e-mail, mesmo que nada tenha mudado — baseline de segurança.
+    // Antes a checagem exigia o minuto exato (se o servidor estivesse ocupado
+    // naquele minuto, o backup do dia era perdido). Agora: a partir das 07:40,
+    // se ainda não saiu hoje, sai. O dia do último envio fica gravado no banco,
+    // então reiniciar o servidor (deploy) depois das 07:40 não manda de novo.
+    const BACKUP_DIARIO_MIN_UTC = 10 * 60 + 40; // 07:40 em Brasília (UTC-3)
+    const CHAVE_ULTIMO_BACKUP_EMAIL = 'backup_email_ultimo_dia';
+    let backupDiarioRodando = false;
+    setInterval(async function() {
       const now = new Date();
       const hojeStr = now.toISOString().slice(0, 10);
-      if (now.getUTCHours() === 6 && now.getUTCMinutes() === 0 && ultimoDiaBackup !== hojeStr) {
-        ultimoDiaBackup = hojeStr;
-        gerarBackupAutomatico({ enviarEmail: true });
-      }
+      const minUTC = now.getUTCHours() * 60 + now.getUTCMinutes();
+      if (minUTC < BACKUP_DIARIO_MIN_UTC || backupDiarioRodando) return;
+      let ultimo = null;
+      try { ultimo = db.get('SELECT valor FROM configuracoes WHERE chave=?', [CHAVE_ULTIMO_BACKUP_EMAIL])?.valor || null; } catch (e) {}
+      if (ultimo === hojeStr) return;
+      backupDiarioRodando = true;
+      try {
+        db.run('INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES(?,?)', [CHAVE_ULTIMO_BACKUP_EMAIL, hojeStr]);
+        await gerarBackupAutomatico({ enviarEmail: true });
+      } finally { backupDiarioRodando = false; }
     }, 60 * 1000);
 
     // Backup REATIVO: a cada 3 minutos, se algo mudou desde a última
     // checagem, salva em disco na hora (proteção quase em tempo real,
     // sem sobrecarregar o servidor fazendo isso a cada clique individual).
-    // NÃO envia e-mail — o e-mail só é enviado pelo backup garantido das 03h.
+    // NÃO envia e-mail — o e-mail só é enviado pelo backup garantido das 07:40.
     setInterval(async function() {
       if (!db.consumirFlagMudanca()) return; // nada mudou, não faz nada
       await gerarBackupAutomatico({ enviarEmail: false });
