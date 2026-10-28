@@ -12,6 +12,10 @@ app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors({ origin: '*', credentials: true }));
+// A restauração recebe o backup inteiro (hoje ~13 MB e crescendo, por causa
+// das fotos). Limite maior SÓ nessa rota; as demais continuam com 10 MB.
+// Precisa vir antes do parser geral: o primeiro que ler o corpo vale.
+app.use('/api/restore', express.json({ limit: '100mb' }));
 app.use(express.json({ limit: '10mb' }));
 
 // Cache-busting automático: a cada boot do servidor (= a cada deploy), os

@@ -1385,8 +1385,39 @@ router.get('/backup', autenticar, isAdmin, (req, res) => {
   res.json(backup);
 });
 
+// Cópia de segurança COMPLETA do banco atual (todas as tabelas, todas as
+// colunas), gravada no volume antes de qualquer restauração. Se o arquivo
+// restaurado estiver errado, os dados de antes continuam guardados aqui.
+// Fica só no servidor (não é enviada por e-mail). Mantém as 10 últimas.
+function salvarCopiaPreRestauracao(usuario) {
+  const fs = require('fs'), path = require('path');
+  const dbDir = process.env.DB_DIR || path.join(__dirname, '../data');
+  const dir = path.join(dbDir, 'backups');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tabelas = db.query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").map(t => t.name);
+  const copia = { _version: '2.0', _exportedAt: new Date().toISOString(), _origem: 'pre_restauracao', _usuario: usuario || '', _tabelas: tabelas };
+  for (const t of tabelas) copia[t] = db.query(`SELECT * FROM "${t}"`);
+  const carimbo = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 23); // inclui milissegundos
+  const arquivo = path.join(dir, `pre_restore_${carimbo}.json`);
+  const tmp = arquivo + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(copia));
+  fs.renameSync(tmp, arquivo);
+  const antigos = fs.readdirSync(dir).filter(f => f.startsWith('pre_restore_') && f.endsWith('.json')).sort();
+  while (antigos.length > 10) { try { fs.unlinkSync(path.join(dir, antigos.shift())); } catch (e) {} }
+  return path.basename(arquivo);
+}
+
 router.post('/restore', autenticar, isAdmin, (req, res) => {
   const s=req.body;
+  // Sem a cópia de segurança, NÃO restaura (melhor falhar do que perder dados).
+  let copiaPre;
+  try {
+    copiaPre = salvarCopiaPreRestauracao(req.user?.email || req.user?.nome);
+    console.log('Copia pre-restauracao salva:', copiaPre);
+  } catch (e) {
+    console.error('Falha ao salvar copia pre-restauracao:', e);
+    return res.status(500).json({ erro: 'Restauração cancelada: não foi possível salvar a cópia de segurança dos dados atuais (' + e.message + '). Nada foi alterado.' });
+  }
   try {
     if (s.pecas?.length) {
       for (const p of s.pecas)
@@ -1528,10 +1559,10 @@ router.post('/restore', autenticar, isAdmin, (req, res) => {
     if (s.config_compras)   db.runBatch("INSERT OR REPLACE INTO configuracoes(chave,valor) VALUES('config_compras',?)",[J(s.config_compras)]);
 
     db.persist();
-    res.json({ok:true});
+    res.json({ok:true, copia_pre_restauracao: copiaPre});
   } catch(e) {
     console.error('Restore error:', e);
-    res.status(500).json({erro:'Erro no restore: '+e.message});
+    res.status(500).json({erro:'Erro no restore: '+e.message+' (os dados de antes estão salvos em '+copiaPre+')'});
   }
 });
 
