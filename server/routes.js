@@ -855,6 +855,72 @@ router.delete('/prazos-validacao/:id', autenticar, isAdmin, (req, res) => {
   db.run('DELETE FROM prazos_validacao WHERE id=?', [req.params.id]); res.json({ ok: true });
 });
 
+// ── Validações: histórico completo ─────────────────────────────
+const _VAL_CAMPOS = [
+  ['equip_serie', 'Série'], ['equip_modelo', 'Modelo'], ['equip_cliente', 'Cliente (destinatário)'],
+  ['origem', 'Origem'], ['tecnico_responsavel', 'Técnico'], ['tecnico_externo', 'Técnico externo'],
+  ['os_numero', 'OS técnica'], ['os_assessoria', 'OS assessoria'],
+  ['responsavel_assessoria', 'Responsável da assessoria'], ['obs', 'Observação'],
+  ['data_entrada_assessoria', 'Entrada na assessoria'], ['data_conclusao', 'Conclusão'],
+];
+const _VAL_TIPO = { PECA: 'Peça', PRODUTO: 'Produto' };
+function _hojeBRT() { return new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10); }
+function _normSolicitacoes(lista) {
+  return (Array.isArray(lista) ? lista : []).filter(x => x && String(x.item || '').trim()).map((x, i) => ({
+    id: String(x.id || (uid() + i)),
+    tipo: x.tipo === 'PRODUTO' ? 'PRODUTO' : 'PECA',
+    etapa: x.etapa === 'ASSESSORIA' ? 'ASSESSORIA' : 'REPAIR',
+    item: String(x.item).trim(),
+    qtd: Math.max(1, parseInt(x.qtd, 10) || 1),
+    data_solicitacao: x.data_solicitacao || '',
+    data_entrega: x.data_entrega || '',
+    situacao: ['SOLICITADO', 'ENTREGUE', 'CANCELADO'].includes(x.situacao) ? x.situacao : 'SOLICITADO',
+  }));
+}
+// Mantém as colunas antigas (1 peça / 1 produto) espelhando o item mais
+// recente da lista — usadas pela tabela, Excel e importação antigos.
+function _espelhoSolicitacoes(sol) {
+  const ult = t => [...sol].reverse().find(x => x.tipo === t && x.situacao !== 'CANCELADO') || null;
+  const p = ult('PECA'), r = ult('PRODUTO');
+  return {
+    peca_solicitada: p ? p.item : '', data_solicitacao_peca: p ? p.data_solicitacao : '', data_entrega_peca: p ? p.data_entrega : '',
+    produto_solicitado: r ? r.item : '', data_solicitacao_produto: r ? r.data_solicitacao : '', data_entrega_produto: r ? r.data_entrega : '',
+  };
+}
+function _diffSolicitacoes(antes, depois) {
+  const out = [], mA = new Map(antes.map(x => [x.id, x])), mD = new Map(depois.map(x => [x.id, x]));
+  const nome = x => `${_VAL_TIPO[x.tipo]} "${x.item}"`;
+  for (const x of depois) {
+    const a = mA.get(x.id);
+    if (!a) { out.push(`${_VAL_TIPO[x.tipo]} adicionada: ${x.item} (qtd ${x.qtd})` + (x.data_entrega ? `, entrega prevista ${x.data_entrega}` : '')); continue; }
+    const mud = [];
+    if (a.item !== x.item) mud.push(`item "${a.item}" → "${x.item}"`);
+    if (a.qtd !== x.qtd) mud.push(`qtd ${a.qtd} → ${x.qtd}`);
+    if (a.data_solicitacao !== x.data_solicitacao) mud.push(`solicitação ${a.data_solicitacao || '—'} → ${x.data_solicitacao || '—'}`);
+    if (a.data_entrega !== x.data_entrega) mud.push(`entrega ${a.data_entrega || '—'} → ${x.data_entrega || '—'}`);
+    if (a.situacao !== x.situacao) mud.push(`situação ${a.situacao} → ${x.situacao}`);
+    if (mud.length) out.push(`${nome(x)}: ${mud.join('; ')}`);
+  }
+  for (const a of antes) if (!mD.has(a.id)) out.push(`${nome(a)} removida`);
+  return out;
+}
+function _solicitacoesDaPlanilha(lista, it) {
+  const sol = _normSolicitacoes(lista);
+  const add = (tipo, etapa, item, ds, de) => {
+    item = String(item || '').trim(); if (!item) return;
+    const ja = sol.find(x => x.tipo === tipo && x.item.toLowerCase() === item.toLowerCase());
+    if (ja) { if (ds) ja.data_solicitacao = ds; if (de) ja.data_entrega = de; return; }
+    sol.push({ id: uid() + sol.length, tipo, etapa, item, qtd: 1, data_solicitacao: ds || '', data_entrega: de || '', situacao: 'SOLICITADO' });
+  };
+  add('PECA', 'REPAIR', it.peca_solicitada, it.data_solicitacao_peca, it.data_entrega_peca);
+  add('PRODUTO', 'ASSESSORIA', it.produto_solicitado, it.data_solicitacao_produto, it.data_entrega_produto);
+  return sol;
+}
+function _retratoValidacao(v, sol) {
+  const r = {}; for (const [c] of _VAL_CAMPOS) r[c] = v[c] || '';
+  r.solicitacoes = sol; return r;
+}
+
 router.get('/validacoes', autenticar, (req, res) => {
   const { status, q } = req.query;
   let sql = 'SELECT * FROM validacoes_equipamento WHERE 1=1'; const p = [];
@@ -866,7 +932,7 @@ router.get('/validacoes', autenticar, (req, res) => {
   res.json(db.query(sql + ' ORDER BY created_at DESC', p).map(v => {
     const fotos = P(v.fotos);
     const { fotos: _omit, ...resto } = v;
-    return { ...resto, eventos: P(v.eventos), fotos_qtd: fotos.length };
+    return { ...resto, eventos: P(v.eventos), solicitacoes: P(v.solicitacoes), fotos_qtd: fotos.length };
   }));
 });
 
@@ -878,13 +944,15 @@ router.get('/validacoes/:id/fotos', autenticar, (req, res) => {
 
 router.post('/validacoes', autenticar, (req, res) => {
   const v = req.body;
-  if (!v.equip_serie && !v.equip_modelo) return res.status(400).json({ erro: 'Informe ao menos a série ou o modelo do equipamento' });
+  if (!String(v.equip_serie || '').trim()) return res.status(400).json({ erro: 'Informe o número de série do equipamento' });
+  const sol = _normSolicitacoes(v.solicitacoes);
+  Object.assign(v, _espelhoSolicitacoes(sol));
   const cfg = db.get("SELECT valor FROM configuracoes WHERE chave='validacao_seq_counter'");
   const seq = parseInt(cfg?.valor || '0') + 1;
   if (cfg) db.run("UPDATE configuracoes SET valor=? WHERE chave='validacao_seq_counter'", [String(seq)]);
   else db.run("INSERT INTO configuracoes(chave,valor) VALUES('validacao_seq_counter',?)", [String(seq)]);
   const id = uid();
-  const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome }]);
+  const eventos = J([{ status: 'REPAIR', data: now(), obs: v.obs || '', user: req.user.nome, retrato: _retratoValidacao(v, sol) }]);
 
   // Puxa o prazo de validação pelo modelo do equipamento (planilha de
   // prazos por modelo) — vira um retrato: não muda se a config for editada
@@ -897,27 +965,64 @@ router.post('/validacoes', autenticar, (req, res) => {
 
   db.run(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
     peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
-    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,created_at,created_by,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    fotos,prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,created_at,created_by,updated_at,
+    os_assessoria,tecnico_externo,responsavel_assessoria,solicitacoes)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, seq, v.equip_id || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', 'REPAIR', v.obs || '', eventos,
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
      J(v.fotos || []), prazoDias, prazoTolerancia, prazoComplexidade, dataLimite, dataLimite, v.tecnico_responsavel || '',
-     v.os_numero || '', v.origem || '', now(), req.user.nome, now()]);
+     v.os_numero || '', v.origem || '', now(), req.user.nome, now(),
+     v.os_assessoria || '', v.tecnico_externo || '', v.responsavel_assessoria || '', J(sol)]);
   res.status(201).json({ id, seq_num: seq, prazo: prazo ? { modelo: prazo.modelo, dias: prazoDias, complexidade: prazoComplexidade, dataLimite } : null });
 });
 
 router.put('/validacoes/:id', autenticar, (req, res) => {
   const v = req.body;
+  const atual = db.get('SELECT * FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!atual) return res.status(404).json({ erro: 'Não encontrado' });
+  if (!String(v.equip_serie || '').trim()) return res.status(400).json({ erro: 'Informe o número de série do equipamento' });
+  const solAntes = P(atual.solicitacoes);
+  const sol = _normSolicitacoes(v.solicitacoes !== undefined ? v.solicitacoes : solAntes);
+  Object.assign(v, _espelhoSolicitacoes(sol));
+  // Campos que o formulário não mandou continuam como estão.
+  for (const [c] of _VAL_CAMPOS) if (v[c] === undefined) v[c] = atual[c] || '';
+  // Registro do que mudou (antes não ficava nada: a informação era trocada sem rastro).
+  const mudancas = [];
+  for (const [c, rotulo] of _VAL_CAMPOS) {
+    const a = String(atual[c] || '').trim(), d = String(v[c] || '').trim();
+    if (a !== d) mudancas.push(`${rotulo}: ${a || '—'} → ${d || '—'}`);
+  }
+  mudancas.push(..._diffSolicitacoes(solAntes, sol));
+  const fotosAntes = P(atual.fotos).length, fotosDepois = (v.fotos || []).length;
+  if (fotosAntes !== fotosDepois) mudancas.push(`Fotos: ${fotosAntes} → ${fotosDepois}`);
+  const eventos = P(atual.eventos);
+  if (mudancas.length) eventos.push({ status: 'EDICAO', data: now(), user: req.user.nome, mudancas });
   db.run(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
     peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
     produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,
-    fotos=?,tecnico_responsavel=?,os_numero=?,origem=?,updated_at=? WHERE id=?`,
+    fotos=?,tecnico_responsavel=?,os_numero=?,origem=?,
+    os_assessoria=?,tecnico_externo=?,responsavel_assessoria=?,solicitacoes=?,
+    data_entrada_assessoria=?,data_conclusao=?,eventos=?,updated_at=? WHERE id=?`,
     [v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '', v.obs || '',
      v.peca_solicitada || '', v.data_solicitacao_peca || '', v.data_entrega_peca || '',
      v.produto_solicitado || '', v.data_solicitacao_produto || '', v.data_entrega_produto || '',
-     J(v.fotos || []), v.tecnico_responsavel || '', v.os_numero || '', v.origem || '', now(), req.params.id]);
-  res.json({ ok: true });
+     J(v.fotos || []), v.tecnico_responsavel || '', v.os_numero || '', v.origem || '',
+     v.os_assessoria || '', v.tecnico_externo || '', v.responsavel_assessoria || '', J(sol),
+     v.data_entrada_assessoria || '', v.data_conclusao || '', J(eventos), now(), req.params.id]);
+  res.json({ ok: true, mudancas: mudancas.length });
+});
+
+// Anotação de serviço: o técnico/assessoria registra o que fez.
+router.post('/validacoes/:id/anotacao', autenticar, (req, res) => {
+  const texto = String(req.body.texto || '').trim();
+  if (!texto) return res.status(400).json({ erro: 'Escreva a anotação' });
+  const atual = db.get('SELECT eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  if (!atual) return res.status(404).json({ erro: 'Não encontrado' });
+  const eventos = P(atual.eventos);
+  eventos.push({ status: 'ANOTACAO', data: now(), obs: texto, user: req.user.nome });
+  db.run('UPDATE validacoes_equipamento SET eventos=?,updated_at=? WHERE id=?', [J(eventos), now(), req.params.id]);
+  res.status(201).json({ ok: true });
 });
 
 // Ajusta manualmente a data-limite (e, opcionalmente, a data de entrada) de
@@ -968,14 +1073,20 @@ router.put('/validacoes/:id/ajustar-prazo', autenticar, (req, res) => {
 // Grava o evento (com observação da etapa que está sendo concluída) no
 // histórico, pra manter rastreabilidade completa do processo.
 router.put('/validacoes/:id/avancar', autenticar, (req, res) => {
-  const existente = db.get('SELECT status, eventos FROM validacoes_equipamento WHERE id=?', [req.params.id]);
+  const existente = db.get('SELECT * FROM validacoes_equipamento WHERE id=?', [req.params.id]);
   if (!existente) return res.status(404).json({ erro: 'Não encontrado' });
   const proximo = { REPAIR: 'ASSESSORIA', ASSESSORIA: 'CONCLUIDO' }[existente.status];
   if (!proximo) return res.status(400).json({ erro: 'Este item já está concluído' });
+  const dataReal = req.body.data_real || _hojeBRT();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dataReal)) return res.status(400).json({ erro: 'Data inválida' });
+  const campoData = proximo === 'ASSESSORIA' ? 'data_entrada_assessoria' : 'data_conclusao';
+  existente[campoData] = dataReal;
   let eventos = []; try { eventos = JSON.parse(existente.eventos || '[]'); } catch (e) { eventos = []; }
-  eventos.push({ status: proximo, data: now(), obs: req.body.obs || '', user: req.user.nome });
-  db.run('UPDATE validacoes_equipamento SET status=?,eventos=?,updated_at=? WHERE id=?',
-    [proximo, J(eventos), now(), req.params.id]);
+  // Retrato do que estava preenchido no momento da passagem de etapa.
+  eventos.push({ status: proximo, data: now(), data_real: dataReal, obs: req.body.obs || '', user: req.user.nome,
+    retrato: _retratoValidacao(existente, P(existente.solicitacoes)) });
+  db.run(`UPDATE validacoes_equipamento SET status=?,eventos=?,${campoData}=?,updated_at=? WHERE id=?`,
+    [proximo, J(eventos), dataReal, now(), req.params.id]);
   res.json({ ok: true, status: proximo });
 });
 
@@ -1026,13 +1137,15 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       const tecnico_responsavel = it.tecnico_responsavel !== undefined && it.tecnico_responsavel !== '' ? it.tecnico_responsavel : existente.tecnico_responsavel;
       const os_numero = it.os_numero !== undefined && it.os_numero !== '' ? it.os_numero : existente.os_numero;
       const origem = it.origem !== undefined && it.origem !== '' ? it.origem : existente.origem;
+      // Peça/produto vindos da planilha entram também na lista de solicitações.
+      const solImp = _solicitacoesDaPlanilha(P(existente.solicitacoes), it);
       db.runBatch(`UPDATE validacoes_equipamento SET equip_serie=?,equip_modelo=?,equip_cliente=?,obs=?,
         peca_solicitada=?,data_solicitacao_peca=?,data_entrega_peca=?,
-        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,tecnico_responsavel=?,os_numero=?,origem=?,updated_at=? WHERE id=?`,
+        produto_solicitado=?,data_solicitacao_produto=?,data_entrega_produto=?,tecnico_responsavel=?,os_numero=?,origem=?,solicitacoes=?,updated_at=? WHERE id=?`,
         [equip_serie, equip_modelo, equip_cliente, obs, peca_solicitada, data_solicitacao_peca, data_entrega_peca,
-         produto_solicitado, data_solicitacao_produto, data_entrega_produto, tecnico_responsavel, os_numero, origem, now(), existente.id]);
+         produto_solicitado, data_solicitacao_produto, data_entrega_produto, tecnico_responsavel, os_numero, origem, J(solImp), now(), existente.id]);
       atualizados++;
-    } else if (!seqNum && (it.equip_serie || it.equip_modelo)) {
+    } else if (!seqNum && String(it.equip_serie || '').trim()) {
       seqCounter++;
       const id = uid();
       const eventos = J([{ status: 'REPAIR', data: now(), obs: it.obs || '', user: req.user.nome }]);
@@ -1042,13 +1155,13 @@ router.post('/validacoes/importar', autenticar, isAdmin, (req, res) => {
       db.runBatch(`INSERT INTO validacoes_equipamento(id,seq_num,equip_id,equip_serie,equip_modelo,equip_cliente,status,obs,eventos,
         peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,
         prazo_dias,prazo_tolerancia,prazo_complexidade,data_limite,data_limite_original,tecnico_responsavel,os_numero,origem,
-        created_at,created_by,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        created_at,created_by,updated_at,solicitacoes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [id, seqCounter, '', it.equip_serie || '', it.equip_modelo || '', it.equip_cliente || '', 'REPAIR', it.obs || '', eventos,
          it.peca_solicitada || '', it.data_solicitacao_peca || '', it.data_entrega_peca || '',
          it.produto_solicitado || '', it.data_solicitacao_produto || '', it.data_entrega_produto || '',
          prazoDiasImp, prazoImp?.tolerancia || 0, prazoImp?.complexidade || '', dataLimiteImp, dataLimiteImp, it.tecnico_responsavel || '',
          it.os_numero || '', it.origem || '',
-         now(), req.user.nome, now()]);
+         now(), req.user.nome, now(), J(_solicitacoesDaPlanilha([], it))]);
       criados++;
     } else {
       naoEncontrados++;

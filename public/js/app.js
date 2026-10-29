@@ -4043,7 +4043,6 @@ function renderValidacao(etapa, q) {
   if (!el) return;
   if (q === undefined) q = document.querySelector('#page-validacao-' + etapa + ' .search-input')?.value || '';
   const statusPrincipal = VALIDACAO_STATUS_MAP[etapa];
-  const mostrarConcluidos = document.getElementById('validacao-' + etapa + '-mostrar-concluidos')?.checked;
 
   const todas = db.validacoes || [];
   // Badges: sempre a partir da lista completa (só é precisa quando não há
@@ -4055,8 +4054,8 @@ function renderValidacao(etapa, q) {
     if (badgeAssessoria) badgeAssessoria.textContent = todas.filter(v => v.status === 'ASSESSORIA').length || '';
   }
 
-  let lista = todas.filter(v => v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'));
-  if (q) lista = lista.filter(v => buscaInclui(v.equip_serie, q) || buscaInclui(v.equip_modelo, q) || buscaInclui(v.equip_cliente, q));
+  let lista = todas.filter(v => v.status === statusPrincipal);
+  if (q) lista = lista.filter(v => [v.equip_serie, v.equip_modelo, v.equip_cliente, v.origem, v.os_numero, v.os_assessoria].some(c => buscaInclui(c, q)));
   lista = [...lista].sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
 
   if (!lista.length) {
@@ -4087,36 +4086,36 @@ function renderValidacao(etapa, q) {
           }
           acoes += `<button class="btn btn-danger btn-sm" onclick="excluirValidacao('${v.id}')" title="Excluir">✕</button>`;
         }
-        // Indicador de peça (Repair) ou produto (Assessoria/Concluído) pendente,
-        // com aviso visual se o prazo de entrega já passou.
-        const usaProduto = v.status === 'ASSESSORIA' || v.status === 'CONCLUIDO';
-        const nomeItem = usaProduto ? v.produto_solicitado : v.peca_solicitada;
-        const dataEntregaItem = usaProduto ? v.data_entrega_produto : v.data_entrega_peca;
+        // Peças/produtos ainda pendentes (situação "Solicitado"), com aviso se a entrega já passou.
+        const pend = _solPendentes(v);
         let colPecaProduto = '<span style="color:var(--text3)">—</span>';
-        if (nomeItem) {
-          const hojeStr = new Date().toISOString().slice(0, 10);
-          const atrasado = dataEntregaItem && dataEntregaItem < hojeStr;
-          colPecaProduto = `<div style="font-size:11px">${nomeItem}</div>` +
-            (dataEntregaItem ? `<div style="font-size:10px;color:${atrasado ? 'var(--red)' : 'var(--text3)'}">${atrasado ? '⚠ ' : ''}entrega: ${new Date(dataEntregaItem + 'T00:00:00').toLocaleDateString('pt-BR')}</div>` : '');
+        if (pend.length) {
+          const hojeStr = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+          colPecaProduto = pend.slice(0, 3).map(x => {
+            const atrasado = x.data_entrega && x.data_entrega < hojeStr;
+            return `<div style="font-size:11px">${x.tipo === 'PRODUTO' ? '📦' : '🔧'} ${_escV(x.item)}${x.qtd > 1 ? ' ×' + x.qtd : ''}</div>` +
+              (x.data_entrega ? `<div style="font-size:10px;color:${atrasado ? 'var(--red)' : 'var(--text3)'}">${atrasado ? '⚠ ' : ''}entrega: ${_dataBR(x.data_entrega)}</div>` : '');
+          }).join('') + (pend.length > 3 ? `<div style="font-size:10px;color:var(--text3)">+${pend.length - 3}</div>` : '');
         }
         const urg = calcularUrgenciaPrazo(v.data_limite, v.status);
         const tecInfo = VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel);
         return `<tr>
           <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
-          <td class="mono" style="font-size:11px;color:var(--accent)">${v.equip_serie || '—'}</td>
-          <td style="font-size:12px">${v.equip_modelo || '—'}</td>
-          <td style="font-size:12px">${v.equip_cliente || '—'}</td>
+          <td class="mono" style="font-size:11px;color:var(--accent)">${_escV(v.equip_serie || '—')}</td>
+          <td style="font-size:12px">${_escV(v.equip_modelo || '—')}</td>
+          <td style="font-size:12px">${_escV(v.equip_cliente || '—')}</td>
           <td style="font-size:11px">
-            ${v.os_numero ? `<div>${ico('clipboard',13)} ${v.os_numero}</div>` : ''}
-            ${v.origem ? `<div style="color:var(--text3)">${ico('box',13)} ${v.origem}</div>` : ''}
-            ${!v.os_numero && !v.origem ? '<span style="color:var(--text3)">—</span>' : ''}
+            ${v.os_numero ? `<div>${ico('clipboard',13)} Téc.: ${_escV(v.os_numero)}</div>` : ''}
+            ${v.os_assessoria ? `<div>${ico('clipboard',13)} Ass.: ${_escV(v.os_assessoria)}</div>` : ''}
+            ${v.origem ? `<div style="color:var(--text3)">${ico('box',13)} ${_escV(v.origem)}</div>` : ''}
+            ${!v.os_numero && !v.os_assessoria && !v.origem ? '<span style="color:var(--text3)">—</span>' : ''}
           </td>
-          <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${tecInfo.label}` : '<span style="color:var(--text3)">—</span>'}</td>
+          <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${_escV(_tecnicoValidacaoTexto(v))}` : '<span style="color:var(--text3)">—</span>'}${v.responsavel_assessoria ? `<div style="font-size:10px;color:var(--text3)">Ass.: ${_escV(v.responsavel_assessoria)}</div>` : ''}</td>
           <td class="mono">${dataEntrada}</td>
           <td><span class="badge ${st.badge}">${st.label}</span></td>
           <td>${urg ? `<div style="font-size:11px;font-weight:600;color:${urg.cor}">${urg.icone} ${urg.label}</div><div style="font-size:10px;color:var(--text3)">${new Date(v.data_limite+'T00:00:00').toLocaleDateString('pt-BR')}${(v.data_limite_original && v.data_limite !== v.data_limite_original) ? ' <span title="Prazo ajustado (original: '+new Date(v.data_limite_original+'T00:00:00').toLocaleDateString('pt-BR')+')">⚠</span>' : ''}</div>` : '<span style="color:var(--text3)">—</span>'}</td>
           <td>${colPecaProduto}</td>
-          <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.obs || ''}</td>
+          <td style="font-size:11px;color:var(--text3);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_escV(v.obs || '')}">${_escV(v.obs || '')}</td>
           <td style="text-align:right;white-space:nowrap">${acoes}</td>
         </tr>`;
       }).join('')}
@@ -4259,7 +4258,7 @@ function renderAgendaCalendario() {
     </div>`;
 }
 
-// ── Modal Novo/Editar equipamento em validação ──
+
 let _validacaoEquipSel = null;
 // ── Helpers genéricos de foto (compressão client-side + thumbnails + lightbox) ──
 // Usados em Validação, Despacho, e reaproveitados nas ideias do mobile.
@@ -4401,9 +4400,22 @@ function removerFotoValidacao(i) {
   renderFotosThumbs('validacao-fotos-lista', _validacaoFotos, 'removerFotoValidacao');
 }
 
+// ── Modal Novo/Editar equipamento em validação ──
+let _validacaoSol = []; // lista de peças/produtos em edição no formulário
+
+function _escV(s) { return _htmlAttr(s == null ? '' : s); }
+function _dataBR(iso) { return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR') : '—'; }
+function _tecnicoValidacaoTexto(v) {
+  const t = VALIDACAO_TECNICOS.find(x => x.valor === v.tecnico_responsavel);
+  if (!t) return '';
+  return t.valor === 'TEC_EXTERNO' && v.tecnico_externo ? `${t.label}: ${v.tecnico_externo}` : t.label;
+}
+function _solPendentes(v) { return (v.solicitacoes || []).filter(x => x.situacao === 'SOLICITADO'); }
+
 function abrirModalValidacao(id) {
   const v = id ? (db.validacoes || []).find(x => x.id === id) : null;
   _validacaoEquipSel = v ? { id: v.equip_id || '', serie: v.equip_serie || '', modelo: v.equip_modelo || '', cliente: v.equip_cliente || '' } : null;
+  _validacaoSol = JSON.parse(JSON.stringify((v && v.solicitacoes) || []));
   _validacaoFotos = [];
   _validacaoFotosCarregadas = !(v && v.fotos_qtd > 0);
   if (v && v.fotos_qtd > 0) {
@@ -4413,6 +4425,7 @@ function abrirModalValidacao(id) {
       renderFotosThumbs('validacao-fotos-lista', _validacaoFotos, 'removerFotoValidacao');
     }).catch(() => { _validacaoFotosCarregadas = true; });
   }
+  const etapa = v ? v.status : 'REPAIR';
 
   let overlay = document.getElementById('modal-validacao-overlay');
   if (!overlay) {
@@ -4424,17 +4437,17 @@ function abrirModalValidacao(id) {
   }
 
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:100%">
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:620px;width:100%;max-height:92vh;display:flex;flex-direction:column">
       <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <span style="font-weight:700;font-size:15px">${v ? 'Editar' : 'Novo'} Equipamento em Validação</span>
+        <span style="font-weight:700;font-size:15px">${v ? 'Editar' : 'Novo'} Equipamento em Validação${v ? ` <span class="badge ${VALIDACAO_ETAPA_LABEL[v.status]?.badge || ''}" style="margin-left:6px">${VALIDACAO_ETAPA_LABEL[v.status]?.label || ''}</span>` : ''}</span>
         <button onclick="document.getElementById('modal-validacao-overlay').remove()"
           style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
-      <div style="padding:20px">
+      <div style="padding:20px;overflow-y:auto">
         <div class="form-group" style="position:relative">
-          <label class="form-label">Equipamento (Nº de Série)</label>
+          <label class="form-label">Equipamento (Nº de Série) <span style="color:var(--red)">*</span></label>
           <input class="form-input" id="validacao-equip-search" placeholder="Buscar por série, modelo ou cliente..." autocomplete="off"
-            value="${v?.equip_serie || ''}"
+            value="${_escV(v?.equip_serie)}"
             oninput="sugerirEquipValidacao(this.value)" onfocus="sugerirEquipValidacao(this.value)"
             onblur="setTimeout(()=>{const dd=document.getElementById('validacao-equip-dropdown'); if(dd) dd.style.display='none';},200)">
           <div id="validacao-equip-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:9999;
@@ -4443,76 +4456,82 @@ function abrirModalValidacao(id) {
         </div>
         <div class="form-group">
           <label class="form-label">Modelo</label>
-          <input class="form-input" id="validacao-modelo" value="${v?.equip_modelo || ''}" placeholder="Preenche sozinho ao selecionar, ou digite"
+          <input class="form-input" id="validacao-modelo" value="${_escV(v?.equip_modelo)}" placeholder="Preenche sozinho ao selecionar, ou digite"
             ${v ? '' : 'oninput="atualizarPreviewPrazoValidacao()"'}>
           <div id="validacao-prazo-preview" style="font-size:11px;margin-top:5px">
-            ${v && v.data_limite ? `<span style="color:var(--accent);font-weight:600">📅 Prazo aplicado: ${v.prazo_dias}d (${v.prazo_complexidade || '—'}) · limite: ${new Date(v.data_limite + 'T00:00:00').toLocaleDateString('pt-BR')}</span>`
+            ${v && v.data_limite ? `<span style="color:var(--accent);font-weight:600">📅 Prazo aplicado: ${v.prazo_dias}d (${v.prazo_complexidade || '—'}) · limite: ${_dataBR(v.data_limite)}</span>`
               : (v ? '<span style="color:var(--text3)">Nenhum prazo configurado pra esse modelo quando entrou no Repair</span>' : '')}
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Cliente</label>
-          <input class="form-input" id="validacao-cliente" value="${v?.equip_cliente || ''}" placeholder="Preenche sozinho ao selecionar, ou digite">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Técnico Responsável</label>
-          <select class="form-select" id="validacao-tecnico">
-            <option value="">— Não definido —</option>
-            ${VALIDACAO_TECNICOS.map(t => `<option value="${t.valor}" ${v?.tecnico_responsavel === t.valor ? 'selected' : ''}>${t.label}</option>`).join('')}
-          </select>
-        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div class="form-group">
-            <label class="form-label">📋 Nº da OS</label>
-            <input class="form-input" id="validacao-os-numero" value="${v?.os_numero || ''}" placeholder="Ex.: 4567">
+            <label class="form-label">Cliente (destinatário)</label>
+            <input class="form-input" id="validacao-cliente" value="${_escV(v?.equip_cliente)}" placeholder="Para quem a máquina vai">
           </div>
           <div class="form-group">
             <label class="form-label">📦 Origem</label>
-            <input class="form-input" id="validacao-origem" value="${v?.origem || ''}" placeholder="Ex.: Cliente X, Estoque SP">
+            <input class="form-input" id="validacao-origem" value="${_escV(v?.origem)}" autocomplete="off" placeholder="Digite de onde veio">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label class="form-label">Técnico Responsável</label>
+            <select class="form-select" id="validacao-tecnico" onchange="document.getElementById('validacao-tec-externo-wrap').style.display = this.value==='TEC_EXTERNO' ? '' : 'none'">
+              <option value="">— Não definido —</option>
+              ${VALIDACAO_TECNICOS.map(t => `<option value="${t.valor}" ${v?.tecnico_responsavel === t.valor ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group" id="validacao-tec-externo-wrap" style="display:${v?.tecnico_responsavel === 'TEC_EXTERNO' ? '' : 'none'}">
+            <label class="form-label">Nome do técnico externo</label>
+            <input class="form-input" id="validacao-tec-externo" value="${_escV(v?.tecnico_externo)}" autocomplete="off" placeholder="Ex.: Ney">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div class="form-group">
+            <label class="form-label">📋 OS técnica</label>
+            <input class="form-input" id="validacao-os-numero" value="${_escV(v?.os_numero)}" placeholder="Ex.: 9338">
+          </div>
+          <div class="form-group">
+            <label class="form-label">📋 OS assessoria</label>
+            <input class="form-input" id="validacao-os-assessoria" value="${_escV(v?.os_assessoria)}" placeholder="Ex.: 9336">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Resp. assessoria</label>
+            <input class="form-input" id="validacao-resp-assessoria" value="${_escV(v?.responsavel_assessoria)}" autocomplete="off" placeholder="Ex.: Mustafa">
           </div>
         </div>
         <div class="form-group">
           <label class="form-label">Observação</label>
-          <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${v?.obs || ''}</textarea>
+          <textarea class="form-textarea" id="validacao-obs" style="min-height:60px">${_escV(v?.obs)}</textarea>
         </div>
 
-        <div style="margin:16px 0 12px;padding-top:12px;border-top:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">SOLICITAÇÃO DE PEÇA (Repair)</div>
-          <div class="form-group">
-            <label class="form-label">Peça Solicitada</label>
-            <input class="form-input" id="validacao-peca-solicitada" value="${v?.peca_solicitada || ''}" placeholder="Deixe em branco se não precisou de peça">
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        ${v ? `<div style="margin:12px 0;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">📅 DATAS REAIS DO PROCESSO</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
             <div class="form-group">
-              <label class="form-label">Data da Solicitação</label>
-              <input class="form-input" type="date" id="validacao-data-solic-peca" value="${v?.data_solicitacao_peca || ''}">
+              <label class="form-label">Entrada no Repair</label>
+              <input class="form-input" value="${v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—'}" disabled title="Ajuste pelo botão de calendário na tabela">
             </div>
             <div class="form-group">
-              <label class="form-label">Data de Entrega (prazo)</label>
-              <input class="form-input" type="date" id="validacao-data-entrega-peca" value="${v?.data_entrega_peca || ''}">
+              <label class="form-label">Entrada na Assessoria</label>
+              <input class="form-input" type="date" id="validacao-data-assessoria" value="${v.data_entrada_assessoria || ''}" ${v.status === 'REPAIR' ? 'disabled' : ''}>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Conclusão</label>
+              <input class="form-input" type="date" id="validacao-data-conclusao" value="${v.data_conclusao || ''}" ${v.status !== 'CONCLUIDO' ? 'disabled' : ''}>
             </div>
           </div>
+        </div>` : ''}
+
+        <div style="margin:12px 0;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--accent)">PEÇAS E PRODUTOS SOLICITADOS</span>
+            <button class="btn btn-ghost btn-sm" onclick="adicionarSolicitacaoValidacao('${etapa}')">⊕ Adicionar</button>
+          </div>
+          <div id="validacao-sol-lista"></div>
         </div>
 
-        <div id="validacao-produto-wrap" style="margin:16px 0 12px;padding-top:12px;border-top:1px solid var(--border);display:${(v && (v.status === 'ASSESSORIA' || v.status === 'CONCLUIDO')) ? '' : 'none'}">
-          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">SOLICITAÇÃO DE PRODUTO (Assessoria)</div>
-          <div class="form-group">
-            <label class="form-label">Produto Solicitado</label>
-            <input class="form-input" id="validacao-produto-solicitado" value="${v?.produto_solicitado || ''}" placeholder="Deixe em branco se não precisou de produto">
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div class="form-group">
-              <label class="form-label">Data da Solicitação</label>
-              <input class="form-input" type="date" id="validacao-data-solic-produto" value="${v?.data_solicitacao_produto || ''}">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Data de Entrega (prazo)</label>
-              <input class="form-input" type="date" id="validacao-data-entrega-produto" value="${v?.data_entrega_produto || ''}">
-            </div>
-          </div>
-        </div>
-
-        <div style="margin:16px 0 4px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="margin:12px 0 4px;padding-top:12px;border-top:1px solid var(--border)">
           <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px">📷 FOTOS DO EQUIPAMENTO</div>
           <div id="validacao-fotos-lista" style="margin-bottom:8px">${_validacaoFotos.length ? '' : '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma foto anexada</div>'}</div>
           <input type="file" accept="image/*" multiple id="validacao-fotos-input" onchange="selecionarFotosValidacao(this)">
@@ -4524,6 +4543,50 @@ function abrirModalValidacao(id) {
         <button class="btn btn-primary" onclick="salvarValidacao('${id || ''}')">✓ Salvar</button>
       </div>
     </div>`;
+  renderSolicitacoesValidacao();
+}
+
+// Lê o que está digitado na lista antes de redesenhar (não perde o que foi escrito).
+function _lerSolicitacoesValidacao() {
+  document.querySelectorAll('#validacao-sol-lista [data-sol]').forEach(row => {
+    const s = _validacaoSol[+row.dataset.sol]; if (!s) return;
+    row.querySelectorAll('[data-campo]').forEach(inp => { s[inp.dataset.campo] = inp.value; });
+  });
+}
+function adicionarSolicitacaoValidacao(etapa) {
+  _lerSolicitacoesValidacao();
+  const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  _validacaoSol.push({ id: 'n' + Date.now(), tipo: etapa === 'REPAIR' ? 'PECA' : 'PRODUTO', etapa: etapa === 'REPAIR' ? 'REPAIR' : 'ASSESSORIA',
+    item: '', qtd: 1, data_solicitacao: hoje, data_entrega: '', situacao: 'SOLICITADO' });
+  renderSolicitacoesValidacao();
+  const ult = document.querySelectorAll('#validacao-sol-lista [data-campo="item"]');
+  if (ult.length) ult[ult.length - 1].focus();
+}
+function removerSolicitacaoValidacao(i) {
+  _lerSolicitacoesValidacao();
+  _validacaoSol.splice(i, 1);
+  renderSolicitacoesValidacao();
+}
+function renderSolicitacoesValidacao() {
+  const el = document.getElementById('validacao-sol-lista');
+  if (!el) return;
+  if (!_validacaoSol.length) { el.innerHTML = '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma peça ou produto solicitado</div>'; return; }
+  el.innerHTML = _validacaoSol.map((s, i) => `
+    <div data-sol="${i}" style="border:1px solid var(--border);border-radius:var(--radius);padding:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:110px 1fr 60px 28px;gap:6px;margin-bottom:6px">
+        <select class="form-select" data-campo="tipo"><option value="PECA" ${s.tipo === 'PECA' ? 'selected' : ''}>Peça</option><option value="PRODUTO" ${s.tipo === 'PRODUTO' ? 'selected' : ''}>Produto</option></select>
+        <input class="form-input" data-campo="item" value="${_escV(s.item)}" placeholder="O que foi solicitado" autocomplete="off">
+        <input class="form-input" data-campo="qtd" type="number" min="1" value="${s.qtd || 1}" title="Quantidade">
+        <button class="btn btn-danger btn-sm" onclick="removerSolicitacaoValidacao(${i})" title="Remover">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <label style="font-size:10px;color:var(--text3)">Solicitada em<input class="form-input" type="date" data-campo="data_solicitacao" value="${s.data_solicitacao || ''}"></label>
+        <label style="font-size:10px;color:var(--text3)">Entrega (prazo/real)<input class="form-input" type="date" data-campo="data_entrega" value="${s.data_entrega || ''}"></label>
+        <label style="font-size:10px;color:var(--text3)">Situação<select class="form-select" data-campo="situacao">
+          ${['SOLICITADO', 'ENTREGUE', 'CANCELADO'].map(o => `<option value="${o}" ${s.situacao === o ? 'selected' : ''}>${{ SOLICITADO: 'Solicitado', ENTREGUE: 'Entregue', CANCELADO: 'Cancelado' }[o]}</option>`).join('')}
+        </select></label>
+      </div>
+    </div>`).join('');
 }
 
 function sugerirEquipValidacao(q) {
@@ -4593,25 +4656,31 @@ function atualizarPreviewPrazoValidacao() {
 
 function salvarValidacao(id) {
   if (!_validacaoFotosCarregadas) { toast('Aguarde o carregamento das fotos e tente salvar novamente', 'error'); return; }
+  _lerSolicitacoesValidacao();
   const serie = document.getElementById('validacao-equip-search')?.value.trim() || '';
   const modelo = document.getElementById('validacao-modelo')?.value.trim() || '';
   const cliente = document.getElementById('validacao-cliente')?.value.trim() || '';
   const obs = document.getElementById('validacao-obs')?.value.trim() || '';
-  if (!serie && !modelo) { toast('Informe ao menos a série ou o modelo', 'error'); return; }
+  if (!serie) { toast('Informe o número de série do equipamento', 'error'); document.getElementById('validacao-equip-search')?.focus(); return; }
+  const semItem = _validacaoSol.findIndex(s => !String(s.item || '').trim());
+  if (semItem >= 0) { toast('Preencha o que foi solicitado (ou remova a linha vazia)', 'error'); return; }
+  const tecnico = document.getElementById('validacao-tecnico')?.value || '';
   const payload = {
     equip_id: (_validacaoEquipSel?.serie === serie) ? (_validacaoEquipSel?.id || '') : '',
     equip_serie: serie, equip_modelo: modelo, equip_cliente: cliente, obs,
-    peca_solicitada: document.getElementById('validacao-peca-solicitada')?.value.trim() || '',
-    data_solicitacao_peca: document.getElementById('validacao-data-solic-peca')?.value || '',
-    data_entrega_peca: document.getElementById('validacao-data-entrega-peca')?.value || '',
-    produto_solicitado: document.getElementById('validacao-produto-solicitado')?.value.trim() || '',
-    data_solicitacao_produto: document.getElementById('validacao-data-solic-produto')?.value || '',
-    data_entrega_produto: document.getElementById('validacao-data-entrega-produto')?.value || '',
-    tecnico_responsavel: document.getElementById('validacao-tecnico')?.value || '',
+    tecnico_responsavel: tecnico,
+    tecnico_externo: tecnico === 'TEC_EXTERNO' ? (document.getElementById('validacao-tec-externo')?.value.trim() || '') : '',
     os_numero: document.getElementById('validacao-os-numero')?.value.trim() || '',
+    os_assessoria: document.getElementById('validacao-os-assessoria')?.value.trim() || '',
+    responsavel_assessoria: document.getElementById('validacao-resp-assessoria')?.value.trim() || '',
     origem: document.getElementById('validacao-origem')?.value.trim() || '',
+    solicitacoes: _validacaoSol.map(s => ({ ...s, qtd: parseInt(s.qtd, 10) || 1 })),
     fotos: _validacaoFotos,
   };
+  const dA = document.getElementById('validacao-data-assessoria');
+  const dC = document.getElementById('validacao-data-conclusao');
+  if (dA && !dA.disabled) payload.data_entrada_assessoria = dA.value || '';
+  if (dC && !dC.disabled) payload.data_conclusao = dC.value || '';
   const prom = id ? API.put('/validacoes/' + id, payload) : API.post('/validacoes', payload);
   prom.then(res => {
     if (!id && res?.prazo) {
@@ -4620,9 +4689,14 @@ function salvarValidacao(id) {
       toast(id ? 'Atualizado' : 'Equipamento adicionado ao Repair (sem prazo configurado pra esse modelo)', id ? 'success' : 'info');
     }
     document.getElementById('modal-validacao-overlay')?.remove();
-    loadAndRenderValidacao('repair');
-    loadAndRenderValidacao('assessoria');
+    _recarregarTelasValidacao();
   }).catch(err => toast(err.message, 'error'));
+}
+
+function _recarregarTelasValidacao() {
+  loadAndRenderValidacao('repair');
+  loadAndRenderValidacao('assessoria');
+  if (document.getElementById('page-validacao-concluidas')?.classList.contains('active')) loadAndRenderValidacaoConcluidas();
 }
 
 // ── Avançar / Voltar etapa ──
@@ -4730,6 +4804,11 @@ function abrirModalAvancarValidacao(id, acao) {
       </div>
       <div style="padding:20px">
         <div style="font-size:12px;color:var(--text3);margin-bottom:10px">${v.equip_modelo || ''} · S/N: ${v.equip_serie || '—'}</div>
+        ${acao !== 'voltar' ? `<div class="form-group">
+          <label class="form-label">Data real ${v.status === 'REPAIR' ? 'de entrada na Assessoria' : 'de conclusão'}</label>
+          <input class="form-input" type="date" id="validacao-avancar-data" value="${new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10)}">
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Se o trabalho aconteceu em outro dia, ajuste aqui.</div>
+        </div>` : ''}
         <div class="form-group">
           <label class="form-label">Observação ${acao === 'voltar' ? '(motivo do retorno)' : '(opcional)'}</label>
           <textarea class="form-textarea" id="validacao-avancar-obs" style="min-height:60px"></textarea>
@@ -4744,12 +4823,12 @@ function abrirModalAvancarValidacao(id, acao) {
 
 function confirmarAvancarValidacao(id, acao) {
   const obs = document.getElementById('validacao-avancar-obs')?.value.trim() || '';
-  API.put('/validacoes/' + id + '/' + acao, { obs })
+  const data_real = document.getElementById('validacao-avancar-data')?.value || '';
+  API.put('/validacoes/' + id + '/' + acao, acao === 'voltar' ? { obs } : { obs, data_real })
     .then(res => {
       toast('Movido para ' + (VALIDACAO_ETAPA_LABEL[res.status]?.label || res.status));
       document.getElementById('modal-validacao-avancar-overlay')?.remove();
-      loadAndRenderValidacao('repair');
-      loadAndRenderValidacao('assessoria');
+      _recarregarTelasValidacao();
     })
     .catch(err => toast(err.message, 'error'));
 }
@@ -4790,10 +4869,35 @@ function verFotosValidacao(id) {
   });
 }
 
-function verEventosValidacao(id) {
+// ── Histórico completo do equipamento na validação ──
+const _VAL_EVENTO_LABEL = {
+  EDICAO: { label: 'Alteração', badge: 'badge-gray' },
+  ANOTACAO: { label: 'Anotação', badge: 'badge-purple' },
+  PRAZO_AJUSTADO: { label: 'Prazo ajustado', badge: 'badge-gray' },
+  ENTRADA_AJUSTADA: { label: 'Entrada ajustada', badge: 'badge-gray' },
+};
+let _valMovsCache = null;
+
+function _linhaInfoVal(rotulo, valor) {
+  return `<div style="padding:4px 0"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">${rotulo}</div>
+    <div style="font-size:12px;color:var(--text);white-space:pre-wrap">${valor ? _escV(valor) : '<span style="color:var(--text3)">—</span>'}</div></div>`;
+}
+function _tabelaSolVal(lista) {
+  if (!lista || !lista.length) return '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma peça ou produto solicitado</div>';
+  const hoje = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  const sit = { SOLICITADO: 'badge-orange', ENTREGUE: 'badge-green', CANCELADO: 'badge-gray' };
+  return `<table class="data-table compact" style="font-size:11px"><thead><tr><th>Tipo</th><th>Item</th><th>Qtd</th><th>Solicitada</th><th>Entrega</th><th>Situação</th></tr></thead><tbody>
+    ${lista.map(s => {
+      const atrasado = s.situacao === 'SOLICITADO' && s.data_entrega && s.data_entrega < hoje;
+      return `<tr><td>${s.tipo === 'PRODUTO' ? 'Produto' : 'Peça'}</td><td>${_escV(s.item)}</td><td class="mono">${s.qtd || 1}</td>
+        <td class="mono">${_dataBR(s.data_solicitacao)}</td><td class="mono" style="${atrasado ? 'color:var(--red)' : ''}">${atrasado ? '⚠ ' : ''}${_dataBR(s.data_entrega)}</td>
+        <td><span class="badge ${sit[s.situacao] || 'badge-gray'}">${{ SOLICITADO: 'Solicitado', ENTREGUE: 'Entregue', CANCELADO: 'Cancelado' }[s.situacao] || s.situacao}</span></td></tr>`;
+    }).join('')}</tbody></table>`;
+}
+
+async function verEventosValidacao(id) {
   const v = (db.validacoes || []).find(x => x.id === id);
   if (!v) return;
-  const eventos = v.eventos || [];
   let overlay = document.getElementById('modal-validacao-eventos-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -4802,27 +4906,159 @@ function verEventosValidacao(id) {
     overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
     document.body.appendChild(overlay);
   }
+  const eventos = v.eventos || [];
+  const st = VALIDACAO_ETAPA_LABEL[v.status] || {};
+  const serieN = _normBusca(v.equip_serie).replace(/[^a-z0-9]/g, '');
+  const outras = serieN ? (db.validacoes || []).filter(x => x.id !== v.id && _normBusca(x.equip_serie).replace(/[^a-z0-9]/g, '') === serieN) : [];
+
+  const linhaTempo = eventos.length ? [...eventos].reverse().map(ev => {
+    const lab = VALIDACAO_ETAPA_LABEL[ev.status] || _VAL_EVENTO_LABEL[ev.status] || { label: ev.status, badge: 'badge-gray' };
+    const dataReal = ev.data_real ? ` · data real: ${_dataBR(ev.data_real)}` : '';
+    const mud = Array.isArray(ev.mudancas) && ev.mudancas.length
+      ? `<ul style="margin:6px 0 0 16px;padding:0;font-size:11px;color:var(--text2)">${ev.mudancas.map(m => `<li>${_escV(m)}</li>`).join('')}</ul>` : '';
+    return `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span class="badge ${lab.badge || 'badge-gray'}">${lab.label}</span>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">${new Date(ev.data).toLocaleString('pt-BR')}${dataReal}</span>
+      </div>
+      ${ev.obs ? `<div style="font-size:12px;color:var(--text2);margin-top:6px;white-space:pre-wrap">${_escV(ev.obs)}</div>` : ''}
+      ${mud}
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${_escV(ev.user || '')}</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--text3);font-size:12px">Nenhum evento registrado</div>';
+
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:440px;width:100%;max-height:80vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)">
-        <span style="font-weight:700;font-size:15px">Histórico — ${v.equip_modelo || v.equip_serie || ''}</span>
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);max-width:820px;width:100%;max-height:92vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1">
+        <span style="font-weight:700;font-size:15px">Histórico — Nº ${v.seq_num || '—'} · ${_escV(v.equip_modelo || v.equip_serie || '')} <span class="badge ${st.badge || ''}" style="margin-left:6px">${st.label || v.status}</span></span>
         <button onclick="document.getElementById('modal-validacao-eventos-overlay').remove()"
           style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
       </div>
-      <div style="padding:20px">
-        ${eventos.length ? eventos.map(ev => {
-          const st = VALIDACAO_ETAPA_LABEL[ev.status] || {};
-          return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span class="badge ${st.badge || 'badge-gray'}">${st.label || ev.status}</span>
-              <span style="font-family:var(--mono);font-size:10px;color:var(--text3)">${new Date(ev.data).toLocaleString('pt-BR')}</span>
-            </div>
-            ${ev.obs ? `<div style="font-size:12px;color:var(--text2);margin-top:6px;font-style:italic">"${ev.obs}"</div>` : ''}
-            <div style="font-size:10px;color:var(--text3);margin-top:4px">${ev.user || ''}</div>
-          </div>`;
-        }).join('') : '<div style="color:var(--text3);font-size:12px">Nenhum evento registrado</div>'}
+      <div style="padding:16px 20px">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">DADOS DO EQUIPAMENTO</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 16px;margin-bottom:14px">
+          ${_linhaInfoVal('Nº de série', v.equip_serie)}
+          ${_linhaInfoVal('Modelo', v.equip_modelo)}
+          ${_linhaInfoVal('Cliente (destinatário)', v.equip_cliente)}
+          ${_linhaInfoVal('Origem', v.origem)}
+          ${_linhaInfoVal('Técnico', _tecnicoValidacaoTexto(v))}
+          ${_linhaInfoVal('Responsável da assessoria', v.responsavel_assessoria)}
+          ${_linhaInfoVal('OS técnica', v.os_numero)}
+          ${_linhaInfoVal('OS assessoria', v.os_assessoria)}
+          ${_linhaInfoVal('Prazo', v.data_limite ? `${v.prazo_dias}d (${v.prazo_complexidade || '—'}) · limite ${_dataBR(v.data_limite)}` : '')}
+        </div>
+        ${_linhaInfoVal('Observação', v.obs)}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:14px 0 6px">DATAS DO PROCESSO</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px 16px">
+          ${_linhaInfoVal('Entrada no Repair', v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '')}
+          ${_linhaInfoVal('Entrada na Assessoria', v.data_entrada_assessoria ? _dataBR(v.data_entrada_assessoria) : '')}
+          ${_linhaInfoVal('Conclusão', v.data_conclusao ? _dataBR(v.data_conclusao) : '')}
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:14px 0 6px">PEÇAS E PRODUTOS SOLICITADOS</div>
+        <div style="overflow-x:auto">${_tabelaSolVal(v.solicitacoes)}</div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">ADICIONAR ANOTAÇÃO</div>
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <textarea class="form-textarea" id="validacao-anotacao-txt" style="min-height:46px;flex:1" placeholder="O que foi feito neste equipamento (ex.: trocada a fonte, calibrado o sensor)"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="salvarAnotacaoValidacao('${v.id}')">Salvar</button>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 2px">LINHA DO TEMPO</div>
+        ${linhaTempo}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">OUTRAS PASSAGENS DESTA SÉRIE PELA VALIDAÇÃO</div>
+        ${outras.length ? outras.map(o => `<div style="font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="verEventosValidacao('${o.id}')">
+            Nº ${o.seq_num || '—'} · entrada ${o.created_at ? new Date(o.created_at).toLocaleDateString('pt-BR') : '—'} · <span class="badge ${VALIDACAO_ETAPA_LABEL[o.status]?.badge || ''}">${VALIDACAO_ETAPA_LABEL[o.status]?.label || o.status}</span> · ${_escV(o.equip_cliente || '')}</div>`).join('')
+          : '<div style="font-size:11px;color:var(--text3);font-style:italic">Nenhuma outra passagem</div>'}
+
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin:16px 0 6px">MOVIMENTAÇÕES DE PEÇAS PARA ESTA SÉRIE</div>
+        <div id="validacao-hist-movs" style="font-size:11px;color:var(--text3)">Carregando…</div>
       </div>
     </div>`;
+
+  try {
+    if (!_valMovsCache) _valMovsCache = await API.movimentacoes();
+    const movs = serieN ? _valMovsCache.filter(m => _normBusca(m.equipSerie).replace(/[^a-z0-9]/g, '') === serieN) : [];
+    const alvo = document.getElementById('validacao-hist-movs');
+    if (alvo) alvo.innerHTML = movs.length
+      ? `<table class="data-table compact" style="font-size:11px"><thead><tr><th>Data</th><th>Peça</th><th>Qtd</th><th>Status</th><th>Técnico</th></tr></thead><tbody>
+          ${movs.map(m => `<tr><td class="mono">${(m.created_at || m.createdAt) ? new Date(m.created_at || m.createdAt).toLocaleDateString('pt-BR') : '—'}</td><td>${_escV((m.pecaCodigo ? m.pecaCodigo + ' — ' : '') + (m.pecaNome || ''))}</td><td class="mono">${m.qtd || 1}</td><td>${_escV(m.status || '')}</td><td>${_escV(m.tecnico || '')}</td></tr>`).join('')}
+        </tbody></table>`
+      : '<span style="font-style:italic">Nenhuma movimentação de peça para esta série</span>';
+  } catch (e) {
+    const alvo = document.getElementById('validacao-hist-movs'); if (alvo) alvo.textContent = 'Não foi possível carregar as movimentações.';
+  }
+}
+
+function salvarAnotacaoValidacao(id) {
+  const txt = document.getElementById('validacao-anotacao-txt')?.value.trim() || '';
+  if (!txt) { toast('Escreva a anotação', 'error'); return; }
+  API.post('/validacoes/' + id + '/anotacao', { texto: txt })
+    .then(async () => {
+      toast('Anotação registrada', 'success');
+      db.validacoes = await API.get('/validacoes');
+      verEventosValidacao(id);
+      _recarregarTelasValidacao();
+    })
+    .catch(err => toast(err.message, 'error'));
+}
+
+// ── Tela: Validações Concluídas ──
+async function loadAndRenderValidacaoConcluidas() {
+  setSyncing(true);
+  try { db.validacoes = await API.get('/validacoes'); _valMovsCache = null; renderValidacaoConcluidas(); }
+  catch (e) { toast(e.message, 'error'); }
+  finally { setSyncing(false); }
+}
+
+function renderValidacaoConcluidas() {
+  const el = document.getElementById('validacao-concluidas-table');
+  if (!el) return;
+  const q = _textoBusca('#page-validacao-concluidas');
+  const tec = document.getElementById('valconc-filtro-tecnico')?.value || '';
+  const de = document.getElementById('valconc-filtro-de')?.value || '';
+  const ate = document.getElementById('valconc-filtro-ate')?.value || '';
+  let lista = (db.validacoes || []).filter(v => v.status === 'CONCLUIDO');
+  if (tec) lista = lista.filter(v => v.tecnico_responsavel === tec);
+  if (de) lista = lista.filter(v => (v.data_conclusao || '') >= de);
+  if (ate) lista = lista.filter(v => v.data_conclusao && v.data_conclusao <= ate);
+  if (q) lista = lista.filter(v => [v.equip_serie, v.equip_modelo, v.equip_cliente, v.origem, v.os_numero, v.os_assessoria,
+    v.tecnico_externo, v.responsavel_assessoria, v.obs, ...(v.solicitacoes || []).map(s => s.item)].some(c => buscaInclui(c, q)));
+  lista.sort((a, b) => (b.data_conclusao || '').localeCompare(a.data_conclusao || '') || (b.updated_at || 0) - (a.updated_at || 0));
+  const total = document.getElementById('valconc-total');
+  if (total) total.textContent = lista.length + ' equipamento(s)';
+
+  if (!lista.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Nenhuma validação concluída encontrada</div>
+      <div class="empty-sub">Equipamentos aparecem aqui quando a Assessoria marca "Pronto pra Envio"</div></div>`;
+    return;
+  }
+  el.innerHTML = `<table class="data-table compact">
+    <thead><tr><th>Nº</th><th>Série</th><th>Modelo</th><th>Cliente</th><th>Origem</th><th>OS técnica / assessoria</th><th>Técnico</th><th>Resp. assessoria</th><th>Entrada</th><th>Conclusão</th><th>Peças / Produtos</th><th>Obs.</th><th></th></tr></thead>
+    <tbody>${lista.map(v => {
+      const sol = v.solicitacoes || [];
+      const solTxt = sol.length ? sol.map(s => `<div style="font-size:11px">${s.tipo === 'PRODUTO' ? '📦' : '🔧'} ${_escV(s.item)}${s.qtd > 1 ? ' ×' + s.qtd : ''}</div>`).join('') : '<span style="color:var(--text3)">—</span>';
+      const tecInfo = VALIDACAO_TECNICOS.find(t => t.valor === v.tecnico_responsavel);
+      return `<tr>
+        <td class="mono" style="color:var(--accent);font-weight:700">${v.seq_num || '—'}</td>
+        <td class="mono" style="font-size:11px;color:var(--accent)">${_escV(v.equip_serie || '—')}</td>
+        <td style="font-size:12px">${_escV(v.equip_modelo || '—')}</td>
+        <td style="font-size:12px">${_escV(v.equip_cliente || '—')}</td>
+        <td style="font-size:11px">${_escV(v.origem || '—')}</td>
+        <td style="font-size:11px">${v.os_numero ? 'Téc.: ' + _escV(v.os_numero) : ''}${v.os_numero && v.os_assessoria ? '<br>' : ''}${v.os_assessoria ? 'Ass.: ' + _escV(v.os_assessoria) : ''}${!v.os_numero && !v.os_assessoria ? '—' : ''}</td>
+        <td style="font-size:11px">${tecInfo ? `<span style="color:${tecInfo.cor}">●</span> ${_escV(_tecnicoValidacaoTexto(v))}` : '—'}</td>
+        <td style="font-size:11px">${_escV(v.responsavel_assessoria || '—')}</td>
+        <td class="mono" style="font-size:11px">${v.created_at ? new Date(v.created_at).toLocaleDateString('pt-BR') : '—'}</td>
+        <td class="mono" style="font-size:11px">${_dataBR(v.data_conclusao)}</td>
+        <td>${solTxt}</td>
+        <td style="font-size:11px;color:var(--text3);max-width:180px;white-space:pre-wrap">${_escV(v.obs || '')}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${v.fotos_qtd > 0 ? `<button class="btn btn-ghost btn-sm" onclick="verFotosValidacao('${v.id}')" title="Ver fotos (${v.fotos_qtd})">${ico('camera',12)}</button>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="verEventosValidacao('${v.id}')" title="Histórico completo">⊙ Histórico</button>
+        </td></tr>`;
+    }).join('')}</tbody></table>`;
 }
 
 // ============================================================
@@ -8653,17 +8889,25 @@ function exportarExcel(aba) {
     XLSX.writeFile(wb, 'partforge_garantia' + (stG ? '_' + stG.toLowerCase() : '') + '.xlsx');
     toast('Garantia exportada: ' + listaG.length + ' equipamentos');
 
-  } else if (aba === 'validacao-repair' || aba === 'validacao-assessoria') {
-    const etapa = aba === 'validacao-repair' ? 'repair' : 'assessoria';
-    const statusPrincipal = VALIDACAO_STATUS_MAP[etapa];
+  } else if (aba === 'validacao-repair' || aba === 'validacao-assessoria' || aba === 'validacao-concluidas') {
+    const etapa = { 'validacao-repair': 'repair', 'validacao-assessoria': 'assessoria', 'validacao-concluidas': 'concluidas' }[aba];
+    const statusPrincipal = etapa === 'concluidas' ? 'CONCLUIDO' : VALIDACAO_STATUS_MAP[etapa];
     const q = (document.querySelector('#page-' + aba + ' .search-input')?.value || '').toLowerCase().trim();
-    const mostrarConcluidos = document.getElementById('validacao-' + etapa + '-mostrar-concluidos')?.checked;
-    let lista = (db.validacoes || []).filter(function(v) { return v.status === statusPrincipal || (mostrarConcluidos && v.status === 'CONCLUIDO'); });
+    let lista = (db.validacoes || []).filter(function(v) { return v.status === statusPrincipal; });
+    if (etapa === 'concluidas') {
+      const tec = document.getElementById('valconc-filtro-tecnico')?.value || '';
+      const de = document.getElementById('valconc-filtro-de')?.value || '';
+      const ate = document.getElementById('valconc-filtro-ate')?.value || '';
+      if (tec) lista = lista.filter(v => v.tecnico_responsavel === tec);
+      if (de) lista = lista.filter(v => (v.data_conclusao || '') >= de);
+      if (ate) lista = lista.filter(v => v.data_conclusao && v.data_conclusao <= ate);
+    }
     if (q) lista = lista.filter(function(v) {
-      return buscaInclui(v.equip_serie || '', q) || buscaInclui(v.equip_modelo || '', q) || buscaInclui(v.equip_cliente || '', q);
+      return [v.equip_serie, v.equip_modelo, v.equip_cliente, v.origem, v.os_numero, v.os_assessoria].some(c => buscaInclui(c || '', q));
     });
     const fmtBR = function(iso) { return /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10).split('-').reverse().join('/') : (iso || ''); };
-    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Técnico', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação'];
+    const heads = ['Nº', 'Série', 'Modelo', 'Cliente', 'Técnico', 'Status', 'Data Entrada', 'Complexidade', 'Prazo (dias)', 'Data Limite', 'Peça Solicitada', 'Data Solic. Peça', 'Data Entrega Peça', 'Produto Solicitado', 'Data Solic. Produto', 'Data Entrega Produto', 'Observação',
+      'Origem', 'OS Técnica', 'OS Assessoria', 'Técnico Externo', 'Resp. Assessoria', 'Entrada Assessoria', 'Conclusão', 'Todas as Peças/Produtos'];
     const rows = [heads, ...lista.map(function(v) {
       return [
         v.seq_num || '', v.equip_serie || '', v.equip_modelo || '', v.equip_cliente || '',
@@ -8673,11 +8917,14 @@ function exportarExcel(aba) {
         v.prazo_complexidade || '', v.prazo_dias || '', fmtBR(v.data_limite),
         v.peca_solicitada || '', fmtBR(v.data_solicitacao_peca), fmtBR(v.data_entrega_peca),
         v.produto_solicitado || '', fmtBR(v.data_solicitacao_produto), fmtBR(v.data_entrega_produto),
-        v.obs || ''
+        v.obs || '',
+        v.origem || '', v.os_numero || '', v.os_assessoria || '', v.tecnico_externo || '', v.responsavel_assessoria || '',
+        fmtBR(v.data_entrada_assessoria), fmtBR(v.data_conclusao),
+        (v.solicitacoes || []).map(x => (x.tipo === 'PRODUTO' ? 'Produto' : 'Peça') + ': ' + x.item + ' (qtd ' + (x.qtd || 1) + ', ' + ({ SOLICITADO: 'solicitado', ENTREGUE: 'entregue', CANCELADO: 'cancelado' }[x.situacao] || x.situacao) + (x.data_entrega ? ', entrega ' + fmtBR(x.data_entrega) : '') + ')').join(' | ')
       ];
     })];
     const ws = buildSheet(rows, heads);
-    XLSX.utils.book_append_sheet(wb, ws, etapa === 'repair' ? 'Validação Repair' : 'Validação Assessoria');
+    XLSX.utils.book_append_sheet(wb, ws, { repair: 'Validação Repair', assessoria: 'Validação Assessoria', concluidas: 'Validações Concluídas' }[etapa]);
     XLSX.writeFile(wb, 'partforge_validacao_' + etapa + '.xlsx');
     toast('Validação exportada: ' + lista.length + ' equipamentos');
 
@@ -9594,6 +9841,7 @@ function navigate(page, el) {
     garantia:     ['Garantia',     '/ equipamentos próprios, por fabricante'],
     'validacao-repair':     ['Validação Repair',     '/ equipamentos em processo no Repair'],
     'validacao-assessoria': ['Validação Assessoria', '/ equipamentos em validação final, prontos pra envio'],
+    'validacao-concluidas': ['Validações Concluídas', '/ histórico dos equipamentos que passaram pela validação'],
     estoque:      ['Estoque',      '/ posição atual'],
     movimentacao: ['Movimentação', '/ nova solicitação'],
     historico:    ['Histórico',    '/ solicitações'],
@@ -9689,6 +9937,9 @@ function navigate(page, el) {
       <button class="btn btn-import" onclick="importarExcel('validacao')">⬆ Importar Excel</button>
       <button class="btn btn-excel" onclick="exportarExcel('validacao-assessoria')">⬇ Exportar Excel</button>`;
     loadAndRenderValidacao('assessoria');
+  } else if (page === 'validacao-concluidas') {
+    if (actionsEl) actionsEl.innerHTML = `<button class="btn btn-excel" onclick="exportarExcel('validacao-concluidas')">⬇ Exportar Excel</button>`;
+    loadAndRenderValidacaoConcluidas();
   } else if (page === 'equip-quallyx-sp') {
     _eqspFiltroStatus = '';
     if (actionsEl) actionsEl.innerHTML = `

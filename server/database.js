@@ -29,6 +29,43 @@ function consumirFlagMudanca() {
 // no meio da escrita (crash, restart, OOM), o arquivo original NUNCA fica
 // corrompido/truncado, porque o rename só acontece depois que a escrita
 // terminou por completo.
+// Migração única e idempotente dos dados que já existem nas validações:
+//  - "TEC.9338//ASS.9336" no Nº da OS → OS técnica 9338 + OS assessoria 9336
+//    (só quando segue esse padrão e a OS assessoria ainda está vazia);
+//  - peça/produto únicos → primeiro item da nova lista de solicitações;
+//  - datas reais de entrada na assessoria/conclusão a partir do histórico.
+// Nada é apagado: as colunas antigas continuam lá.
+function migrarValidacoesHistorico() {
+  const res = _db.exec("SELECT id,os_numero,os_assessoria,solicitacoes,peca_solicitada,data_solicitacao_peca,data_entrega_peca,produto_solicitado,data_solicitacao_produto,data_entrega_produto,eventos,status,data_entrada_assessoria,data_conclusao FROM validacoes_equipamento");
+  if (!res.length) return;
+  const cols = res[0].columns;
+  const dia = ms => { const d = new Date(ms - 3 * 3600000); return d.toISOString().slice(0, 10); }; // dia em Brasília
+  let n = 0;
+  for (const vals of res[0].values) {
+    const v = {}; cols.forEach((c, i) => v[c] = vals[i]);
+    const sets = [], params = [];
+    const m = /^\s*TEC\.?\s*([\w-]+)\s*\/+\s*ASS\.?\s*([\w-]+)\s*$/i.exec(v.os_numero || '');
+    if (m && !v.os_assessoria) { sets.push('os_numero=?', 'os_assessoria=?'); params.push(m[1], m[2]); }
+    let sol = []; try { sol = JSON.parse(v.solicitacoes || '[]'); } catch (e) { sol = []; }
+    if (!sol.length && (v.peca_solicitada || v.produto_solicitado)) {
+      if (v.peca_solicitada) sol.push({ id: 'mig-p-' + v.id, tipo: 'PECA', etapa: 'REPAIR', item: v.peca_solicitada, qtd: 1, data_solicitacao: v.data_solicitacao_peca || '', data_entrega: v.data_entrega_peca || '', situacao: 'SOLICITADO' });
+      if (v.produto_solicitado) sol.push({ id: 'mig-r-' + v.id, tipo: 'PRODUTO', etapa: 'ASSESSORIA', item: v.produto_solicitado, qtd: 1, data_solicitacao: v.data_solicitacao_produto || '', data_entrega: v.data_entrega_produto || '', situacao: 'SOLICITADO' });
+      sets.push('solicitacoes=?'); params.push(JSON.stringify(sol));
+    }
+    let ev = []; try { ev = JSON.parse(v.eventos || '[]'); } catch (e) { ev = []; }
+    if (!v.data_entrada_assessoria && v.status !== 'REPAIR') {
+      const e = [...ev].reverse().find(x => x.status === 'ASSESSORIA');
+      if (e && e.data) { sets.push('data_entrada_assessoria=?'); params.push(dia(e.data)); }
+    }
+    if (!v.data_conclusao && v.status === 'CONCLUIDO') {
+      const e = [...ev].reverse().find(x => x.status === 'CONCLUIDO');
+      if (e && e.data) { sets.push('data_conclusao=?'); params.push(dia(e.data)); }
+    }
+    if (sets.length) { params.push(v.id); _db.run(`UPDATE validacoes_equipamento SET ${sets.join(',')} WHERE id=?`, params); n++; }
+  }
+  if (n) console.log('Validacoes migradas para o historico completo:', n);
+}
+
 function persist() {
   const data = _db.export();
   const tmpFile = DB_FILE + '.tmp';
@@ -271,6 +308,22 @@ async function init() {
   // Nº da OS e origem do equipamento (de onde ele veio) — Validação Repair.
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN os_numero TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
   try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN origem TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+
+  // Validações — histórico completo (Correção 2):
+  //  os_numero passa a ser a OS TÉCNICA; os_assessoria é a OS da assessoria.
+  //  tecnico_externo: nome quando o técnico é externo.
+  //  responsavel_assessoria: quem validou na assessoria.
+  //  solicitacoes: lista de peças (Repair) e produtos (Assessoria), cada um
+  //  com datas e situação — antes só cabia 1 peça e 1 produto.
+  //  data_entrada_assessoria / data_conclusao: datas REAIS de cada etapa
+  //  (a entrada no Repair é o created_at, que já é ajustável).
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN os_assessoria TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN tecnico_externo TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN responsavel_assessoria TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN solicitacoes TEXT DEFAULT '[]'"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_entrada_assessoria TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { _db.run("ALTER TABLE validacoes_equipamento ADD COLUMN data_conclusao TEXT DEFAULT ''"); } catch(e) { /* coluna ja existe */ }
+  try { migrarValidacoesHistorico(); } catch(e) { console.log('erro migrando validacoes', e.message); }
 
   // Peça usada retirada de um equipamento da aba Equip. Quallyx SP, pra
   // registrar a origem quando a peça enviada numa movimentação não é nova.

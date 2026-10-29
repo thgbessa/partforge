@@ -96,6 +96,9 @@
           <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></span> Validação Assessoria
           <span class="nav-badge" id="badge-validacao-assessoria">0</span>
         </div>
+        <div class="nav-item" onclick="navigate('validacao-concluidas', this)">
+          <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span> Validações Concluídas
+        </div>
         <div class="nav-item" onclick="navigate('orcamento', this)">
           <span class="icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span> Orçamentos
           <span class="nav-badge" id="badge-orcamento">0</span>
@@ -538,9 +541,6 @@
             <input class="search-input" type="text" placeholder="Buscar por série, modelo ou cliente..."
               oninput="renderValidacao('repair', this.value)">
           </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap">
-            <input type="checkbox" id="validacao-repair-mostrar-concluidos" onchange="renderValidacao('repair')"> Mostrar também os já concluídos
-          </label>
         </div>
         <div class="table-wrap" id="validacao-repair-table"></div>
       </div>
@@ -553,11 +553,29 @@
             <input class="search-input" type="text" placeholder="Buscar por série, modelo ou cliente..."
               oninput="renderValidacao('assessoria', this.value)">
           </div>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);white-space:nowrap">
-            <input type="checkbox" id="validacao-assessoria-mostrar-concluidos" onchange="renderValidacao('assessoria')"> Mostrar também os já concluídos
-          </label>
         </div>
         <div class="table-wrap" id="validacao-assessoria-table"></div>
+      </div>
+
+      <!-- VALIDAÇÕES CONCLUÍDAS -->
+      <div class="page" id="page-validacao-concluidas">
+        <div class="search-bar" style="flex-wrap:wrap;gap:8px">
+          <div class="search-input-wrap" style="flex:1;min-width:220px">
+            <span class="search-icon">⌕</span>
+            <input class="search-input" type="text" placeholder="Buscar por série, modelo, cliente, origem, OS, peça..."
+              oninput="renderValidacaoConcluidas()">
+          </div>
+          <select class="form-select" id="valconc-filtro-tecnico" style="width:auto" onchange="renderValidacaoConcluidas()">
+            <option value="">Todos os técnicos</option>
+            <option value="ICARO">Icaro</option><option value="MORENTE">Morente</option><option value="TEC_EXTERNO">Téc. Externo</option>
+          </select>
+          <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">Concluídos de
+            <input class="form-input" type="date" id="valconc-filtro-de" style="width:auto" onchange="renderValidacaoConcluidas()"></label>
+          <label style="font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px">até
+            <input class="form-input" type="date" id="valconc-filtro-ate" style="width:auto" onchange="renderValidacaoConcluidas()"></label>
+          <span id="valconc-total" style="font-size:11px;color:var(--text3)"></span>
+        </div>
+        <div class="table-wrap" id="validacao-concluidas-table"></div>
       </div>
 
       <!-- EQUIP. QUALLYX SP -->
